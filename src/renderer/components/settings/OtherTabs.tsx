@@ -1,15 +1,15 @@
-import { FolderOpen, FileJson, RotateCcw, Volume2 } from 'lucide-react';
+import { FolderOpen, FileJson, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { buildSystemPrompt } from '@shared/personalities';
 import type { AppInfo, ReduceMotion, ThemeId } from '@shared/types';
 import { useConversationStore } from '@renderer/stores/conversationStore';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { THEMES, THEME_TOKENS } from '@renderer/themes/themes';
-import { unavailableSpeechInput, webSpeechOutput, type VoiceInfo } from '@renderer/voice/providers';
 import { playSfx } from '@renderer/voice/sfx';
 import { playChime } from '@renderer/voice/alarm';
-import { Field, Section, Segmented, Select, Slider, TextField, Toggle } from './controls';
+import { Field, Section, Segmented, Slider, TextField, Toggle } from './controls';
 import { AiSection } from './AiSection';
+import { VoiceSection } from './VoiceSection';
 import { PlaceSearch } from '@renderer/components/weather/PlaceSearch';
 import { placeLabel } from '@shared/weather';
 import { HotkeyRecorder, prettyAccel } from './HotkeyRecorder';
@@ -230,75 +230,9 @@ export function AppearanceTab() {
 
 export function VoiceTab() {
   const { settings: s, update } = useSettingsStore();
-  const [voices, setVoices] = useState<VoiceInfo[]>([]);
-  useEffect(() => {
-    void webSpeechOutput.voices().then(setVoices);
-  }, []);
   return (
     <>
-      <Section title="Speech">
-        <Field label="Mute voice" hint="Silences speech everywhere (also in the tray menu).">
-          <Toggle
-            label="Mute voice"
-            checked={s.voiceMuted}
-            onChange={(v) => void update({ voiceMuted: v })}
-          />
-        </Field>
-        <Field
-          label="Speak replies"
-          hint={
-            webSpeechOutput.available
-              ? 'Reads replies aloud with a system voice.'
-              : 'No speech engine available.'
-          }
-        >
-          <Toggle
-            label="Speak replies"
-            checked={s.speakReplies}
-            onChange={(v) => void update({ speakReplies: v })}
-            disabled={!webSpeechOutput.available}
-          />
-        </Field>
-        <Field label="Voice" stacked>
-          <div className="flex items-center gap-2">
-            <Select
-              label="Voice"
-              value={s.voiceName}
-              onChange={(v) => void update({ voiceName: v })}
-              options={[
-                { value: '', label: 'System default' },
-                ...voices.map((v) => ({ value: v.name, label: `${v.name} (${v.lang})` })),
-              ]}
-            />
-            <button
-              type="button"
-              className="hud-button"
-              onClick={() =>
-                webSpeechOutput.speak(`Hello. This is ${s.assistantName}.`, {
-                  voiceName: s.voiceName || undefined,
-                })
-              }
-              disabled={!webSpeechOutput.available}
-            >
-              <Volume2 size={12} strokeWidth={1.5} /> Test
-            </button>
-          </div>
-        </Field>
-        <Field label="Voice input" hint={unavailableSpeechInput.unavailableReason}>
-          <Toggle label="Voice input" checked={false} onChange={() => undefined} disabled />
-        </Field>
-        <Field
-          label={`Wake word “Hey ${s.assistantName}”`}
-          hint="Placeholder; listening for a wake word arrives with voice input."
-        >
-          <Toggle
-            label="Wake word"
-            checked={s.wakeWord}
-            onChange={(v) => void update({ wakeWord: v })}
-            disabled
-          />
-        </Field>
-      </Section>
+      <VoiceSection />
       <Section title="Timer alarm">
         <Field
           label="Alarm sound"

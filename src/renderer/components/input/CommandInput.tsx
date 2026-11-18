@@ -1,7 +1,8 @@
-import { CornerDownLeft, Mic, Square } from 'lucide-react';
+import { CornerDownLeft, LoaderCircle, Mic, Square } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useConversationStore } from '@renderer/stores/conversationStore';
-import { useSpeechInput } from '@renderer/voice/useSpeechInput';
+import { useVoiceStore } from '@renderer/stores/voiceStore';
+import { cancelListening, useSpeechInput } from '@renderer/voice/useSpeechInput';
 import { FOCUS_INPUT_EVENT } from '@renderer/hooks/useAppCommands';
 import { SlashPalette } from './SlashPalette';
 import { matchSlash, type SlashCommand } from './slashCommands';
@@ -118,6 +119,7 @@ export function CommandInput({ assistantName, compact = false, autoFocus = false
         break;
       case 'Escape':
         e.preventDefault();
+        if (cancelListening()) break;
         if (paletteOpen) setPaletteDismissed(true);
         else if (value) reset();
         else if (busy) cancel();
@@ -125,8 +127,18 @@ export function CommandInput({ assistantName, compact = false, autoFocus = false
     }
   };
 
-  // Push-to-talk: hold the mic to show `listening` (voice input itself arrives later).
-  const { start: talkStart, stop: talkEnd } = useSpeechInput();
+  // Voice: click to talk (stops when you pause), or hold and release.
+  const { press: talkStart, release: talkEnd } = useSpeechInput();
+  const mic = useVoiceStore((s) => s.mic);
+  const stt = useVoiceStore((s) => s.status.stt);
+  const micTitle =
+    mic === 'listening'
+      ? 'Listening… pause to send, or click again'
+      : mic === 'transcribing'
+        ? 'Working out what you said…'
+        : stt.state === 'downloading'
+          ? `Downloading the speech model ${stt.progress ?? 0}%`
+          : 'Click to talk (sends when you pause), or hold';
 
   return (
     <form
@@ -179,16 +191,28 @@ export function CommandInput({ assistantName, compact = false, autoFocus = false
       />
       <button
         type="button"
-        aria-label="Push to talk (hold)"
-        title="Hold to talk (voice input is coming in a later update)"
+        aria-label={mic === 'listening' ? 'Stop listening' : 'Talk to ARC'}
+        aria-pressed={mic !== 'idle'}
+        title={micTitle}
+        disabled={mic === 'transcribing'}
         onPointerDown={talkStart}
         onPointerUp={talkEnd}
         onPointerLeave={talkEnd}
         onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && !e.repeat && talkStart()}
         onKeyUp={(e) => (e.key === ' ' || e.key === 'Enter') && talkEnd()}
-        className="text-text-muted transition-colors hover:text-accent active:text-accent"
+        className={`transition-colors hover:text-accent ${
+          mic === 'listening'
+            ? 'animate-pulse text-accent drop-shadow-[0_0_6px_currentColor]'
+            : mic === 'transcribing'
+              ? 'text-amber'
+              : 'text-text-muted'
+        }`}
       >
-        <Mic size={16} strokeWidth={1.5} />
+        {mic === 'transcribing' ? (
+          <LoaderCircle size={16} strokeWidth={1.5} className="animate-spin" />
+        ) : (
+          <Mic size={16} strokeWidth={1.5} />
+        )}
       </button>
       {busy && !value ? (
         <button

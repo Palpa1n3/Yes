@@ -11,8 +11,17 @@ files:
   - package.json
   - '!**/*.map'
 asar: true
+# Native speech-recognition runtime (Whisper) must sit outside the asar archive.
+asarUnpack:
+  - node_modules/onnxruntime-node/**
+  - node_modules/sharp/**
+  - node_modules/@img/**
 win:
   icon: resources/icon@2x.png
+  # Ship only the Windows build of onnxruntime (the package carries every OS).
+  files:
+    - '!node_modules/onnxruntime-node/bin/napi-v*/darwin/**'
+    - '!node_modules/onnxruntime-node/bin/napi-v*/linux/**'
   target:
     - target: nsis
       arch: [x64]

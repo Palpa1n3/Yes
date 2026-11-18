@@ -30,6 +30,7 @@ describe('IPC channel contract', () => {
         'storage',
         'system',
         'timers',
+        'voice',
         'weather',
         'window',
       ].sort(),

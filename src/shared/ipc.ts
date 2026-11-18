@@ -29,6 +29,7 @@ import type {
   WindowStatePayload,
 } from './types';
 import type { Routine } from './routines';
+import type { FishKeyResult, VoiceStatus } from './voice';
 
 export const IPC = {
   window: {
@@ -74,6 +75,15 @@ export const IPC = {
     refresh: 'weather:refresh',
     search: 'weather:search',
     onChange: 'weather:changed',
+  },
+  voice: {
+    status: 'voice:status',
+    setFishKey: 'voice:set-fish-key',
+    clearFishKey: 'voice:clear-fish-key',
+    speak: 'voice:speak',
+    transcribe: 'voice:transcribe',
+    prepare: 'voice:prepare',
+    onStatus: 'voice:status-changed',
   },
   routines: {
     list: 'routines:list',
@@ -134,6 +144,11 @@ export interface InvokeMap {
   [IPC.ai.status]: { args: []; result: AiStatus };
   [IPC.timers.list]: { args: []; result: TimerInfo[] };
   [IPC.routines.list]: { args: []; result: Routine[] };
+  [IPC.voice.status]: { args: []; result: VoiceStatus };
+  [IPC.voice.setFishKey]: { args: [key: string]; result: FishKeyResult };
+  [IPC.voice.clearFishKey]: { args: []; result: VoiceStatus };
+  [IPC.voice.speak]: { args: [text: string]; result: Uint8Array };
+  [IPC.voice.transcribe]: { args: [samples: Float32Array]; result: string };
   [IPC.routines.save]: { args: [routine: Routine]; result: Routine[] };
   [IPC.routines.remove]: { args: [id: string]; result: Routine[] };
   [IPC.routines.startup]: { args: []; result: Routine[] };
@@ -168,6 +183,7 @@ export interface SendMap {
   [IPC.history.save]: [messages: StoredMessage[]];
   [IPC.timers.cancel]: [id: string];
   [IPC.routines.stop]: [];
+  [IPC.voice.prepare]: [];
   [IPC.timers.snooze]: [id: string, minutes: number];
   [IPC.storage.reveal]: [downloadName: string];
   [IPC.storage.openSpecial]: [target: 'temp' | 'recycleBin'];
@@ -191,6 +207,7 @@ export interface EventMap {
   [IPC.timers.onRing]: TimerInfo;
   [IPC.routines.onChange]: Routine[];
   [IPC.routines.onProgress]: RoutineProgress;
+  [IPC.voice.onStatus]: VoiceStatus;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -252,6 +269,19 @@ export interface ArcAPI {
     /** Find towns by name (Open-Meteo geocoding). */
     search(query: string): Promise<WeatherPlace[]>;
     onChange(cb: (s: WeatherState) => void): Unsubscribe;
+  };
+  voice: {
+    status(): Promise<VoiceStatus>;
+    /** Check a Fish Audio key (by making a one-word clip), then store it encrypted. */
+    setFishKey(key: string): Promise<FishKeyResult>;
+    clearFishKey(): Promise<VoiceStatus>;
+    /** MP3 audio of the text in the chosen Fish Audio voice. */
+    speak(text: string): Promise<Uint8Array>;
+    /** 16 kHz mono samples → text (local Whisper). */
+    transcribe(samples: Float32Array): Promise<string>;
+    /** Download/load the speech model ahead of first use. */
+    prepare(): void;
+    onStatus(cb: (s: VoiceStatus) => void): Unsubscribe;
   };
   routines: {
     list(): Promise<Routine[]>;

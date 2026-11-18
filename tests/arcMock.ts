@@ -45,6 +45,21 @@ export function installArcMock(): ArcAPI {
       onChange: vi.fn(() => () => undefined),
       onRing: vi.fn(() => () => undefined),
     },
+    voice: {
+      status: vi.fn(async () => ({
+        fishKey: false,
+        stt: { state: 'idle' as const, progress: null, model: 'base' as const },
+      })),
+      setFishKey: vi.fn(async () => ({ ok: true, message: '' })),
+      clearFishKey: vi.fn(async () => ({
+        fishKey: false,
+        stt: { state: 'idle' as const, progress: null, model: 'base' as const },
+      })),
+      speak: vi.fn(async () => new Uint8Array()),
+      transcribe: vi.fn(async () => ''),
+      prepare: vi.fn(),
+      onStatus: vi.fn(() => () => undefined),
+    },
     routines: {
       list: vi.fn(async () => []),
       save: vi.fn(async () => []),

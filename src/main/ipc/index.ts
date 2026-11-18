@@ -9,6 +9,7 @@ import { registerInfoIpc } from './info';
 import { registerRoutinesIpc } from './routines';
 import { registerTimersIpc } from './timers';
 import { registerWeatherIpc } from './weather';
+import { registerVoiceIpc } from './voice';
 import { registerSettingsIpc } from './settings';
 import { registerSystemIpc } from './system';
 import { registerWindowIpc } from './window';
@@ -36,6 +37,7 @@ export function registerIpc(ctx: MainContext): void {
     routines: () => routines.service.list(),
   });
   registerTimersIpc(ctx);
+  registerVoiceIpc(ctx);
   registerSettingsIpc(ctx);
   registerAppIpc(ctx);
   registerInfoIpc();

@@ -1,3 +1,4 @@
+import { DEFAULT_FISH_VOICE, type FishModel, type VoiceEngine, type WhisperModel } from './voice';
 import type { TempUnit, WeatherPlace, WindUnit } from './weather';
 import { DEFAULT_PERSONALITY, type Personality } from './personalities';
 
@@ -148,6 +149,13 @@ export interface Settings {
   /** Read replies aloud with the system voice. */
   speakReplies: boolean;
   voiceName: string; // '' = system default
+  /** Who speaks: the Windows voices, or Fish Audio (needs an API key in main). */
+  voiceEngine: VoiceEngine;
+  fishVoiceId: string;
+  fishModel: FishModel;
+  /** The mic button (local Whisper speech-to-text). */
+  voiceInput: boolean;
+  whisperModel: WhisperModel;
   sfx: boolean;
   sfxVolume: number; // 0–1
   wakeWord: boolean; // placeholder, not implemented yet
@@ -186,6 +194,11 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceMuted: false,
   speakReplies: false,
   voiceName: '',
+  voiceEngine: 'system',
+  fishVoiceId: DEFAULT_FISH_VOICE,
+  fishModel: 's2.1-pro-free',
+  voiceInput: true,
+  whisperModel: 'base',
   sfx: true,
   sfxVolume: 0.35,
   wakeWord: false,

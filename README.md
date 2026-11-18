@@ -68,6 +68,12 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 - Timers are saved to `%APPDATA%\ARC\timers.json`, so they survive restarts; anything that finished while ARC was closed rings on the next start.
 - Cancel by voice/text: _"cancel the oven timer"_, _"cancel all timers"_.
 
+### Voice
+
+- **Talking to ARC:** click the mic in the message box and speak; ARC sends it when you pause (or hold the mic and let go). Esc cancels. Speech is turned into text by Whisper running on your own PC: free, and your voice is never uploaded. The model downloads once the first time (Standard ≈ 75 MB, Better ≈ 250 MB, Settings › Voice) into `%APPDATA%\ARC\models`.
+- **ARC's voice:** Settings › Voice › Voice › **Fish Audio**, paste your Fish Audio API key (fish.audio › API keys) and press **Save & test**. The key is checked, then stored encrypted like the Claude key. The voice ID defaults to the one you chose; you can paste another from any fish.audio voice page. The **S2.1 Pro Free** model is used by default. Reply text is sent to Fish Audio to be spoken; if it fails, ARC falls back to the Windows voice and says why.
+- If the mic doesn't work: Windows Settings › Privacy & security › Microphone › turn on **Let desktop apps access your microphone**.
+
 ### Routines and the morning briefing
 
 - A routine is a list of steps run in order: open or close apps, set the volume, music controls, open a folder or website, search the web, start a timer, say something, wait, give a briefing, or lock the PC.

@@ -2,6 +2,7 @@
  *  defaults, so a hand-edited or corrupted settings.json can't break the app. */
 import { sanitizePersonality } from './personalities';
 import type { WeatherPlace } from './weather';
+import { FISH_MODELS, type FishModel } from './voice';
 import {
   AI_MODELS,
   DEFAULT_SETTINGS,
@@ -67,6 +68,15 @@ export function sanitizeSettings(raw: unknown): Settings {
     voiceMuted: bool('voiceMuted'),
     speakReplies: bool('speakReplies'),
     voiceName: str('voiceName', 200),
+    voiceEngine: r['voiceEngine'] === 'fish' ? 'fish' : 'system',
+    fishVoiceId: /^[A-Za-z0-9_-]{6,64}$/.test(String(r['fishVoiceId'] ?? ''))
+      ? String(r['fishVoiceId'])
+      : d.fishVoiceId,
+    fishModel: (FISH_MODELS as readonly string[]).includes(r['fishModel'] as string)
+      ? (r['fishModel'] as FishModel)
+      : d.fishModel,
+    voiceInput: bool('voiceInput'),
+    whisperModel: r['whisperModel'] === 'small' ? 'small' : 'base',
     sfx: bool('sfx'),
     sfxVolume:
       typeof r['sfxVolume'] === 'number' && r['sfxVolume'] >= 0 && r['sfxVolume'] <= 1
