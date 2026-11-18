@@ -29,7 +29,7 @@ Close ARC, then in the `arc` folder run:
 npm run installer
 ```
 
-It takes a few minutes and creates `dist\ARC-<version>-x64-nsis.exe`. Run that to install ARC with a desktop icon and Start-menu entry. Windows may show **"Windows protected your PC"** because the app isn't code-signed: click **More info** → **Run anyway**. After installing, open ARC from the Start menu instead of `npm run dev`; your settings, keys, routines and timers carry over. Turn on **Settings › General › Launch at login** so it starts quietly in the tray. To update later: extract the new zip, run `npm install` if asked, then `npm run installer` again and install over the top.
+It takes a few minutes and creates `dist\ARC-Setup-<version>.exe`. Run that to install ARC with a desktop icon and Start-menu entry. Windows may show **"Windows protected your PC"** because the app isn't code-signed: click **More info** → **Run anyway**. After installing, open ARC from the Start menu instead of `npm run dev`; your settings, keys, routines and timers carry over. Turn on **Settings › General › Launch at login** so it starts quietly in the tray. To update later: extract the new zip, run `npm install` if asked, then `npm run installer` again and install over the top.
 
 If the build fails with "Cannot create symbolic link", open Command Prompt **as administrator** (or turn on Windows Settings › System › For developers › Developer Mode) and run it again.
 
