@@ -34,7 +34,7 @@ export default {
       },
       letterSpacing: { hud: '0.2em' },
       borderRadius: { panel: 'var(--panel-radius)' },
-      screens: { hud: '1180px', wide: '1440px' },
+      screens: { hud: '1180px', wide: '1440px', full: '1600px' },
     },
   },
   plugins: [],

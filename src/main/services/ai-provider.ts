@@ -17,7 +17,15 @@ import type {
 } from '@shared/types';
 import { describeWeather, rainSoon, tempSymbol, type WeatherData } from '@shared/weather';
 import { agendaSentence, eventsOn, fmtTime, type CalEvent } from '@shared/calendar';
+import { listName, splitItems } from '@shared/notes';
+import type { NowPlaying } from '@shared/media';
 import { snapshot } from './system-stats';
+
+/** What the offline brain needs from the notes store. */
+export interface NotesApi {
+  tool(name: string, input: unknown): unknown;
+  memories(): string[];
+}
 
 export interface SendOptions {
   systemPrompt: string;
@@ -25,6 +33,8 @@ export interface SendOptions {
   signal?: AbortSignal;
   /** Run an action through ARC (cards, approval) and resolve with its outcome. */
   runTool?(toolUseId: string, intent: RawIntent): Promise<ToolOutcome>;
+  /** Research mode: web search, a smarter model, fuller answers with sources. */
+  research?: boolean;
 }
 
 export interface AIProvider {
@@ -107,6 +117,8 @@ export function plan(
   persona: Persona,
   getWeather: () => WeatherData | null = () => null,
   getCalendar: () => CalEvent[] | null = () => null,
+  notes: NotesApi | null = null,
+  nowPlaying: () => NowPlaying | null = () => null,
 ): Plan {
   const { personality: p } = persona;
   const title = resolveTitle(p.userTitle, persona.userName);
@@ -132,6 +144,102 @@ export function plan(
       text: ok(`Opening your ${m[1]} folder.`),
       intent: { action: 'open_folder', target: m[1] },
     };
+  }
+  if (
+    /\b(what'?s|what is) (this|that) song\b|\bwhat song is (this|that|playing)\b|\bwhat'?s playing\b|\bnow playing\b|\bwho sings (this|that)\b/.test(
+      lower,
+    )
+  ) {
+    const n = nowPlaying();
+    return {
+      text: !n
+        ? v <= 1
+          ? 'Nothing playing.'
+          : "Nothing's playing right now that Windows can see."
+        : `${n.playing ? '' : 'Paused: '}${n.title}${n.artist ? ` by ${n.artist}` : ''}${v <= 1 ? '' : `, in ${n.app}`}.`,
+    };
+  }
+  if (notes) {
+    const said = (r: unknown): Record<string, unknown> =>
+      r && typeof r === 'object' ? (r as Record<string, unknown>) : {};
+    // "add milk and eggs to my shopping list" / "put bread on the list"
+    if (
+      (m = q.match(
+        /^(?:please\s+)?(?:add|put)\s+(.+?)\s+(?:to|on(?:to)?)\s+(?:my\s+|the\s+)?(.+?)\s*list[.!]?$/i,
+      ))
+    ) {
+      const items = splitItems(m[1] ?? '');
+      const r = said(notes.tool('add_to_list', { list: m[2] || 'To-do', items }));
+      return {
+        text:
+          v <= 1
+            ? `Added to ${String(r['list'])}.`
+            : t(
+                `Added ${items.join(', ')} to your ${String(r['list']).toLowerCase()} list{,title}.`,
+              ),
+      };
+    }
+    // "what's on my shopping list" / "read my to-do list"
+    if (
+      (m = lower.match(
+        /^(?:what'?s|what is)\s+on\s+(?:my\s+|the\s+)?(.+?)\s*list\??$|^(?:read|show)\s+(?:me\s+)?(?:my\s+|the\s+)?(.+?)\s*list[.!]?$/,
+      ))
+    ) {
+      const name = listName(m[1] ?? m[2] ?? '');
+      const lists = notes.tool('get_lists', {}) as Array<{ list: string; toDo: string[] }>;
+      const l = lists.find((x) => x.list.toLowerCase() === name.toLowerCase());
+      return {
+        text: !l
+          ? `You don't have a ${name.toLowerCase()} list yet. Say “add … to my ${name.toLowerCase()} list” to start one.`
+          : l.toDo.length
+            ? `${l.list}: ${l.toDo.join(', ')}.`
+            : `Your ${l.list.toLowerCase()} list is empty.`,
+      };
+    }
+    // "tick off milk" / "cross eggs off my shopping list" (needs "off": not "check the weather")
+    if (
+      (m = lower.match(
+        /^(?:tick|cross|check)\s+(?:off\s+(.+?)|(.+?)\s+off)(?:\s+(?:from|on)\s+(?:my\s+|the\s+)?(.+?)\s*list)?[.!]?$/,
+      ))
+    ) {
+      const r = said(
+        notes.tool('update_list_item', { item: m[1] ?? m[2], list: m[3], action: 'done' }),
+      );
+      return {
+        text: r['error']
+          ? String(r['error'])
+          : t(`Ticked off ${(r['tickedOff'] as string[]).join(', ')}{,title}.`),
+      };
+    }
+    // "take a note: …" / "note that …"
+    if ((m = q.match(/^(?:take\s+a\s+note|make\s+a\s+note|note\s+(?:that|down))[:,]?\s+(.+)$/i))) {
+      notes.tool('add_note', { text: m[1] });
+      return { text: v <= 1 ? 'Noted.' : t('Noted{,title}. It’s in the Notes tab.') };
+    }
+    // "what do you remember (about me)?"
+    if (/^what (?:do you|have you) (?:remember|know)(?: about me)?\??$/.test(lower)) {
+      const facts = notes.memories();
+      return {
+        text: facts.length
+          ? `I remember: ${facts.join('; ')}.`
+          : "I haven't been asked to remember anything yet. Say “remember that …”.",
+      };
+    }
+    // "forget that I …"
+    if ((m = q.match(/^forget\s+(?:that\s+|about\s+)?(.+?)[.!]?$/i))) {
+      const r = said(notes.tool('forget', { about: m[1] }));
+      return {
+        text: r['error'] ? "I don't have anything like that remembered." : t('Forgotten{,title}.'),
+      };
+    }
+    // "remember that I take my coffee black"
+    if (
+      (m = q.match(/^(?:please\s+)?remember\s+(?:that\s+)?(.+?)[.!]?$/i)) &&
+      !/^to\b/i.test(m[1] ?? '')
+    ) {
+      notes.tool('remember', { fact: m[1] });
+      return { text: v <= 1 ? 'Remembered.' : t('I’ll remember that{,title}.') };
+    }
   }
   if ((m = lower.match(/^(?:please\s+)?(?:close|quit|exit)\s+(.+?)[.!]?$/))) {
     return {
@@ -398,6 +506,8 @@ export class MockProvider implements AIProvider {
     private readonly getPersona: () => Persona | null = () => null,
     private readonly getWeather: () => WeatherData | null = () => null,
     private readonly getCalendar: () => CalEvent[] | null = () => null,
+    private readonly notes: NotesApi | null = null,
+    private readonly nowPlaying: () => NowPlaying | null = () => null,
   ) {}
 
   async *send(messages: ChatMessage[], opts: SendOptions): AsyncIterable<ProviderChunk> {
@@ -411,6 +521,8 @@ export class MockProvider implements AIProvider {
       persona,
       this.getWeather,
       this.getCalendar,
+      this.notes,
+      this.nowPlaying,
     );
 
     await sleep(350 + Math.random() * 450, signal); // "thinking"

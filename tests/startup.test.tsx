@@ -23,7 +23,7 @@ beforeEach(() => {
     bootSequence: false,
     persistHistory: true,
   }));
-  arc.history.get = vi.fn(async () => [old]);
+  arc.chats.open = vi.fn(async () => [old]);
   useConversationStore.setState({ messages: [] });
 });
 

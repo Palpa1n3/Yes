@@ -71,6 +71,8 @@ export interface UserMessage {
   id: string;
   text: string;
   timestamp: number;
+  /** Which saved chat this belongs to. */
+  chatId?: string;
 }
 
 export interface AssistantResponse {
@@ -93,6 +95,10 @@ export type StreamChunk =
   | { type: 'intent'; responseId: string; intent: RawIntent; toolUseId?: string }
   /** Informational line for the transcript (e.g. "offline, using the mock"). */
   | { type: 'notice'; responseId: string; message: string }
+  /** What the model is doing right now ("Searching the web…"). */
+  | { type: 'activity'; responseId: string; text: string }
+  /** Web pages the answer used, shown under the reply. */
+  | { type: 'sources'; responseId: string; sources: import('./chats').Source[] }
   | { type: 'done'; responseId: string }
   | { type: 'error'; responseId: string; message: string };
 
@@ -169,10 +175,22 @@ export interface Settings {
   globalHotkey: string;
   /** Start/stop talking from any app; '' = off. */
   voiceHotkey: string;
+  /* Gaming mode */
+  /** Spot running games and switch gaming mode on/off automatically. */
+  gamingMode: boolean;
+  gamingPowerPlan: boolean;
+  /** No speech, sounds or wake word while gaming. */
+  gamingQuiet: boolean;
+  /** Apps to close (politely) while gaming, reopened afterwards. */
+  gamingCloseApps: string[];
+  /** Extra game process names to recognise. */
+  gamingGames: string[];
   /* Advanced */
   /** 'anthropic' needs an API key (stored encrypted in main, never in settings). */
   provider: AiProvider;
   model: AiModel;
+  /** Model for chats in research mode (web search, fuller answers). */
+  researchModel: AiModel;
 }
 
 export type AiProvider = 'mock' | 'anthropic';
@@ -211,8 +229,14 @@ export const DEFAULT_SETTINGS: Settings = {
   alarmVolume: 0.8,
   globalHotkey: 'CommandOrControl+Space',
   voiceHotkey: 'CommandOrControl+Alt+Space',
+  gamingMode: false,
+  gamingPowerPlan: true,
+  gamingQuiet: true,
+  gamingCloseApps: [],
+  gamingGames: [],
   provider: 'mock',
   model: 'claude-haiku-5-5',
+  researchModel: 'claude-sonnet-5-5',
 };
 
 export interface WindowStatePayload {
@@ -254,6 +278,7 @@ export type StoredMessage =
       timestamp: number;
       streaming: boolean;
       revealed: boolean;
+      sources?: import('./chats').Source[];
     }
   | { id: string; role: 'command'; timestamp: number; command: CommandInfoShared }
   | { id: string; role: 'system'; text: string; timestamp: number; tone: 'info' | 'error' };

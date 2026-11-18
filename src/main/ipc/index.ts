@@ -10,6 +10,11 @@ import { registerRoutinesIpc } from './routines';
 import { registerTimersIpc } from './timers';
 import { registerWeatherIpc } from './weather';
 import { registerCalendarIpc } from './calendar';
+import { registerChatsIpc } from './chats';
+import { registerNotesIpc } from './notes';
+import { registerMediaIpc } from './media';
+import { registerCleanupIpc } from './cleanup';
+import { registerGamingIpc } from './gaming';
 import { registerVoiceIpc } from './voice';
 import { registerSettingsIpc } from './settings';
 import { registerSystemIpc } from './system';
@@ -32,9 +37,17 @@ export function registerIpc(ctx: MainContext): void {
   skills.register(systemReportSkill);
   const commands = registerCommandsIpc(skills, ctx.timers);
   const calendar = registerCalendarIpc(ctx);
-  const routines = registerRoutinesIpc(ctx, commands.execute, weather, calendar);
+  const notes = registerNotesIpc(ctx);
+  const media = registerMediaIpc(ctx);
+  registerCleanupIpc(ctx);
+  const routines = registerRoutinesIpc(ctx, commands.execute, weather, calendar, notes);
   commands.setRoutineRunner(routines.run);
+  registerGamingIpc(ctx, commands.execute);
+  const chats = registerChatsIpc(ctx);
   registerAssistantIpc(ctx, {
+    chats,
+    notes,
+    nowPlaying: () => media.get(),
     weather: () => weather.get().data,
     routines: () => routines.service.list(),
     calendar: () => {

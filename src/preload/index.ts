@@ -75,6 +75,26 @@ const api: ArcAPI = {
     search: (q) => invoke(IPC.weather.search, q),
     onChange: (cb) => subscribe(IPC.weather.onChange, cb),
   },
+  gaming: {
+    status: () => invoke(IPC.gaming.status),
+    start: () => invoke(IPC.gaming.start),
+    stop: () => invoke(IPC.gaming.stop),
+    onChange: (cb) => subscribe(IPC.gaming.onChange, cb),
+  },
+  cleanup: {
+    scan: () => invoke(IPC.cleanup.scan),
+    run: (ids, names) => invoke(IPC.cleanup.run, ids, names),
+    openWindowsTool: () => send(IPC.cleanup.openWindowsTool),
+  },
+  media: {
+    get: () => invoke(IPC.media.get),
+    onChange: (cb) => subscribe(IPC.media.onChange, cb),
+  },
+  notes: {
+    state: () => invoke(IPC.notes.state),
+    apply: (o) => invoke(IPC.notes.apply, o),
+    onChange: (cb) => subscribe(IPC.notes.onChange, cb),
+  },
   calendar: {
     get: () => invoke(IPC.calendar.get),
     refresh: () => invoke(IPC.calendar.refresh),
@@ -129,15 +149,24 @@ const api: ArcAPI = {
     reveal: (n) => send(IPC.storage.reveal, n),
     openSpecial: (t) => send(IPC.storage.openSpecial, t),
   },
-  history: {
-    get: () => invoke(IPC.history.get),
-    save: (m) => send(IPC.history.save, m),
-    clear: () => send(IPC.history.clear),
+  chats: {
+    state: () => invoke(IPC.chats.state),
+    open: (id) => invoke(IPC.chats.open, id),
+    create: (r) => invoke(IPC.chats.create, r),
+    save: (id, m) => send(IPC.chats.save, id, m),
+    rename: (id, t) => invoke(IPC.chats.rename, id, t),
+    setPinned: (id, p) => invoke(IPC.chats.setPinned, id, p),
+    setResearch: (id, r) => invoke(IPC.chats.setResearch, id, r),
+    remove: (id) => invoke(IPC.chats.remove, id),
+    search: (q) => invoke(IPC.chats.search, q),
+    exportMd: (id) => invoke(IPC.chats.exportMd, id),
+    onChange: (cb) => subscribe(IPC.chats.onChange, cb),
   },
   app: {
     onCommand: (cb) => subscribe(IPC.app.onCommand, cb),
     getInfo: () => invoke(IPC.app.getInfo),
     openPath: (t) => send(IPC.app.openPath, t),
+    openUrl: (u) => send(IPC.app.openUrl, u),
     resetSettings: () => invoke(IPC.app.resetSettings),
   },
 };

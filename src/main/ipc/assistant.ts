@@ -13,6 +13,9 @@ import type { Routine } from '@shared/routines';
 import type { CalEvent } from '@shared/calendar';
 import type { WeatherData } from '@shared/weather';
 import type { MainContext } from '../context';
+import type { ChatStore } from '../services/chat-store';
+import type { NotesStore } from '../services/notes-store';
+import type { NowPlaying } from '@shared/media';
 import { MockProvider, type AIProvider } from '../services/ai-provider';
 import { AnthropicProvider, OfflineError } from '../services/anthropic-provider';
 import { AppRegistry } from '../services/app-registry';
@@ -30,6 +33,9 @@ export function registerAssistantIpc(
     weather(): WeatherData | null;
     routines(): Routine[];
     calendar(): CalEvent[] | null;
+    chats: ChatStore;
+    notes: NotesStore;
+    nowPlaying(): NowPlaying | null;
   },
 ): void {
   const getWeather = extra.weather;
@@ -52,23 +58,47 @@ export function registerAssistantIpc(
     },
     getWeather,
     extra.calendar,
+    { tool: (n, i) => extra.notes.tool(n, i), memories: () => extra.notes.memoryTexts() },
+    extra.nowPlaying,
   );
-  const claude = new AnthropicProvider({
-    getKey: () => secrets.get(),
-    model: () => getSettings().model,
-    systemPrompt,
-    info,
-    stats: getStats,
-    detailedStats: () => ctx.telemetry.snapshotWithProcesses(),
-    warm: () => ctx.telemetry.warmProcesses(),
-    timers: () => ctx.timers.list(),
-    weather: getWeather,
-    routines: extra.routines,
-    calendar: extra.calendar,
-    apps: () => registry.load().map((a) => ({ name: a.name, intents: a.intents })),
-  });
+  const makeClaude = (): AnthropicProvider =>
+    new AnthropicProvider({
+      getKey: () => secrets.get(),
+      model: () => getSettings().model,
+      researchModel: () => getSettings().researchModel,
+      systemPrompt,
+      info,
+      stats: getStats,
+      detailedStats: () => ctx.telemetry.snapshotWithProcesses(),
+      warm: () => ctx.telemetry.warmProcesses(),
+      timers: () => ctx.timers.list(),
+      weather: getWeather,
+      routines: extra.routines,
+      calendar: extra.calendar,
+      notes: extra.notes,
+      memories: () => extra.notes.memoryTexts(),
+      nowPlaying: extra.nowPlaying,
+      apps: () => registry.load().map((a) => ({ name: a.name, intents: a.intents })),
+    });
 
-  let history: ChatMessage[] = [];
+  /** The key-test and per-chat Claude conversations (each keeps its own context). */
+  const claude = makeClaude();
+  const perChat = new Map<string, { claude: AnthropicProvider; history: ChatMessage[] }>();
+  const chatState = (chatId: string): { claude: AnthropicProvider; history: ChatMessage[] } => {
+    let st = perChat.get(chatId);
+    if (!st) {
+      // A chat from before a restart: give Claude its earlier turns as plain text.
+      const earlier = extra.chats
+        .messages(chatId)
+        .flatMap((m) =>
+          m.role === 'user' || m.role === 'assistant' ? [{ role: m.role, content: m.text }] : [],
+        );
+      st = { claude: makeClaude(), history: earlier.slice(-MAX_HISTORY) };
+      st.claude.seed(earlier);
+      perChat.set(chatId, st);
+    }
+    return st;
+  };
   let inflight: AbortController | null = null;
   /** Actions the model is waiting on, keyed `${responseId}:${toolUseId}`. */
   const waiting = new Map<string, (o: ToolOutcome) => void>();
@@ -78,7 +108,12 @@ export function registerAssistantIpc(
     const ctrl = new AbortController();
     inflight = ctrl;
     const responseId = responseIdFor(msg.id);
-    history = [...history, { role: 'user' as const, content: msg.text }].slice(-MAX_HISTORY);
+    const chatId = typeof msg.chatId === 'string' ? msg.chatId : extra.chats.state().activeId;
+    const chat = chatState(chatId);
+    const research = extra.chats.get(chatId)?.research === true;
+    chat.history = [...chat.history, { role: 'user' as const, content: msg.text }].slice(
+      -MAX_HISTORY,
+    );
     const out = (chunk: Parameters<typeof emit<typeof IPC.assistant.onStream>>[2]): void =>
       emit(getWindow(), IPC.assistant.onStream, chunk);
 
@@ -105,7 +140,7 @@ export function registerAssistantIpc(
     const s = getSettings();
     let provider = mock;
     if (s.provider === 'anthropic') {
-      if (secrets.has()) provider = claude;
+      if (secrets.has()) provider = chat.claude;
       else
         out({
           type: 'notice',
@@ -117,10 +152,11 @@ export function registerAssistantIpc(
 
     let text = '';
     const run = async (p: AIProvider): Promise<void> => {
-      for await (const chunk of p.send(history, {
+      for await (const chunk of p.send(chat.history, {
         systemPrompt: systemPrompt(),
         signal: ctrl.signal,
         runTool,
+        research,
       })) {
         if (ctrl.signal.aborted) break;
         if (chunk.type === 'text') text += chunk.delta;
@@ -160,7 +196,9 @@ export function registerAssistantIpc(
     // A cancelled response still closes its stream so the renderer can settle.
     if (ctrl.signal.aborted) out({ type: 'done', responseId });
     if (text)
-      history = [...history, { role: 'assistant' as const, content: text }].slice(-MAX_HISTORY);
+      chat.history = [...chat.history, { role: 'assistant' as const, content: text }].slice(
+        -MAX_HISTORY,
+      );
     return { id: responseId, text, timestamp: Date.now() };
   });
 
@@ -184,8 +222,8 @@ export function registerAssistantIpc(
     IPC.assistant.reset,
     () => {
       inflight?.abort();
-      history = [];
-      claude.reset();
+      // "Clear" in the current chat: forget its context too.
+      perChat.delete(extra.chats.state().activeId);
     },
     getWindow,
   );

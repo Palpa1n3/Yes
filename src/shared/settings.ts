@@ -34,6 +34,19 @@ function validPlace(v: unknown): WeatherPlace | null {
   };
 }
 
+/** A short list of app/process names (letters, digits, spaces, . _ -). */
+function names(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return [
+    ...new Set(
+      v
+        .filter((x): x is string => typeof x === 'string')
+        .map((x) => x.trim())
+        .filter((x) => /^[\w .-]{1,60}$/.test(x)),
+    ),
+  ].slice(0, 20);
+}
+
 export function sanitizeSettings(raw: unknown): Settings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const d = DEFAULT_SETTINGS;
@@ -93,9 +106,17 @@ export function sanitizeSettings(raw: unknown): Settings {
         : d.alarmVolume,
     globalHotkey: str('globalHotkey', 60).trim() || d.globalHotkey,
     voiceHotkey: str('voiceHotkey', 60).trim(),
+    gamingMode: bool('gamingMode'),
+    gamingPowerPlan: bool('gamingPowerPlan'),
+    gamingQuiet: bool('gamingQuiet'),
+    gamingCloseApps: names(r['gamingCloseApps']),
+    gamingGames: names(r['gamingGames']),
     provider: r['provider'] === 'anthropic' ? 'anthropic' : 'mock',
     model: (AI_MODELS as readonly string[]).includes(r['model'] as string)
       ? (r['model'] as AiModel)
       : d.model,
+    researchModel: (AI_MODELS as readonly string[]).includes(r['researchModel'] as string)
+      ? (r['researchModel'] as AiModel)
+      : d.researchModel,
   };
 }

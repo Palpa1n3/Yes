@@ -39,6 +39,8 @@ describe('TopBar', () => {
     fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
     expect(useUiStore.getState().tab).toBe('storage');
     fireEvent.keyDown(window, { key: '2', ctrlKey: true });
+    expect(useUiStore.getState().tab).toBe('chat');
+    fireEvent.keyDown(window, { key: '4', ctrlKey: true });
     expect(useUiStore.getState().tab).toBe('system');
     expect(screen.getByRole('tab', { name: /system/i }).getAttribute('aria-selected')).toBe('true');
   });

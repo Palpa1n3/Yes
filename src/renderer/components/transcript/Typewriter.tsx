@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useReducedMotion } from '@renderer/hooks/useReducedMotion';
 
 const MS_PER_CHAR = 20;
@@ -13,10 +13,12 @@ interface Props {
   streaming: boolean;
   revealed: boolean;
   onDone(): void;
+  /** How to draw the visible part (e.g. as Markdown). Plain text by default. */
+  render?(visible: string): ReactNode;
 }
 
 /** Reveals streamed text at ~20ms/char. Click to skip. Instant under reduced motion. */
-export function Typewriter({ id, text, streaming, revealed, onDone }: Props) {
+export function Typewriter({ id, text, streaming, revealed, onDone, render }: Props) {
   const reduced = useReducedMotion();
   const instant = revealed || reduced;
   const [shown, setShown] = useState(() => (instant ? text.length : (progress.get(id) ?? 0)));
@@ -48,19 +50,21 @@ export function Typewriter({ id, text, streaming, revealed, onDone }: Props) {
   }, [streaming, visible, target, id, onDone]);
 
   const typing = visible < target || streaming;
+  // Markdown is block content, so it needs a block wrapper.
+  const Wrap = render ? 'div' : 'span';
   return (
-    <span
+    <Wrap
       onClick={() => typing && setSkipped(true)}
       className={typing ? 'cursor-pointer' : undefined}
       title={typing ? 'Click to skip' : undefined}
     >
-      {text.slice(0, visible)}
+      {render ? render(text.slice(0, visible)) : text.slice(0, visible)}
       {typing && (
         <span
           className="ml-0.5 inline-block h-[1em] w-[0.5em] translate-y-[2px] animate-blink bg-accent/80"
           aria-hidden
         />
       )}
-    </span>
+    </Wrap>
   );
 }

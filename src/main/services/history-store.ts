@@ -7,7 +7,7 @@ export const MAX_HISTORY = 200;
 
 const ROLES = new Set(['user', 'assistant', 'command', 'system']);
 
-function valid(m: unknown): m is StoredMessage {
+export function validMessage(m: unknown): m is StoredMessage {
   if (!m || typeof m !== 'object') return false;
   const r = m as Record<string, unknown>;
   if (
@@ -21,6 +21,16 @@ function valid(m: unknown): m is StoredMessage {
     : typeof r['text'] === 'string';
 }
 
+/** Nothing is mid-stream or awaiting approval once it's on disk. */
+export function settleMessages(messages: StoredMessage[]): StoredMessage[] {
+  return messages.filter(validMessage).map((m): StoredMessage => {
+    if (m.role === 'assistant') return { ...m, streaming: false, revealed: true };
+    if (m.role === 'command' && (m.command.status === 'pending' || m.command.status === 'awaiting'))
+      return { ...m, command: { ...m.command, status: 'cancelled' } };
+    return m;
+  });
+}
+
 export class HistoryStore {
   constructor(private readonly file: string) {}
 
@@ -28,7 +38,7 @@ export class HistoryStore {
     try {
       if (!existsSync(this.file)) return [];
       const raw: unknown = JSON.parse(readFileSync(this.file, 'utf8'));
-      return Array.isArray(raw) ? raw.filter(valid).slice(-MAX_HISTORY) : [];
+      return Array.isArray(raw) ? raw.filter(validMessage).slice(-MAX_HISTORY) : [];
     } catch {
       return [];
     }
@@ -39,7 +49,7 @@ export class HistoryStore {
       mkdirSync(dirname(this.file), { recursive: true });
       // Nothing is mid-stream or awaiting approval once it's on disk.
       const settled = messages
-        .filter(valid)
+        .filter(validMessage)
         .slice(-MAX_HISTORY)
         .map((m): StoredMessage => {
           if (m.role === 'assistant') return { ...m, streaming: false, revealed: true };

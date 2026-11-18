@@ -100,6 +100,20 @@ export function AiSection() {
           />
         </Field>
       )}
+      {s.provider === 'anthropic' && (
+        <Field
+          label="Research model"
+          hint="Used for chats in research mode, which search the web and write fuller answers with sources. Web searches cost about 1p each on top of the usual message cost."
+          stacked
+        >
+          <Select<AiModel>
+            label="Research model"
+            value={s.researchModel}
+            onChange={(v) => void update({ researchModel: v })}
+            options={MODELS}
+          />
+        </Field>
+      )}
 
       <Field
         label="Anthropic API key"

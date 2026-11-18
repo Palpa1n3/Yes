@@ -57,7 +57,9 @@ If the build fails with "Cannot create symbolic link", open Command Prompt **as 
 
 | Tab      | Shows                                                                                          |
 | -------- | ---------------------------------------------------------------------------------------------- |
-| Overview | Timers, live weather, vitals, core, console, network, drives, activity log                     |
+| Overview | Timers, weather, now playing, vitals, core, console, network, drives, agenda, activity log     |
+| Chat     | Saved chats (like ChatGPT): new, pin, rename, search, export; research mode with web sources   |
+| Notes    | Lists (shopping, to-do…), quick notes, and what ARC remembers about you                        |
 | System   | Per-thread CPU, memory, CPU/RAM/GPU history, top processes, GPU                                |
 | Tasks    | Built-in Task Manager: every app and process with CPU and memory, search, sort, End task       |
 | Apps     | Your `apps.json` as a launch grid, add installed apps, edit trigger phrases, open your folders |
@@ -90,6 +92,30 @@ If the build fails with "Cannot create symbolic link", open Command Prompt **as 
 - **Timed routines:** tick **Run at a set time**, pick a time and the days (weekdays are pre-selected). They run while ARC is open or sitting in the tray; if the PC is off or asleep at that time, that run is skipped.
 - Three examples come built in (Morning briefing, Focus mode, Wind down). They're saved in `%APPDATA%\ARC\routines.json`.
 
+### Chats and research
+
+- The **Chat** tab keeps every conversation, grouped Pinned / Today / Yesterday / Previous 7 days / Older. **New chat** starts fresh; hover a chat to pin, rename or delete it; search looks inside messages too. Claude keeps each chat's context separately, and after a restart it's given the chat's earlier messages.
+- The console on the Overview always shows the open chat (its name is at the top; **+** starts a new one).
+- **Research mode** (the switch at the top of a chat, or **Research** for a new one): Claude searches the web and reads pages, uses the research model (Settings › Advanced, Sonnet by default) and writes fuller answers with headings, lists, tables and **sources** you can click. Web searches cost about 1p each on top of normal usage. Answers have a copy button; **Export** saves the chat as a Markdown file.
+
+### Notes, lists and memory
+
+- Say or type _"add milk and eggs to my shopping list"_, _"what's on my shopping list?"_, _"tick off milk"_, _"take a note: …"_. Lists and notes are in the **Notes** tab, where you can also tick, add, rename and delete.
+- _"Remember that I take my coffee black"_ saves a memory; Claude is given your memories in every chat. _"What do you remember about me?"_, _"forget the coffee thing"_, or delete them in the Notes tab. Memories are stored on your PC and sent to Claude with your messages.
+- The morning briefing mentions what's on your **To-do** list.
+
+### Now playing
+
+When Spotify, a browser tab or any media app is playing, a **Now playing** panel appears on the Overview with the song, artist and previous / play-pause / next buttons. Ask _"what's this song?"_. (It reads Windows' own media controls, so it works with anything that shows up in the Windows volume pop-up.)
+
+### Free up space (Storage tab)
+
+**Find space to free up** sizes: temporary files (older than a day), the Recycle Bin, crash reports, browser caches (logins and history are kept), graphics shader caches, Steam/Epic/Discord caches, and big or old files in Downloads. Tick what to clear, then confirm. Caches and temp files are deleted; Downloads files you pick go to the **Recycle Bin**. Files in use are skipped. For Windows Update leftovers use **Windows Disk Cleanup (system files)**. Claude can't clear anything.
+
+### Gaming mode (Settings › Gaming)
+
+Turn on **Turn on automatically** and ARC watches for games (popular titles, plus anything running from Steam, Epic, Xbox, Battle.net, Riot, EA, Ubisoft, GOG or CurseForge/Minecraft folders). While you play: **High performance** power plan, the apps you list are closed politely, and ARC stays quiet (no speech, sounds or wake word; timer alarms still ring). When the game has closed, the power plan is put back and those apps reopen. A **Gaming** chip shows in the top bar; click it to end gaming mode. If a game isn't spotted, add its process name (from the Tasks tab) under **Extra games**.
+
 ### Task Manager (Tasks tab)
 
 - Every running app and process, grouped like Windows Task Manager (**Apps**, **Background processes**, **Windows processes**), updated every 2 seconds. Click CPU, Memory or Name to sort; search by name.
@@ -120,7 +146,9 @@ All in `%APPDATA%\ARC\` (Settings › Advanced › Data folder):
 | ------------------- | ------------------------------------------------------------------------------------------- |
 | `settings.json`     | All settings incl. personality. Hand-editing is safe: invalid values fall back to defaults. |
 | `apps.json`         | App registry: `{ id, name, path?, args?, startMenu?, uri?, icon?, intents[] }`              |
-| `history.json`      | Last 200 conversation messages (turn off in Settings › General)                             |
+| `chats\`            | Your saved chats (`index.json` + one file per chat). Turn off in Settings › General         |
+| `notes.json`        | Lists, notes and memories                                                                   |
+| `routines.json`     | Your routines                                                                               |
 | `window-state.json` | Window position/size                                                                        |
 
 ## Personalities

@@ -1,6 +1,7 @@
 /** Sound effects synthesised with Web Audio: no audio files to ship or license.
  *  Each cue is a short, soft envelope so it stays unobtrusive. */
 import { useSettingsStore } from '@renderer/stores/settingsStore';
+import { gamingQuiet } from '@renderer/stores/gamingStore';
 
 export type Sfx = 'send' | 'success' | 'error' | 'boot' | 'open';
 
@@ -41,7 +42,7 @@ function tone(
 /** Play a cue unless sound effects are off. `force` ignores the setting (Settings "Test"). */
 export function playSfx(name: Sfx, force = false): void {
   const { sfx, sfxVolume } = useSettingsStore.getState().settings;
-  if ((!sfx && !force) || sfxVolume <= 0) return;
+  if ((!sfx && !force) || sfxVolume <= 0 || (!force && gamingQuiet())) return;
   const ac = audio();
   if (!ac) return;
   const out = ac.createGain();

@@ -46,6 +46,38 @@ export function installArcMock(): ArcAPI {
       onChange: vi.fn(() => () => undefined),
       onRing: vi.fn(() => () => undefined),
     },
+    gaming: {
+      status: vi.fn(async () => ({
+        active: false,
+        game: null,
+        since: null,
+        manual: false,
+        actions: [],
+      })),
+      start: vi.fn(async () => ({ active: true, game: null, since: 0, manual: true, actions: [] })),
+      stop: vi.fn(async () => ({
+        active: false,
+        game: null,
+        since: null,
+        manual: false,
+        actions: [],
+      })),
+      onChange: vi.fn(() => () => undefined),
+    },
+    cleanup: {
+      scan: vi.fn(async () => ({ items: [], downloads: [] })),
+      run: vi.fn(async () => ({ freed: 0, skipped: 0, message: 'Done.' })),
+      openWindowsTool: vi.fn(),
+    },
+    media: {
+      get: vi.fn(async () => null),
+      onChange: vi.fn(() => () => undefined),
+    },
+    notes: {
+      state: vi.fn(async () => ({ lists: [], notes: [], memories: [] })),
+      apply: vi.fn(async () => ({ lists: [], notes: [], memories: [] })),
+      onChange: vi.fn(() => () => undefined),
+    },
     calendar: {
       get: vi.fn(async () => ({ configured: false, events: [], fetchedAt: null, error: null })),
       refresh: vi.fn(async () => ({ configured: false, events: [], fetchedAt: null, error: null })),
@@ -136,7 +168,38 @@ export function installArcMock(): ArcAPI {
       reveal: vi.fn(),
       openSpecial: vi.fn(),
     },
-    history: { get: vi.fn(async () => []), save: vi.fn(), clear: vi.fn() },
+    chats: {
+      state: vi.fn(async () => ({
+        activeId: 'c000000',
+        chats: [
+          {
+            id: 'c000000',
+            title: 'New chat',
+            createdAt: 0,
+            updatedAt: 0,
+            pinned: false,
+            research: false,
+          },
+        ],
+      })),
+      open: vi.fn(async () => []),
+      create: vi.fn(async () => ({
+        id: 'c000001',
+        title: 'New chat',
+        createdAt: 0,
+        updatedAt: 0,
+        pinned: false,
+        research: false,
+      })),
+      save: vi.fn(),
+      rename: vi.fn(async () => ({ activeId: 'c000000', chats: [] })),
+      setPinned: vi.fn(async () => ({ activeId: 'c000000', chats: [] })),
+      setResearch: vi.fn(async () => ({ activeId: 'c000000', chats: [] })),
+      remove: vi.fn(async () => ({ activeId: 'c000000', chats: [] })),
+      search: vi.fn(async () => []),
+      exportMd: vi.fn(async () => ({ ok: true, message: '' })),
+      onChange: vi.fn(() => () => undefined),
+    },
     app: {
       onCommand: vi.fn(() => () => undefined),
       getInfo: vi.fn(async () => ({
@@ -148,6 +211,7 @@ export function installArcMock(): ArcAPI {
         activeVoiceHotkey: 'CommandOrControl+Alt+Space',
       })),
       openPath: vi.fn(),
+      openUrl: vi.fn(),
       resetSettings: vi.fn(async () => DEFAULT_SETTINGS),
     },
   };

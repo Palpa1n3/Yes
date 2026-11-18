@@ -135,16 +135,19 @@ export function GeneralTab() {
       </Section>
       <Section title="Conversation">
         <Field
-          label="Remember conversation"
-          hint="Keeps the transcript between restarts, stored only on this PC."
+          label="Remember chats"
+          hint="Keeps your chats between restarts, stored only on this PC. Turning this off deletes the saved copies."
         >
           <Toggle
-            label="Remember conversation"
+            label="Remember chats"
             checked={s.persistHistory}
             onChange={(v) => void update({ persistHistory: v })}
           />
         </Field>
-        <Field label="Clear conversation" hint="Also erases the saved copy.">
+        <Field
+          label="Clear this chat"
+          hint="Empties the chat that's open (other chats are kept; delete those from the Chat tab)."
+        >
           <button type="button" className="hud-button" onClick={clear}>
             Clear
           </button>

@@ -7,6 +7,8 @@ import type { MainContext } from '../context';
 import { RoutineService } from '../services/routine-service';
 import type { WeatherService } from '../services/weather';
 import type { CalendarService } from '../services/calendar';
+import type { NotesStore } from '../services/notes-store';
+import { todoSentence } from '@shared/notes';
 import { emit, handle, on } from './handle';
 
 export function registerRoutinesIpc(
@@ -14,6 +16,7 @@ export function registerRoutinesIpc(
   execute: (cmd: CanonicalCommand) => Promise<CommandResult>,
   weather: WeatherService,
   calendar: CalendarService,
+  notes: NotesStore,
 ): { service: RoutineService; run(cmd: CanonicalCommand): Promise<CommandResult> } {
   const service = new RoutineService({
     file: join(app.getPath('userData'), 'routines.json'),
@@ -29,6 +32,7 @@ export function registerRoutinesIpc(
         timers: ctx.timers.list(),
         stats: ctx.telemetry.snapshot(),
         calendar: calendar.state().configured ? calendar.state().events : null,
+        todo: todoSentence(notes.state()),
       });
     },
     onChange: (list) => emit(ctx.getWindow(), IPC.routines.onChange, list),

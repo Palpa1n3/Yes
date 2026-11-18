@@ -2,6 +2,8 @@ import { create } from 'zustand';
 
 export const TAB_IDS = [
   'overview',
+  'chat',
+  'notes',
   'system',
   'tasks',
   'apps',
@@ -16,6 +18,7 @@ export const SETTINGS_TABS = [
   'personality',
   'appearance',
   'voice',
+  'gaming',
   'hotkeys',
   'advanced',
 ] as const;

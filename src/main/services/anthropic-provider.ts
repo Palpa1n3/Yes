@@ -3,6 +3,8 @@
  *  (Approve / Cancel, activity log) before its result goes back to the model. */
 import { describeSchedule, describeStep, type Routine } from '@shared/routines';
 import { fmtTime, type CalEvent } from '@shared/calendar';
+import type { Source } from '@shared/chats';
+import type { NowPlaying } from '@shared/media';
 import { weatherSummary, type WeatherData } from '@shared/weather';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
@@ -178,6 +180,79 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'add_to_list',
+    description:
+      'Add items to one of the user\'s lists (shopping, to-do, packing…). The list is created if needed. Use "To-do" for tasks.',
+    input_schema: {
+      type: 'object',
+      properties: { list: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } },
+      required: ['list', 'items'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_lists',
+    description: "The user's lists with what is still to do and what is done.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'update_list_item',
+    description:
+      'Tick off ("done"), reopen ("undone") or remove an item from a list, matched by its words.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        list: { type: 'string' },
+        item: { type: 'string' },
+        action: { type: 'string', enum: ['done', 'undone', 'remove'] },
+      },
+      required: ['item', 'action'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'add_note',
+    description: 'Save a quick note for the user (shown in the Notes tab).',
+    input_schema: {
+      type: 'object',
+      properties: { text: { type: 'string' } },
+      required: ['text'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_notes',
+    description: "The user's saved notes, newest first.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'remember',
+    description:
+      'Remember a fact about the user for all future chats (preferences, people, dates, details they ask you to keep). Only when they ask you to remember something, or clearly want it kept.',
+    input_schema: {
+      type: 'object',
+      properties: { fact: { type: 'string' } },
+      required: ['fact'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'forget',
+    description: 'Forget remembered facts matching these words.',
+    input_schema: {
+      type: 'object',
+      properties: { about: { type: 'string' } },
+      required: ['about'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_now_playing',
+    description:
+      "What's playing right now in any media app (Spotify, a browser tab, etc.): title, artist, app, playing or paused.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'list_routines',
     description:
       'List the user\'s saved routines (named sequences of actions such as "Focus mode") with their steps.',
@@ -220,7 +295,16 @@ export function toIntent(
 ):
   | { intent: RawIntent }
   | { error: string }
-  | { local: 'list_apps' | 'list_timers' | 'get_weather' | 'list_routines' | 'get_calendar' } {
+  | {
+      local:
+        | 'list_apps'
+        | 'list_timers'
+        | 'get_weather'
+        | 'list_routines'
+        | 'get_calendar'
+        | 'notes'
+        | 'get_now_playing';
+    } {
   const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const str = (k: string): string | null =>
     typeof o[k] === 'string' && (o[k] as string).trim()
@@ -302,6 +386,16 @@ export function toIntent(
       return { local: 'list_routines' };
     case 'get_calendar':
       return { local: 'get_calendar' };
+    case 'get_now_playing':
+      return { local: 'get_now_playing' };
+    case 'add_to_list':
+    case 'get_lists':
+    case 'update_list_item':
+    case 'add_note':
+    case 'get_notes':
+    case 'remember':
+    case 'forget':
+      return { local: 'notes' };
     case 'run_routine': {
       const n = str('name');
       return n ? { intent: { action: 'run_routine', target: n } } : { error: 'Missing "name".' };
@@ -318,6 +412,38 @@ export function toIntent(
 }
 
 /** Compact telemetry for the model (bytes → GB, rounded), so tool results stay small. */
+const RESEARCH_NOTE =
+  'Research mode is on for this chat. Give thorough, well-organised answers in Markdown (short headings, bullet lists, bold for key points, tables when comparing). Search the web for anything current, factual or specific that you are not certain of, read the most relevant pages, and cite sources inline as Markdown links. Say clearly when sources disagree or information may be out of date.';
+
+/** Web search and fetch (server tools). Newer models get the versions that filter
+ *  results before they reach the context; Haiku uses the basic versions. */
+export function webTools(model: AiModel): Anthropic.Beta.BetaToolUnion[] {
+  return model === 'claude-haiku-5-5'
+    ? [
+        { type: 'web_search_20250305', name: 'web_search', max_uses: 5 },
+        { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5 },
+      ]
+    : [
+        { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
+        { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 5 },
+      ];
+}
+
+/** Unique pages cited (or found) in the assistant turns of this exchange. */
+export function sourcesFrom(msgs: Msg[]): Source[] {
+  const out = new Map<string, Source>();
+  for (const m of msgs) {
+    if (m.role !== 'assistant' || typeof m.content === 'string') continue;
+    for (const b of m.content) {
+      if (b.type === 'text' && Array.isArray(b.citations))
+        for (const c of b.citations)
+          if ('url' in c && typeof c.url === 'string' && !out.has(c.url))
+            out.set(c.url, { url: c.url, title: ('title' in c && c.title) || c.url });
+    }
+  }
+  return [...out.values()].slice(0, 12);
+}
+
 /** Calendar events as local, human-readable times for the model. */
 export function calendarForModel(events: CalEvent[], now = Date.now()): Record<string, unknown> {
   const day = (t: number): string =>
@@ -397,6 +523,8 @@ export function statsForModel(s: SystemStats): Record<string, unknown> {
 export interface AnthropicDeps {
   getKey(): Promise<string | null>;
   model(): AiModel;
+  /** Model for research-mode chats. */
+  researchModel?(): AiModel;
   systemPrompt(): string;
   info(): SystemInfo | null;
   stats(): SystemStats;
@@ -408,6 +536,10 @@ export interface AnthropicDeps {
   timers?(): TimerInfo[];
   weather?(): WeatherData | null;
   routines?(): Routine[];
+  /** Lists, notes and memories (the note tools). */
+  notes?: { tool(name: string, input: unknown): unknown };
+  memories?(): string[];
+  nowPlaying?(): NowPlaying | null;
   /** null = no calendar connected. */
   calendar?(): CalEvent[] | null;
   /** Injectable for tests. */
@@ -424,6 +556,23 @@ export class AnthropicProvider implements AIProvider {
   private lastSystem: string | null = null;
 
   constructor(private readonly deps: AnthropicDeps) {}
+
+  /** Start from an earlier saved chat (plain text turns), e.g. after ARC restarts. */
+  seed(history: Array<{ role: 'user' | 'assistant'; content: string }>): void {
+    if (this.transcript.length) return;
+    const out: Msg[] = [];
+    for (const h of history.slice(-40)) {
+      const text = h.content.trim();
+      if (!text) continue;
+      const last = out.at(-1);
+      if (last && last.role === h.role && typeof last.content === 'string')
+        last.content = `${last.content}\n\n${text}`;
+      else out.push({ role: h.role, content: text });
+    }
+    while (out[0] && out[0].role !== 'user') out.shift();
+    while (out.length && out.at(-1)?.role !== 'assistant') out.pop();
+    this.transcript = out;
+  }
 
   reset(): void {
     this.transcript = [];
@@ -461,6 +610,7 @@ export class AnthropicProvider implements AIProvider {
   }
 
   private systemText(): string {
+    const memories = this.deps.memories?.() ?? [];
     const info = this.deps.info();
     const machine = info
       ? `The computer is "${info.hostname}" running ${info.osName} on ${info.cpuModel} (${info.cpuThreads} threads), ${Math.round(info.memTotal / 1024 ** 3)} GB RAM.`
@@ -470,8 +620,11 @@ export class AnthropicProvider implements AIProvider {
       'Use the tools to act rather than describing what you would do. Actions may need the user to approve them; if one is cancelled or fails, say so briefly and suggest an alternative.',
       'Answer questions about the computer from get_system_status, never from guesses.',
       "Each user message is followed by a system note with the user's current local date and time, read from this computer's clock. It is accurate: answer questions about the time, date or day directly from it.",
-      "You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, check the weather and the user's calendar, run their saved routines, and lock the PC.",
+      "You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, check the weather and the user's calendar, run their saved routines, keep lists and notes, remember things they ask you to, and lock the PC.",
       machine,
+      memories.length
+        ? `Things the user asked you to remember (use them naturally when relevant):\n${memories.map((m) => `- ${m}`).join('\n')}`
+        : '',
     ];
     return `${this.deps.systemPrompt()}\n\n${rules.filter(Boolean).join('\n')}`;
   }
@@ -483,7 +636,10 @@ export class AnthropicProvider implements AIProvider {
     const key = await this.deps.getKey();
     if (!key) throw new Error('No API key saved. Add one in Settings › Advanced.');
     const client = this.client(key);
-    const model = this.deps.model();
+    const research = opts.research === true;
+    const model = research
+      ? (this.deps.researchModel?.() ?? 'claude-sonnet-5-5')
+      : this.deps.model();
     const userText = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
 
     if (this.transcript.length > MAX_TRANSCRIPT) {
@@ -517,6 +673,7 @@ export class AnthropicProvider implements AIProvider {
         role: 'system',
         content: [
           `Current local date and time (from this computer's clock): ${localTimeText(now)}.`,
+          research ? RESEARCH_NOTE : '',
           changed
             ? `Your instructions have been updated. From now on, follow these instead of the earlier ones:\n\n${current}`
             : '',
@@ -540,11 +697,11 @@ export class AnthropicProvider implements AIProvider {
               max_tokens: 64000,
               // Stable text, cached: the same for every request in this conversation.
               system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-              tools: TOOLS,
+              tools: research ? [...TOOLS, ...webTools(model)] : TOOLS,
               // A snapshot: retries must not see messages appended later in this turn.
               messages: [...this.transcript],
               // Conversational route: low effort keeps replies quick and cheap.
-              output_config: { effort: 'low' },
+              output_config: { effort: research ? 'medium' : 'low' },
               // If earlier thinking no longer matches the history, drop it rather than fail.
               thinking: {
                 type: 'adaptive',
@@ -562,6 +719,17 @@ export class AnthropicProvider implements AIProvider {
           for await (const ev of stream) {
             if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta')
               yield { type: 'text', delta: ev.delta.text };
+            else if (
+              ev.type === 'content_block_start' &&
+              ev.content_block.type === 'server_tool_use'
+            )
+              yield {
+                type: 'activity',
+                text:
+                  ev.content_block.name === 'web_fetch'
+                    ? 'Reading a web page…'
+                    : 'Searching the web…',
+              };
           }
           message = await stream.finalMessage();
           jsonRetries = 0;
@@ -605,6 +773,8 @@ export class AnthropicProvider implements AIProvider {
         if (toolUses.length === 0) {
           this.transcript.push({ role: 'assistant', content: message.content });
           finished = true;
+          const sources = sourcesFrom(this.transcript.slice(start));
+          if (sources.length) yield { type: 'sources', sources };
           yield { type: 'done' };
           return;
         }
@@ -627,6 +797,26 @@ export class AnthropicProvider implements AIProvider {
               tool_use_id: t.id,
               is_error: true,
               content: plan.error,
+            });
+            continue;
+          }
+          if ('local' in plan && plan.local === 'get_now_playing') {
+            const n = this.deps.nowPlaying?.() ?? null;
+            results.push({
+              type: 'tool_result',
+              tool_use_id: t.id,
+              content: JSON.stringify(n ?? { nothingPlaying: true }),
+            });
+            continue;
+          }
+          if ('local' in plan && plan.local === 'notes') {
+            const r = this.deps.notes?.tool(t.name, t.input) ?? { error: 'Notes are unavailable.' };
+            const isErr = !!r && typeof r === 'object' && 'error' in r;
+            results.push({
+              type: 'tool_result',
+              tool_use_id: t.id,
+              ...(isErr ? { is_error: true } : {}),
+              content: JSON.stringify(r),
             });
             continue;
           }

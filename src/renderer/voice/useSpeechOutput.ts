@@ -3,6 +3,7 @@ import { useAssistantStore } from '@renderer/stores/assistantStore';
 import { useConversationStore } from '@renderer/stores/conversationStore';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { useVoiceStore } from '@renderer/stores/voiceStore';
+import { gamingQuiet } from '@renderer/stores/gamingStore';
 import { FishSpeaker } from './fishSpeech';
 import { webSpeechOutput } from './providers';
 
@@ -79,7 +80,13 @@ export function useSpeechOutput(): void {
           continue;
         }
         spoken.add(m.id);
-        if (!speakReplies || voiceMuted || (!useFish && !webSpeechOutput.available)) continue;
+        if (
+          !speakReplies ||
+          voiceMuted ||
+          gamingQuiet() ||
+          (!useFish && !webSpeechOutput.available)
+        )
+          continue;
         assistant().setSpeechActive(true);
         if (useFish) fish.speak(m.text);
         else speakSystem(m.text);

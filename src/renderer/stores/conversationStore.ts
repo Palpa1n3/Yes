@@ -32,6 +32,15 @@ interface ConversationState {
   /** ms from send to first chunk of the last response. */
   lastLatencyMs: number | null;
   sentAt: number;
+  /** The saved chat on screen. */
+  chatId: string;
+  /** What the model is doing right now ("Searching the web…"), while a reply streams. */
+  activity: string | null;
+
+  /** Switch to another saved chat (the current one is saved first). */
+  openChat(id: string): Promise<void>;
+  /** Start a new chat (optionally in research mode) and switch to it. */
+  newChat(research?: boolean): Promise<void>;
 
   send(text: string): Promise<void>;
   cancel(): void;
@@ -271,6 +280,29 @@ export const useConversationStore = create<ConversationState>((set, get) => {
     gotFirstChunk: false,
     lastLatencyMs: null,
     sentAt: 0,
+    chatId: '',
+    activity: null,
+
+    async openChat(id) {
+      const s = get();
+      if (id === s.chatId) return;
+      if (s.activeResponseId) window.arc.assistant.cancel();
+      if (s.chatId) saveNow(s.chatId, s.messages);
+      const messages = await window.arc.chats.open(id);
+      set({
+        chatId: id,
+        messages: messages.map((m) => (m.role === 'assistant' ? { ...m, revealed: true } : m)),
+        activeResponseId: null,
+        activeBubbleId: null,
+        activity: null,
+      });
+      sync();
+    },
+
+    async newChat(research = false) {
+      const meta = await window.arc.chats.create(research);
+      await get().openChat(meta.id);
+    },
 
     async send(raw) {
       const text = raw.trim();
@@ -301,7 +333,7 @@ export const useConversationStore = create<ConversationState>((set, get) => {
         return;
       }
       try {
-        await window.arc.assistant.send({ id, text, timestamp: now() });
+        await window.arc.assistant.send({ id, text, timestamp: now(), chatId: get().chatId });
       } catch (err) {
         get().handleChunk({
           type: 'error',
@@ -318,8 +350,9 @@ export const useConversationStore = create<ConversationState>((set, get) => {
 
     clear() {
       window.arc.assistant.reset();
-      window.arc.history.clear();
-      set({ messages: [], activeResponseId: null, activeBubbleId: null });
+      const { chatId } = get();
+      if (chatId) window.arc.chats.save(chatId, []);
+      set({ messages: [], activeResponseId: null, activeBubbleId: null, activity: null });
       useAssistantStore.getState().setState('idle');
     },
 
@@ -392,6 +425,7 @@ export const useConversationStore = create<ConversationState>((set, get) => {
 
       switch (chunk.type) {
         case 'text': {
+          if (s.activity) set({ activity: null });
           const bubble = s.activeBubbleId;
           if (bubble) {
             update((ms) =>
@@ -439,6 +473,23 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           if (!confirm) void runCommand(info, mid);
           break;
         }
+        case 'activity':
+          set({ activity: chunk.text });
+          useAssistantStore.getState().setState('thinking', chunk.text);
+          break;
+        case 'sources': {
+          // Attach to the reply this response produced (its last assistant message).
+          const lastAssistant = [...get().messages].reverse().find((m) => m.role === 'assistant');
+          if (lastAssistant)
+            update((ms) =>
+              ms.map((m) =>
+                m.id === lastAssistant.id && m.role === 'assistant'
+                  ? { ...m, sources: chunk.sources }
+                  : m,
+              ),
+            );
+          break;
+        }
         case 'notice':
           set({ activeBubbleId: null });
           update((ms) => [
@@ -447,7 +498,7 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           ]);
           break;
         case 'error': {
-          set({ activeResponseId: null, activeBubbleId: null });
+          set({ activeResponseId: null, activeBubbleId: null, activity: null });
           const lead = persona().phrase(
             useSettingsStore.getState().settings.personality.errorPhrases,
           );
@@ -466,7 +517,7 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           break;
         }
         case 'done':
-          set({ activeResponseId: null, activeBubbleId: null });
+          set({ activeResponseId: null, activeBubbleId: null, activity: null });
           update(closeBubble);
           break;
       }
@@ -482,20 +533,24 @@ export function bindAssistantStream(): () => void {
 }
 
 /** Persist the transcript (debounced) while history is enabled. Returns an unsubscribe. */
+/** Session-only lines (restore notice, greeting) are never saved. */
+const keepable = (ms: Message[]): Message[] => ms.filter((m) => !m.id.startsWith('session-'));
+let pendingSave: ReturnType<typeof setTimeout> | undefined;
+function saveNow(chatId: string, messages: Message[]): void {
+  clearTimeout(pendingSave);
+  window.arc.chats.save(chatId, keepable(messages));
+}
+
+/** Save the open chat (debounced) as it changes. Returns an unsubscribe. */
 export function bindHistoryPersistence(): () => void {
-  let t: ReturnType<typeof setTimeout> | undefined;
   const unsub = useConversationStore.subscribe((s, prev) => {
-    if (s.messages === prev.messages || !useSettingsStore.getState().settings.persistHistory)
-      return;
-    clearTimeout(t);
-    // Don't persist the restore notice or the per-launch greeting.
-    t = setTimeout(
-      () => window.arc.history.save(s.messages.filter((m) => !m.id.startsWith('session-'))),
-      800,
-    );
+    if (s.messages === prev.messages || !s.chatId || s.chatId !== prev.chatId) return;
+    clearTimeout(pendingSave);
+    const { chatId, messages } = s;
+    pendingSave = setTimeout(() => window.arc.chats.save(chatId, keepable(messages)), 800);
   });
   return () => {
-    clearTimeout(t);
+    clearTimeout(pendingSave);
     unsub();
   };
 }

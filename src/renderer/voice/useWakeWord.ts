@@ -3,6 +3,7 @@ import { useAssistantStore } from '@renderer/stores/assistantStore';
 import { useConversationStore } from '@renderer/stores/conversationStore';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { useVoiceStore } from '@renderer/stores/voiceStore';
+import { useGamingStore } from '@renderer/stores/gamingStore';
 import { playSfx } from './sfx';
 import { isListening, toggleListening } from './useSpeechInput';
 import { stopSpeaking } from './useSpeechOutput';
@@ -13,7 +14,8 @@ const ECHO_MS = 1200;
 
 /** "Hey ARC": listens all the time while on, transcribing only what sounds like speech. */
 export function useWakeWord(): void {
-  const on = useSettingsStore((s) => s.settings.wakeWord && s.settings.voiceInput);
+  const quiet = useGamingStore((g) => g.active) && useSettingsStore.getState().settings.gamingQuiet;
+  const on = useSettingsStore((s) => s.settings.wakeWord && s.settings.voiceInput) && !quiet;
 
   useEffect(() => {
     if (!on) return;

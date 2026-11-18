@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { ActivityLogPanel } from '@renderer/components/panels/ActivityLogPanel';
 import { AgendaPanel } from '@renderer/components/panels/AgendaPanel';
+import { NowPlayingPanel } from '@renderer/components/panels/NowPlayingPanel';
 import { TimersPanel } from '@renderer/components/panels/TimersPanel';
 import { Chip } from '@renderer/components/panels/Chip';
 import { panelVariants, Panel } from '@renderer/components/panels/Panel';
@@ -244,6 +245,7 @@ export function OverviewTab() {
         <>
           <TimersPanel className="shrink-0" />
           <WeatherPanel className="shrink-0" />
+          <NowPlayingPanel className="shrink-0" />
           <VitalsPanel />
         </>
       }

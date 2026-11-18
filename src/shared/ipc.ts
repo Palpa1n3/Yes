@@ -30,6 +30,11 @@ import type {
 } from './types';
 import type { Routine } from './routines';
 import type { FishKeyResult, VoiceStatus } from './voice';
+import type { ChatMeta, ChatsState } from './chats';
+import type { NotesOp, NotesState } from './notes';
+import type { NowPlaying } from './media';
+import type { CleanupId, CleanupResult, CleanupScan } from './cleanup';
+import type { GamingStatus } from './gaming';
 import type { EndTaskResult, TaskList } from './tasks';
 import type { CalEvent, CalendarState, CalendarUrlResult } from './calendar';
 
@@ -78,6 +83,26 @@ export const IPC = {
     refresh: 'weather:refresh',
     search: 'weather:search',
     onChange: 'weather:changed',
+  },
+  gaming: {
+    status: 'gaming:status',
+    start: 'gaming:start',
+    stop: 'gaming:stop',
+    onChange: 'gaming:changed',
+  },
+  cleanup: {
+    scan: 'cleanup:scan',
+    run: 'cleanup:run',
+    openWindowsTool: 'cleanup:open-windows-tool',
+  },
+  media: {
+    get: 'media:get',
+    onChange: 'media:changed',
+  },
+  notes: {
+    state: 'notes:state',
+    apply: 'notes:apply',
+    onChange: 'notes:changed',
   },
   calendar: {
     get: 'calendar:get',
@@ -133,13 +158,22 @@ export const IPC = {
     reveal: 'storage:reveal',
     openSpecial: 'storage:open-special',
   },
-  history: {
-    get: 'history:get',
-    save: 'history:save',
-    clear: 'history:clear',
+  chats: {
+    state: 'chats:state',
+    open: 'chats:open',
+    create: 'chats:create',
+    save: 'chats:save',
+    rename: 'chats:rename',
+    setPinned: 'chats:set-pinned',
+    setResearch: 'chats:set-research',
+    remove: 'chats:remove',
+    search: 'chats:search',
+    exportMd: 'chats:export',
+    onChange: 'chats:changed',
   },
   app: {
     onCommand: 'app:command',
+    openUrl: 'app:open-url',
     getInfo: 'app:get-info',
     openPath: 'app:open-path',
     resetSettings: 'app:reset-settings',
@@ -155,13 +189,29 @@ export interface InvokeMap {
   [IPC.commands.execute]: { args: [cmd: CanonicalCommand]; result: CommandResult };
   [IPC.settings.get]: { args: []; result: Settings };
   [IPC.settings.set]: { args: [patch: Partial<Settings>]; result: undefined };
-  [IPC.history.get]: { args: []; result: StoredMessage[] };
+  [IPC.chats.state]: { args: []; result: ChatsState };
+  [IPC.chats.open]: { args: [id: string]; result: StoredMessage[] };
+  [IPC.chats.create]: { args: [research: boolean]; result: ChatMeta };
+  [IPC.chats.rename]: { args: [id: string, title: string]; result: ChatsState };
+  [IPC.chats.setPinned]: { args: [id: string, pinned: boolean]; result: ChatsState };
+  [IPC.chats.setResearch]: { args: [id: string, research: boolean]; result: ChatsState };
+  [IPC.chats.remove]: { args: [id: string]; result: ChatsState };
+  [IPC.chats.search]: { args: [query: string]; result: string[] };
+  [IPC.chats.exportMd]: { args: [id: string]; result: { ok: boolean; message: string } };
   [IPC.ai.status]: { args: []; result: AiStatus };
   [IPC.timers.list]: { args: []; result: TimerInfo[] };
   [IPC.routines.list]: { args: []; result: Routine[] };
   [IPC.voice.status]: { args: []; result: VoiceStatus };
   [IPC.tasks.list]: { args: []; result: TaskList };
   [IPC.calendar.get]: { args: []; result: CalendarState };
+  [IPC.notes.state]: { args: []; result: NotesState };
+  [IPC.media.get]: { args: []; result: NowPlaying | null };
+  [IPC.cleanup.scan]: { args: []; result: CleanupScan };
+  [IPC.gaming.status]: { args: []; result: GamingStatus };
+  [IPC.gaming.start]: { args: []; result: GamingStatus };
+  [IPC.gaming.stop]: { args: []; result: GamingStatus };
+  [IPC.cleanup.run]: { args: [ids: CleanupId[], downloads: string[]]; result: CleanupResult };
+  [IPC.notes.apply]: { args: [op: NotesOp]; result: NotesState };
   [IPC.calendar.refresh]: { args: []; result: CalendarState };
   [IPC.calendar.setUrl]: { args: [url: string]; result: CalendarUrlResult };
   [IPC.calendar.clearUrl]: { args: []; result: CalendarState };
@@ -202,7 +252,9 @@ export interface SendMap {
   [IPC.window.setCompact]: [value: boolean];
   [IPC.window.peek]: [];
   [IPC.system.setDetail]: [detail: TelemetryDetail];
-  [IPC.history.save]: [messages: StoredMessage[]];
+  [IPC.chats.save]: [id: string, messages: StoredMessage[]];
+  [IPC.cleanup.openWindowsTool]: [];
+  [IPC.app.openUrl]: [url: string];
   [IPC.timers.cancel]: [id: string];
   [IPC.routines.stop]: [];
   [IPC.voice.prepare]: [];
@@ -210,7 +262,6 @@ export interface SendMap {
   [IPC.storage.reveal]: [downloadName: string];
   [IPC.storage.openSpecial]: [target: 'temp' | 'recycleBin'];
   [IPC.apps.openFolder]: [folder: UserFolder];
-  [IPC.history.clear]: [];
   [IPC.app.openPath]: [target: OpenTarget];
   [IPC.assistant.cancel]: [];
   [IPC.assistant.toolResult]: [responseId: string, toolUseId: string, outcome: ToolOutcome];
@@ -230,7 +281,11 @@ export interface EventMap {
   [IPC.routines.onChange]: Routine[];
   [IPC.routines.onProgress]: RoutineProgress;
   [IPC.voice.onStatus]: VoiceStatus;
+  [IPC.chats.onChange]: ChatsState;
   [IPC.calendar.onChange]: CalendarState;
+  [IPC.notes.onChange]: NotesState;
+  [IPC.media.onChange]: NowPlaying | null;
+  [IPC.gaming.onChange]: GamingStatus;
   [IPC.calendar.onReminder]: { event: CalEvent; minutes: number };
 }
 
@@ -295,6 +350,31 @@ export interface ArcAPI {
     /** Find towns by name (Open-Meteo geocoding). */
     search(query: string): Promise<WeatherPlace[]>;
     onChange(cb: (s: WeatherState) => void): Unsubscribe;
+  };
+  gaming: {
+    status(): Promise<GamingStatus>;
+    /** Turn gaming mode on/off by hand. */
+    start(): Promise<GamingStatus>;
+    stop(): Promise<GamingStatus>;
+    onChange(cb: (s: GamingStatus) => void): Unsubscribe;
+  };
+  cleanup: {
+    /** Size the known-safe places to clear, plus big/old Downloads files. */
+    scan(): Promise<CleanupScan>;
+    /** Clear the chosen categories; Downloads files go to the Recycle Bin. */
+    run(ids: CleanupId[], downloads: string[]): Promise<CleanupResult>;
+    /** Windows Disk Cleanup, for system files that need admin rights. */
+    openWindowsTool(): void;
+  };
+  media: {
+    /** What's playing (Windows media controls); null when nothing is. */
+    get(): Promise<NowPlaying | null>;
+    onChange(cb: (n: NowPlaying | null) => void): Unsubscribe;
+  };
+  notes: {
+    state(): Promise<NotesState>;
+    apply(op: NotesOp): Promise<NotesState>;
+    onChange(cb: (s: NotesState) => void): Unsubscribe;
   };
   calendar: {
     get(): Promise<CalendarState>;
@@ -366,16 +446,29 @@ export interface ArcAPI {
     reveal(downloadName: string): void;
     openSpecial(target: 'temp' | 'recycleBin'): void;
   };
-  history: {
-    get(): Promise<StoredMessage[]>;
-    save(messages: StoredMessage[]): void;
-    clear(): void;
+  chats: {
+    state(): Promise<ChatsState>;
+    /** Switch to a chat; returns its messages. */
+    open(id: string): Promise<StoredMessage[]>;
+    create(research: boolean): Promise<ChatMeta>;
+    save(id: string, messages: StoredMessage[]): void;
+    rename(id: string, title: string): Promise<ChatsState>;
+    setPinned(id: string, pinned: boolean): Promise<ChatsState>;
+    setResearch(id: string, research: boolean): Promise<ChatsState>;
+    remove(id: string): Promise<ChatsState>;
+    /** Ids of chats whose title or messages match. */
+    search(query: string): Promise<string[]>;
+    /** Save a chat as a Markdown file (asks where). */
+    exportMd(id: string): Promise<{ ok: boolean; message: string }>;
+    onChange(cb: (s: ChatsState) => void): Unsubscribe;
   };
   app: {
     onCommand(cb: (c: AppCommand) => void): Unsubscribe;
     getInfo(): Promise<AppInfo>;
     /** Open one of ARC's own folders/files in Explorer (fixed set, never arbitrary paths). */
     openPath(target: OpenTarget): void;
+    /** Open an http(s) link (e.g. a research source) in the default browser. */
+    openUrl(url: string): void;
     resetSettings(): Promise<Settings>;
   };
 }

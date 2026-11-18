@@ -5,12 +5,14 @@ import { useReducedMotion } from '@renderer/hooks/useReducedMotion';
 import { SETTINGS_TABS, useUiStore, type SettingsTab } from '@renderer/stores/uiStore';
 import { AdvancedTab, AppearanceTab, GeneralTab, HotkeysTab, VoiceTab } from './OtherTabs';
 import { PersonalityTab } from './PersonalityTab';
+import { GamingTab } from './GamingTab';
 
 const TABS: Record<SettingsTab, { label: string; View: ComponentType }> = {
   general: { label: 'General', View: GeneralTab },
   personality: { label: 'Personality', View: PersonalityTab },
   appearance: { label: 'Appearance', View: AppearanceTab },
   voice: { label: 'Voice', View: VoiceTab },
+  gaming: { label: 'Gaming', View: GamingTab },
   hotkeys: { label: 'Hotkeys', View: HotkeysTab },
   advanced: { label: 'Advanced', View: AdvancedTab },
 };
@@ -103,7 +105,7 @@ export function SettingsPanel() {
             <nav
               role="tablist"
               aria-label="Settings sections"
-              className="flex shrink-0 justify-between border-b border-line/60 px-2"
+              className="flex shrink-0 flex-wrap justify-start gap-x-0.5 border-b border-line/60 px-2"
               onKeyDown={(e) => {
                 if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
                 const i = SETTINGS_TABS.indexOf(settingsTab);

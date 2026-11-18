@@ -3,6 +3,8 @@ import {
   AppWindow,
   HardDrive,
   ListChecks,
+  MessagesSquare,
+  NotebookPen,
   LayoutDashboard,
   Network,
   Workflow,
@@ -19,6 +21,8 @@ export interface TabDef {
 
 export const TABS: TabDef[] = [
   { id: 'overview', label: 'Overview', code: 'SEC.01', icon: LayoutDashboard },
+  { id: 'chat', label: 'Chat', code: 'SEC.08', icon: MessagesSquare },
+  { id: 'notes', label: 'Notes', code: 'SEC.09', icon: NotebookPen },
   { id: 'system', label: 'System', code: 'SEC.02', icon: Activity },
   { id: 'tasks', label: 'Tasks', code: 'SEC.07', icon: ListChecks },
   { id: 'apps', label: 'Apps', code: 'SEC.03', icon: AppWindow },

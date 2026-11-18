@@ -5,6 +5,7 @@ import { useSystemStore } from '@renderer/stores/systemStore';
 import { useUiStore } from '@renderer/stores/uiStore';
 import { Palette } from './Palette';
 import { WeatherChip } from '@renderer/components/weather/WeatherChip';
+import { GamingChip } from './GamingChip';
 import { TimerChip } from './TimerChip';
 import { TabBar } from './TabBar';
 import { WindowControls } from './WindowControls';
@@ -54,6 +55,7 @@ export function TopBar({ assistantName, maximized }: Props) {
       <TabBar />
 
       <div className="ml-auto flex items-center gap-5 pl-4">
+        <GamingChip />
         <WeatherChip />
         <TimerChip />
         <Palette />

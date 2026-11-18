@@ -9,6 +9,8 @@ import { OverviewTab } from '@renderer/components/tabs/OverviewTab';
 import { RoutinesTab } from '@renderer/components/tabs/RoutinesTab';
 import { StorageTab } from '@renderer/components/tabs/StorageTab';
 import { SystemTab } from '@renderer/components/tabs/SystemTab';
+import { ChatTab } from '@renderer/components/tabs/ChatTab';
+import { NotesTab } from '@renderer/components/tabs/NotesTab';
 import { TasksTab } from '@renderer/components/tabs/TasksTab';
 import { bindDevStateKeys, DevStateSwitcher } from '@renderer/components/core/DevStateSwitcher';
 import { useFakeAudio } from '@renderer/hooks/useFakeAudio';
@@ -21,6 +23,11 @@ import {
 } from '@renderer/stores/conversationStore';
 import { bindWeather } from '@renderer/stores/weatherStore';
 import { bindVoice } from '@renderer/stores/voiceStore';
+import { bindChats } from '@renderer/stores/chatsStore';
+import { bindNotes } from '@renderer/stores/notesStore';
+import { bindMedia } from '@renderer/stores/mediaStore';
+import { bindGaming } from '@renderer/stores/gamingStore';
+import { useAssistantStore } from '@renderer/stores/assistantStore';
 import { bindCalendar } from '@renderer/stores/calendarStore';
 import { bindRoutines } from '@renderer/stores/routinesStore';
 import { bindTimers, timerTitle, useTimersStore } from '@renderer/stores/timersStore';
@@ -41,6 +48,8 @@ import { applyTheme } from '@renderer/themes/themes';
 
 const VIEWS: Record<TabId, ComponentType> = {
   overview: OverviewTab,
+  chat: ChatTab,
+  notes: NotesTab,
   system: SystemTab,
   tasks: TasksTab,
   apps: AppsTab,
@@ -82,6 +91,24 @@ export function App() {
 
   useEffect(() => bindWeather(), []);
   useEffect(() => bindVoice(), []);
+  useEffect(() => bindChats(), []);
+  useEffect(() => bindNotes(), []);
+  useEffect(() => bindMedia(), []);
+  useEffect(
+    () =>
+      bindGaming((s, prev) => {
+        const log = useAssistantStore.getState().logActivity;
+        if (s.active && !prev.active)
+          log({
+            kind: 'sys',
+            label: `Gaming mode on${s.game ? ` (${s.game})` : ''}${s.actions.length ? `: ${s.actions.join(', ')}` : ''}`,
+            status: 'success',
+          });
+        else if (!s.active && prev.active)
+          log({ kind: 'sys', label: 'Gaming mode off: settings put back', status: 'success' });
+      }),
+    [],
+  );
   useEffect(() => bindCalendar((text) => useConversationStore.getState().pushAssistant(text)), []);
   useEffect(() => bindRoutines((text) => useConversationStore.getState().pushAssistant(text)), []);
 

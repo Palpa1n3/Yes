@@ -48,12 +48,13 @@ export function TabBar() {
             tabIndex={active ? 0 : -1}
             title={`${t.label} (Ctrl+${i + 1})`}
             onClick={() => setTab(t.id)}
-            className={`group relative flex h-full items-center gap-2 px-3 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors duration-150 hud:px-4 ${
+            className={`group relative flex h-full items-center gap-2 px-2.5 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors duration-150 full:px-4 ${
               active ? 'bg-accent/[0.07] text-ice' : 'text-text-muted hover:text-accent'
             }`}
           >
             <Icon size={15} strokeWidth={1.5} className={active ? 'text-accent' : ''} />
-            <span className="hidden hud:inline">{t.label}</span>
+            {/* Names for every tab only on wide screens; otherwise just the open one. */}
+            <span className={active ? 'hidden hud:inline' : 'hidden full:inline'}>{t.label}</span>
             <span
               className={`absolute inset-x-3 bottom-0 h-[2px] transition-opacity duration-150 ${
                 active
