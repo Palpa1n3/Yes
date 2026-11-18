@@ -351,6 +351,17 @@ export interface AiTestResult {
 
 /* ── Timers ────────────────────────────────────────────────────────────── */
 
+/** One step of a running routine, pushed to the renderer. `say` is text for ARC to show and speak. */
+export interface RoutineProgress {
+  routineId: string;
+  name: string;
+  index: number;
+  total: number;
+  status: 'running' | 'success' | 'failed';
+  message: string;
+  say?: string;
+}
+
 export interface TimerInfo {
   id: string;
   label: string;

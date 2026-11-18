@@ -9,6 +9,7 @@ import {
   type SystemStats,
   type ToolOutcome,
 } from '@shared/types';
+import type { Routine } from '@shared/routines';
 import type { WeatherData } from '@shared/weather';
 import type { MainContext } from '../context';
 import { MockProvider, type AIProvider } from '../services/ai-provider';
@@ -22,7 +23,11 @@ const MAX_HISTORY = 40;
 /** How long an action card may wait for Approve / Cancel before the model is told it timed out. */
 const TOOL_TIMEOUT_MS = 10 * 60_000;
 
-export function registerAssistantIpc(ctx: MainContext, getWeather: () => WeatherData | null): void {
+export function registerAssistantIpc(
+  ctx: MainContext,
+  extra: { weather(): WeatherData | null; routines(): Routine[] },
+): void {
+  const getWeather = extra.weather;
   const getWindow = ctx.getWindow;
   const getStats = (): SystemStats => ctx.telemetry.snapshot();
   const getSettings = (): Settings => ctx.settings.get();
@@ -52,6 +57,7 @@ export function registerAssistantIpc(ctx: MainContext, getWeather: () => Weather
     warm: () => ctx.telemetry.warmProcesses(),
     timers: () => ctx.timers.list(),
     weather: getWeather,
+    routines: extra.routines,
     apps: () => registry.load().map((a) => ({ name: a.name, intents: a.intents })),
   });
 

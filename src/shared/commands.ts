@@ -16,6 +16,7 @@ export const CANONICAL_ACTIONS = [
   'set_timer',
   'cancel_timer',
   'lock_screen',
+  'run_routine',
   'unknown',
 ] as const;
 
@@ -168,6 +169,7 @@ const SYNONYMS: Record<Exclude<CanonicalAction, 'unknown'>, string[]> = {
     'cancel alarm',
     'stop alarm',
   ],
+  run_routine: ['run_routine', 'run routine', 'start routine', 'routine', 'run_workflow'],
   lock_screen: [
     'lock_screen',
     'lock screen',
@@ -251,6 +253,8 @@ const RISK: Record<CanonicalAction, CommandRisk> = {
   set_timer: 'safe',
   cancel_timer: 'safe',
   lock_screen: 'sensitive',
+  // A routine may close apps or lock the PC; the user wrote it, but Claude asking for one shows a card.
+  run_routine: 'sensitive',
   unknown: 'sensitive',
 };
 

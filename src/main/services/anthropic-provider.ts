@@ -1,6 +1,7 @@
 /** Claude via the Anthropic Messages API, with ARC's actions as tools.
  *  ARC runs the loop itself so each action passes through the renderer's command cards
  *  (Approve / Cancel, activity log) before its result goes back to the model. */
+import { describeStep, type Routine } from '@shared/routines';
 import { weatherSummary, type WeatherData } from '@shared/weather';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
@@ -176,6 +177,23 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'list_routines',
+    description:
+      'List the user\'s saved routines (named sequences of actions such as "Focus mode") with their steps.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'run_routine',
+    description:
+      "Run one of the user's saved routines by name. Use when they ask to start a routine or mode by name; call list_routines first if unsure of the exact name.",
+    input_schema: {
+      type: 'object',
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'get_weather',
     description:
       "Current weather and the forecast for the next few hours, today and tomorrow at the user's saved location, in their units. Use for questions about weather, rain, temperature, or whether to take a coat or umbrella.",
@@ -195,7 +213,7 @@ export function toIntent(
 ):
   | { intent: RawIntent }
   | { error: string }
-  | { local: 'list_apps' | 'list_timers' | 'get_weather' } {
+  | { local: 'list_apps' | 'list_timers' | 'get_weather' | 'list_routines' } {
   const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const str = (k: string): string | null =>
     typeof o[k] === 'string' && (o[k] as string).trim()
@@ -273,6 +291,12 @@ export function toIntent(
       return { local: 'list_timers' };
     case 'get_weather':
       return { local: 'get_weather' };
+    case 'list_routines':
+      return { local: 'list_routines' };
+    case 'run_routine': {
+      const n = str('name');
+      return n ? { intent: { action: 'run_routine', target: n } } : { error: 'Missing "name".' };
+    }
     case 'cancel_timer': {
       const w = str('which');
       return w ? { intent: { action: 'cancel_timer', target: w } } : { error: 'Missing "which".' };
@@ -342,6 +366,7 @@ export interface AnthropicDeps {
   apps(): Array<{ name: string; intents: string[] }>;
   timers?(): TimerInfo[];
   weather?(): WeatherData | null;
+  routines?(): Routine[];
   /** Injectable for tests. */
   createClient?(apiKey: string): Pick<Anthropic, 'beta' | 'models'>;
 }
@@ -394,7 +419,7 @@ export class AnthropicProvider implements AIProvider {
       "You live inside ARC, a desktop assistant HUD on the user's own computer. Replies appear in a small console (and may be read aloud), so write plain sentences: no markdown headings, tables or code fences unless asked.",
       'Use the tools to act rather than describing what you would do. Actions may need the user to approve them; if one is cancelled or fails, say so briefly and suggest an alternative.',
       'Answer questions about the computer from get_system_status, never from guesses.',
-      'You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, check the weather, and lock the PC.',
+      "You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, check the weather, run the user's saved routines, and lock the PC.",
       machine,
     ];
     // Stable text first and cached: personality changes are rare, so this prefix is reused.
@@ -542,17 +567,23 @@ export class AnthropicProvider implements AIProvider {
               content: JSON.stringify(
                 w
                   ? weatherSummary(w)
-                  : plan.local === 'list_apps'
-                    ? this.deps.apps()
-                    : (this.deps.timers?.() ?? []).map((x) => ({
-                        label: x.label || '(no label)',
-                        status: x.status,
-                        minutesLeft: Math.max(0, Math.round((x.dueAt - Date.now()) / 6000) / 10),
-                        due: new Date(x.dueAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        }),
-                      })),
+                  : plan.local === 'list_routines'
+                    ? (this.deps.routines?.() ?? []).map((r) => ({
+                        name: r.name,
+                        phrases: r.phrases,
+                        steps: r.steps.map(describeStep),
+                      }))
+                    : plan.local === 'list_apps'
+                      ? this.deps.apps()
+                      : (this.deps.timers?.() ?? []).map((x) => ({
+                          label: x.label || '(no label)',
+                          status: x.status,
+                          minutesLeft: Math.max(0, Math.round((x.dueAt - Date.now()) / 6000) / 10),
+                          due: new Date(x.dueAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }),
+                        })),
               ),
             });
             continue;

@@ -1,0 +1,65 @@
+import { app } from 'electron';
+import { join } from 'node:path';
+import type { CanonicalCommand, CommandResult } from '@shared/commands';
+import { IPC } from '@shared/ipc';
+import { buildBriefing, findRoutine } from '@shared/routines';
+import type { MainContext } from '../context';
+import { RoutineService } from '../services/routine-service';
+import type { WeatherService } from '../services/weather';
+import { emit, handle, on } from './handle';
+
+export function registerRoutinesIpc(
+  ctx: MainContext,
+  execute: (cmd: CanonicalCommand) => Promise<CommandResult>,
+  weather: WeatherService,
+): { service: RoutineService; run(cmd: CanonicalCommand): Promise<CommandResult> } {
+  const service = new RoutineService({
+    file: join(app.getPath('userData'), 'routines.json'),
+    execute,
+    briefing: () => {
+      const s = ctx.settings.get();
+      return buildBriefing({
+        now: Date.now(),
+        personality: s.personality,
+        userName: s.userName,
+        weather: weather.get().data,
+        weatherConfigured: s.weatherPlace !== null,
+        timers: ctx.timers.list(),
+        stats: ctx.telemetry.snapshot(),
+      });
+    },
+    onChange: (list) => emit(ctx.getWindow(), IPC.routines.onChange, list),
+    onProgress: (p) => emit(ctx.getWindow(), IPC.routines.onProgress, p),
+  });
+  service.load();
+
+  // Startup routines are handed out once per launch, so a renderer reload doesn't repeat them.
+  let startupServed = false;
+  handle(IPC.routines.list, () => service.list());
+  handle(IPC.routines.save, (r) => service.upsert(r));
+  handle(IPC.routines.remove, (id) => service.remove(String(id)));
+  handle(IPC.routines.startup, () => {
+    if (startupServed) return [];
+    startupServed = true;
+    return service.dueAtStartup();
+  });
+  on(IPC.routines.stop, () => service.stop(), ctx.getWindow);
+
+  /** The run_routine command: target is a routine id (from ARC's UI) or a name (from Claude). */
+  const run = async (cmd: CanonicalCommand): Promise<CommandResult> => {
+    const list = service.list();
+    const t = cmd.target?.trim() ?? '';
+    const r = list.find((x) => x.id === t) ?? findRoutine(t, list);
+    if (!r)
+      return {
+        commandId: cmd.id,
+        status: 'failed',
+        message: list.length
+          ? `No routine called “${t}”. You have: ${list.map((x) => x.name).join(', ')}.`
+          : 'You have no routines yet. Make one in the Routines tab.',
+        timestamp: Date.now(),
+      };
+    return service.run(r.id, cmd.id);
+  };
+  return { service, run };
+}

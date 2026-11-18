@@ -4,7 +4,7 @@ import { useAppsStore } from '@renderer/stores/appsStore';
 import { useConversationStore } from '@renderer/stores/conversationStore';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 
-/** Startup: load settings, restore the saved conversation, then greet. */
+/** Startup: load settings, restore the saved conversation, then greet (or run startup routines). */
 export async function startSession(): Promise<void> {
   const settings = await window.arc.settings.get();
   useSettingsStore.setState({ settings, loaded: true });
@@ -27,7 +27,16 @@ export async function startSession(): Promise<void> {
     ]);
   }
   const { personality, userName } = settings;
-  const greet = (): void =>
+  // Startup routines (e.g. the morning briefing) replace the plain greeting.
+  const due = await window.arc.routines.startup().catch(() => []);
+  const greet = (): void => {
+    if (due.length) {
+      void (async () => {
+        for (const r of due)
+          await useConversationStore.getState().perform({ action: 'run_routine', target: r.id });
+      })();
+      return;
+    }
     useConversationStore
       .getState()
       .pushAssistant(
@@ -38,6 +47,7 @@ export async function startSession(): Promise<void> {
         ),
         `session-greet-${Date.now()}`,
       );
+  };
   // With the boot sequence playing, the greeting types out as it finishes.
   const reduced =
     settings.reduceMotion === 'on' ||

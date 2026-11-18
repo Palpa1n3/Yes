@@ -58,7 +58,7 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 | Apps     | Your `apps.json` as a launch grid, add installed apps, edit trigger phrases, open your folders |
 | Network  | Live throughput, interfaces, gateway & latency                                                 |
 | Storage  | Drive gauges, recent downloads, folder sizes on demand                                         |
-| Routines | Saved routines (preview; running them is planned)                                              |
+| Routines | Your routines: build, edit and run them, see each step's result                                |
 
 ### Timers and reminders
 
@@ -67,6 +67,14 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 - When one ends: a repeating alarm chime (up to 2 minutes; toggle and volume in Settings › Voice), a Windows notification, a flashing taskbar icon, and a **Time's up** banner with **Dismiss** / **Snooze 5**.
 - Timers are saved to `%APPDATA%\ARC\timers.json`, so they survive restarts; anything that finished while ARC was closed rings on the next start.
 - Cancel by voice/text: _"cancel the oven timer"_, _"cancel all timers"_.
+
+### Routines and the morning briefing
+
+- A routine is a list of steps run in order: open or close apps, set the volume, music controls, open a folder or website, search the web, start a timer, say something, wait, give a briefing, or lock the PC.
+- Run one by typing or saying its name or one of its phrases (_"work mode"_, _"good morning"_). This runs straight away without using AI credit. You can also press **Run** in the Routines tab, or ask Claude (_"start my focus routine"_).
+- Steps go through the same command system as chat, so the same safety rules apply. Closing an app is always a polite close. If a step fails, the rest still run and the Routines tab shows why.
+- **Morning briefing**: the time, your weather, running timers, and anything wrong with the PC (drives over 90% full, high memory use, a hot processor, low battery, or no restart for a week). Tick **Run when ARC starts (once a day)** to get it each day in place of the usual greeting.
+- Three examples come built in (Morning briefing, Focus mode, Wind down). They're saved in `%APPDATA%\ARC\routines.json`.
 
 ### Weather
 
@@ -151,7 +159,7 @@ ARC works offline with a built-in mock, or with Claude for real conversation and
 How it works (`src/main/services/anthropic-provider.ts`):
 
 - The key is validated, then encrypted with the OS keychain (`safeStorage`, DPAPI on Windows) into `%APPDATA%\ARC\anthropic-key.bin`. It never reaches the renderer, logs or settings.
-- ARC runs a streaming Messages API tool loop. Claude can `launch_app`, `close_app` (always confirmed unless the personality never asks; polite close, never force-kill, never Windows/ARC processes), `set_volume`, `media_control`, `open_folder`, `find_files` (your own folders only), `reveal_file` (shows, never runs), `set_timer` (Windows notification), `lock_screen`, `open_url`, `search_web`, `get_system_status`, `get_weather` and `list_apps`. Every action except `list_apps` goes through ARC's command cards (approval per your personality, activity log), and the outcome, including "cancelled", is sent back to Claude.
+- ARC runs a streaming Messages API tool loop. Claude can `launch_app`, `close_app` (always confirmed unless the personality never asks; polite close, never force-kill, never Windows/ARC processes), `set_volume`, `media_control`, `open_folder`, `find_files` (your own folders only), `reveal_file` (shows, never runs), `set_timer` (Windows notification), `lock_screen`, `open_url`, `search_web`, `get_system_status`, `get_weather`, `list_routines`, `run_routine` and `list_apps`. Every action except `list_apps` goes through ARC's command cards (approval per your personality, activity log), and the outcome, including "cancelled", is sent back to Claude.
 - Effort is `low` (chat), the personality prompt is cached, at most 8 model steps run per reply, and Sonnet/Opus use Anthropic's default server-side fallback. Haiku has none, so a refusal shows a message.
 - No key, or offline: ARC says so and answers with the mock. Bad key, no credit or rate limits produce plain-English messages.
 

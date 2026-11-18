@@ -45,6 +45,15 @@ export function installArcMock(): ArcAPI {
       onChange: vi.fn(() => () => undefined),
       onRing: vi.fn(() => () => undefined),
     },
+    routines: {
+      list: vi.fn(async () => []),
+      save: vi.fn(async () => []),
+      remove: vi.fn(async () => []),
+      stop: vi.fn(),
+      startup: vi.fn(async () => []),
+      onChange: vi.fn(() => () => undefined),
+      onProgress: vi.fn(() => () => undefined),
+    },
     weather: {
       get: vi.fn(async () => ({ data: null, error: null })),
       refresh: vi.fn(async () => ({ data: null, error: null })),

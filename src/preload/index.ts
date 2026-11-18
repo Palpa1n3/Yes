@@ -74,6 +74,15 @@ const api: ArcAPI = {
     search: (q) => invoke(IPC.weather.search, q),
     onChange: (cb) => subscribe(IPC.weather.onChange, cb),
   },
+  routines: {
+    list: () => invoke(IPC.routines.list),
+    save: (r) => invoke(IPC.routines.save, r),
+    remove: (id) => invoke(IPC.routines.remove, id),
+    stop: () => send(IPC.routines.stop),
+    startup: () => invoke(IPC.routines.startup),
+    onChange: (cb) => subscribe(IPC.routines.onChange, cb),
+    onProgress: (cb) => subscribe(IPC.routines.onProgress, cb),
+  },
   timers: {
     list: () => invoke(IPC.timers.list),
     add: (m, l) => invoke(IPC.timers.add, m, l),

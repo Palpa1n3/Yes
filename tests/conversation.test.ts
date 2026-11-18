@@ -8,6 +8,7 @@ import {
   useConversationStore,
   type Message,
 } from '@renderer/stores/conversationStore';
+import { applyProgress, useRoutinesStore } from '@renderer/stores/routinesStore';
 import { installArcMock } from './arcMock';
 
 const conv = () => useConversationStore.getState();
@@ -171,5 +172,63 @@ describe('real-model actions', () => {
       text: 'Offline, using the mock.',
     });
     expect(conv().activeResponseId).toBe(rid());
+  });
+});
+
+describe('routines from the console', () => {
+  beforeEach(() => {
+    useRoutinesStore.setState({
+      routines: [
+        {
+          id: 'focus-mode',
+          name: 'Focus mode',
+          icon: 'Target',
+          phrases: ['work mode'],
+          steps: [{ kind: 'say', target: 'Go' }],
+          runAtStartup: false,
+        },
+      ],
+    });
+  });
+
+  it('runs a routine phrase locally, without asking the AI, as one card', async () => {
+    const done = conv().send('Work mode!');
+    expect(window.arc.assistant.send).not.toHaveBeenCalled();
+    const card = conv().messages.find((m) => m.role === 'command');
+    expect(card?.role === 'command' && card.command.cmd).toMatchObject({
+      action: 'run_routine',
+      target: 'focus-mode',
+    });
+    expect(card?.role === 'command' && card.command.status).toBe('pending');
+    expect(useAssistantStore.getState().stateDetail).toBe('Routine · Focus mode');
+    resolveExec?.(true);
+    await done;
+    const after = conv().messages.find((m) => m.role === 'command');
+    expect(after?.role === 'command' && after.command.status).toBe('success');
+    expect(conv().activeResponseId).toBeNull();
+  });
+
+  it('sends anything else to the AI as usual', () => {
+    void conv().send('what is focus mode for?');
+    expect(window.arc.assistant.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('tracks a run in the log', () => {
+    const p = { routineId: 'r', name: 'R', total: 2, message: '' };
+    let run = applyProgress(null, { ...p, index: 0, status: 'running' });
+    run = applyProgress(run, { ...p, index: 0, status: 'success', message: 'ok' });
+    expect(run.finished).toBe(false);
+    run = applyProgress(run, { ...p, index: 1, status: 'failed', message: 'nope' });
+    expect(run).toEqual({
+      routineId: 'r',
+      name: 'R',
+      finished: true,
+      steps: [
+        { status: 'success', message: 'ok' },
+        { status: 'failed', message: 'nope' },
+      ],
+    });
+    // A new run of the same routine starts a fresh log.
+    expect(applyProgress(run, { ...p, index: 0, status: 'running' }).steps[1]).toBeUndefined();
   });
 });

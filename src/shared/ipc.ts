@@ -7,6 +7,7 @@ import type {
   AiTestResult,
   ToolOutcome,
   TimerInfo,
+  RoutineProgress,
   AppCommand,
   AppEntry,
   AppInfo,
@@ -27,6 +28,7 @@ import type {
   UserMessage,
   WindowStatePayload,
 } from './types';
+import type { Routine } from './routines';
 
 export const IPC = {
   window: {
@@ -72,6 +74,15 @@ export const IPC = {
     refresh: 'weather:refresh',
     search: 'weather:search',
     onChange: 'weather:changed',
+  },
+  routines: {
+    list: 'routines:list',
+    save: 'routines:save',
+    remove: 'routines:remove',
+    stop: 'routines:stop',
+    startup: 'routines:startup',
+    onChange: 'routines:changed',
+    onProgress: 'routines:progress',
   },
   timers: {
     list: 'timers:list',
@@ -122,6 +133,10 @@ export interface InvokeMap {
   [IPC.history.get]: { args: []; result: StoredMessage[] };
   [IPC.ai.status]: { args: []; result: AiStatus };
   [IPC.timers.list]: { args: []; result: TimerInfo[] };
+  [IPC.routines.list]: { args: []; result: Routine[] };
+  [IPC.routines.save]: { args: [routine: Routine]; result: Routine[] };
+  [IPC.routines.remove]: { args: [id: string]; result: Routine[] };
+  [IPC.routines.startup]: { args: []; result: Routine[] };
   [IPC.weather.get]: { args: []; result: WeatherState };
   [IPC.weather.refresh]: { args: []; result: WeatherState };
   [IPC.weather.search]: { args: [query: string]; result: WeatherPlace[] };
@@ -152,6 +167,7 @@ export interface SendMap {
   [IPC.system.setDetail]: [detail: TelemetryDetail];
   [IPC.history.save]: [messages: StoredMessage[]];
   [IPC.timers.cancel]: [id: string];
+  [IPC.routines.stop]: [];
   [IPC.timers.snooze]: [id: string, minutes: number];
   [IPC.storage.reveal]: [downloadName: string];
   [IPC.storage.openSpecial]: [target: 'temp' | 'recycleBin'];
@@ -173,6 +189,8 @@ export interface EventMap {
   [IPC.timers.onChange]: TimerInfo[];
   [IPC.weather.onChange]: WeatherState;
   [IPC.timers.onRing]: TimerInfo;
+  [IPC.routines.onChange]: Routine[];
+  [IPC.routines.onProgress]: RoutineProgress;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -234,6 +252,18 @@ export interface ArcAPI {
     /** Find towns by name (Open-Meteo geocoding). */
     search(query: string): Promise<WeatherPlace[]>;
     onChange(cb: (s: WeatherState) => void): Unsubscribe;
+  };
+  routines: {
+    list(): Promise<Routine[]>;
+    /** Create (unknown id) or update a routine. */
+    save(routine: Routine): Promise<Routine[]>;
+    remove(id: string): Promise<Routine[]>;
+    /** Stop the running routine after its current step. */
+    stop(): void;
+    /** Routines due to run now that ARC has started (marked as run once started). */
+    startup(): Promise<Routine[]>;
+    onChange(cb: (list: Routine[]) => void): Unsubscribe;
+    onProgress(cb: (p: RoutineProgress) => void): Unsubscribe;
   };
   timers: {
     list(): Promise<TimerInfo[]>;

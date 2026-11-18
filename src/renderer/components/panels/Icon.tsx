@@ -1,6 +1,9 @@
 import {
   Activity,
   AppWindow,
+  Sun,
+  Coffee,
+  Briefcase,
   Calculator,
   Code2,
   Folder,
@@ -24,6 +27,9 @@ import {
 const ICONS: Record<string, LucideIcon> = {
   Activity,
   AppWindow,
+  Sun,
+  Coffee,
+  Briefcase,
   Calculator,
   Code2,
   Folder,

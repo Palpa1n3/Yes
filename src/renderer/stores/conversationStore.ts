@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { toCommand, type CanonicalCommand, type CommandResult } from '@shared/commands';
 import { pickPhrase, resolveTitle, type ConfirmMode } from '@shared/personalities';
+import { findRoutine, matchRoutine } from '@shared/routines';
 import {
   responseIdFor,
   type AssistantState,
   type CommandInfoShared,
+  type RawIntent,
   type StoredMessage,
   type StreamChunk,
 } from '@shared/types';
@@ -12,6 +14,7 @@ import { playSfx } from '@renderer/voice/sfx';
 import { useAppsStore } from './appsStore';
 import { useAssistantStore, type ActivityKind } from './assistantStore';
 import { useSettingsStore } from './settingsStore';
+import { useRoutinesStore } from './routinesStore';
 
 export type CommandInfo = CommandInfoShared;
 export type Message = StoredMessage;
@@ -40,6 +43,8 @@ interface ConversationState {
   /** Approve / Cancel for commands awaiting confirmation. */
   approve(messageId: string): void;
   reject(messageId: string): void;
+  /** Run an action the user asked for directly (a button, a routine phrase): no confirmation. */
+  perform(intent: RawIntent): Promise<void>;
   /** Replace the transcript with restored history (startup). */
   restore(messages: Message[]): void;
 }
@@ -58,6 +63,7 @@ const ACTIVITY_KIND: Record<CanonicalCommand['action'], ActivityKind> = {
   open_folder: 'dsk',
   find_files: 'dsk',
   reveal_file: 'dsk',
+  run_routine: 'rtn',
   unknown: 'msg',
 };
 
@@ -75,6 +81,7 @@ const VERB: Record<CanonicalCommand['action'], string> = {
   set_timer: 'Timer',
   cancel_timer: 'Cancel timer',
   lock_screen: 'Locking',
+  run_routine: 'Routine',
   unknown: 'Unknown',
 };
 
@@ -142,6 +149,10 @@ export function describeCommand(cmd: CanonicalCommand): { verb: string; target: 
       };
     case 'open_folder':
       return { verb, target: cap(t) };
+    case 'run_routine': {
+      const list = useRoutinesStore.getState().routines;
+      return { verb, target: (list.find((r) => r.id === t) ?? findRoutine(t, list))?.name ?? t };
+    }
     case 'reveal_file':
       return { verb, target: t.split(/[\\/]/).pop() || t };
     case 'launch_app':
@@ -174,6 +185,7 @@ export function failureLine(cmd: CanonicalCommand, reason: string): string {
     set_timer: 'Try something like “remind me in 10 minutes to stretch”.',
     cancel_timer: 'Your timers are listed in the Timers panel on the Overview.',
     lock_screen: 'You can always press Windows+L.',
+    run_routine: 'Your routines are in the Routines tab, where you can check each step.',
     unknown: 'Type /help to see what I can do.',
   };
   // Terse personalities skip the coaching.
@@ -281,6 +293,13 @@ export const useConversationStore = create<ConversationState>((set, get) => {
       }));
       sync();
       playSfx('send');
+      // A routine's name or phrase runs it right here: instant, free, no AI round trip.
+      const routine = matchRoutine(text, useRoutinesStore.getState().routines);
+      if (routine) {
+        set({ activeResponseId: null });
+        await get().perform({ action: 'run_routine', target: routine.id });
+        return;
+      }
       try {
         await window.arc.assistant.send({ id, text, timestamp: now() });
       } catch (err) {
@@ -345,6 +364,13 @@ export const useConversationStore = create<ConversationState>((set, get) => {
         label: `${verb} ${target}: cancelled`,
         status: 'failed',
       });
+    },
+
+    async perform(intent) {
+      const info: CommandInfo = { cmd: toCommand(intent, uid()), status: 'pending' };
+      const mid = uid();
+      update((ms) => [...ms, { id: mid, role: 'command', timestamp: now(), command: info }]);
+      await runCommand(info, mid);
     },
 
     restore(messages) {

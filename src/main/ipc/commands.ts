@@ -1,6 +1,7 @@
 import { app, shell } from 'electron';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import type { CanonicalCommand, CommandResult } from '@shared/commands';
 import { IPC } from '@shared/ipc';
 import { USER_FOLDERS, type FolderInfo, type UserFolder } from '@shared/types';
 import { AppRegistry } from '../services/app-registry';
@@ -20,7 +21,14 @@ const FOLDER_NAMES: Record<UserFolder, string> = {
   music: 'Music',
 };
 
-export function registerCommandsIpc(skills: SkillRegistry, timers: TimerService): void {
+export interface CommandsIpc {
+  /** Run one command (skills first, then the built-in executor). */
+  execute(cmd: CanonicalCommand): Promise<CommandResult>;
+  /** Wire run_routine to the routine runner (created after this). */
+  setRoutineRunner(run: (cmd: CanonicalCommand) => Promise<CommandResult>): void;
+}
+
+export function registerCommandsIpc(skills: SkillRegistry, timers: TimerService): CommandsIpc {
   const registry = new AppRegistry(join(app.getPath('userData'), 'apps.json'));
   registry.load();
   const system = createSystemActions({
@@ -33,10 +41,15 @@ export function registerCommandsIpc(skills: SkillRegistry, timers: TimerService)
   const deps = { ...osDeps(), registry, system };
   const execute = createExecutor(deps);
 
+  // Skills get first refusal; anything they don't claim goes to the built-in executor.
+  const executeAny = async (cmd: CanonicalCommand): Promise<CommandResult> =>
+    (await skills.handle(cmd)) ?? execute(cmd);
+  let runRoutine: ((cmd: CanonicalCommand) => Promise<CommandResult>) | null = null;
+
   handle(IPC.commands.execute, async (cmd) => {
     registry.load(); // pick up edits to apps.json without restarting
-    // Skills get first refusal; anything they don't claim goes to the built-in executor.
-    return (await skills.handle(cmd)) ?? execute(cmd);
+    if (cmd.action === 'run_routine' && runRoutine) return runRoutine(cmd);
+    return executeAny(cmd);
   });
 
   handle(IPC.apps.list, () => registry.load());
@@ -61,4 +74,10 @@ export function registerCommandsIpc(skills: SkillRegistry, timers: TimerService)
     },
     () => null,
   );
+  return {
+    execute: executeAny,
+    setRoutineRunner: (run) => {
+      runRoutine = run;
+    },
+  };
 }
