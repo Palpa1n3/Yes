@@ -1,6 +1,7 @@
 /** Single source of truth for renderer <-> main communication.
  *  Both the preload bridge and main handlers import from here. */
 import type { CanonicalCommand, CommandResult } from './commands';
+import type { WeatherData, WeatherPlace } from './weather';
 import type {
   AiStatus,
   AiTestResult,
@@ -66,6 +67,12 @@ export const IPC = {
     folders: 'apps:folders',
     openFolder: 'apps:open-folder',
   },
+  weather: {
+    get: 'weather:get',
+    refresh: 'weather:refresh',
+    search: 'weather:search',
+    onChange: 'weather:changed',
+  },
   timers: {
     list: 'timers:list',
     add: 'timers:add',
@@ -115,6 +122,9 @@ export interface InvokeMap {
   [IPC.history.get]: { args: []; result: StoredMessage[] };
   [IPC.ai.status]: { args: []; result: AiStatus };
   [IPC.timers.list]: { args: []; result: TimerInfo[] };
+  [IPC.weather.get]: { args: []; result: WeatherState };
+  [IPC.weather.refresh]: { args: []; result: WeatherState };
+  [IPC.weather.search]: { args: [query: string]; result: WeatherPlace[] };
   [IPC.timers.add]: { args: [minutes: number, label: string]; result: TimerInfo[] };
   [IPC.ai.setKey]: { args: [key: string]; result: AiTestResult };
   [IPC.ai.clearKey]: { args: []; result: AiStatus };
@@ -161,6 +171,7 @@ export interface EventMap {
   [IPC.settings.onChange]: Settings;
   [IPC.app.onCommand]: AppCommand;
   [IPC.timers.onChange]: TimerInfo[];
+  [IPC.weather.onChange]: WeatherState;
   [IPC.timers.onRing]: TimerInfo;
 }
 
@@ -217,6 +228,13 @@ export interface ArcAPI {
     folders(): Promise<FolderInfo[]>;
     openFolder(folder: UserFolder): void;
   };
+  weather: {
+    get(): Promise<WeatherState>;
+    refresh(): Promise<WeatherState>;
+    /** Find towns by name (Open-Meteo geocoding). */
+    search(query: string): Promise<WeatherPlace[]>;
+    onChange(cb: (s: WeatherState) => void): Unsubscribe;
+  };
   timers: {
     list(): Promise<TimerInfo[]>;
     add(minutes: number, label: string): Promise<TimerInfo[]>;
@@ -259,6 +277,12 @@ export interface ArcAPI {
     openPath(target: OpenTarget): void;
     resetSettings(): Promise<Settings>;
   };
+}
+
+/** Latest weather (null until a town is set or the first fetch) plus any fetch error. */
+export interface WeatherState {
+  data: WeatherData | null;
+  error: string | null;
 }
 
 export type OpenTarget = 'userData' | 'appsJson' | 'settingsJson';

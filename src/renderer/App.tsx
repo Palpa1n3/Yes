@@ -18,6 +18,7 @@ import {
   bindHistoryPersistence,
   useConversationStore,
 } from '@renderer/stores/conversationStore';
+import { bindWeather } from '@renderer/stores/weatherStore';
 import { bindTimers, timerTitle, useTimersStore } from '@renderer/stores/timersStore';
 import { startAlarm, stopAlarm } from '@renderer/voice/alarm';
 import { RingingBanner } from '@renderer/components/hud/RingingBanner';
@@ -71,6 +72,8 @@ export function App() {
       offHistory();
     };
   }, []);
+
+  useEffect(() => bindWeather(), []);
 
   // Timers: mirror main's list; ring → alarm sound + a console line; silence when none ring.
   useEffect(() => {

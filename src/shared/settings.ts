@@ -1,6 +1,7 @@
 /** Pure validation for stored settings: unknown keys dropped, wrong types replaced by
  *  defaults, so a hand-edited or corrupted settings.json can't break the app. */
 import { sanitizePersonality } from './personalities';
+import type { WeatherPlace } from './weather';
 import {
   AI_MODELS,
   DEFAULT_SETTINGS,
@@ -12,6 +13,25 @@ import {
 
 const THEMES: ThemeId[] = ['arc-cyan', 'solar-gold', 'crimson', 'mono'];
 const MOTION: ReduceMotion[] = ['system', 'on', 'off'];
+
+function validPlace(v: unknown): WeatherPlace | null {
+  if (!v || typeof v !== 'object') return null;
+  const p = v as Record<string, unknown>;
+  const lat = p['lat'];
+  const lon = p['lon'];
+  if (typeof p['name'] !== 'string' || typeof lat !== 'number' || typeof lon !== 'number')
+    return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  const str = (k: string): string | undefined =>
+    typeof p[k] === 'string' ? (p[k] as string).slice(0, 80) : undefined;
+  return {
+    name: (p['name'] as string).slice(0, 80),
+    region: str('region'),
+    country: str('country'),
+    lat,
+    lon,
+  };
+}
 
 export function sanitizeSettings(raw: unknown): Settings {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -29,6 +49,9 @@ export function sanitizeSettings(raw: unknown): Settings {
     closeToTray: bool('closeToTray'),
     launchAtLogin: bool('launchAtLogin'),
     persistHistory: bool('persistHistory'),
+    weatherPlace: validPlace(r['weatherPlace']),
+    tempUnit: r['tempUnit'] === 'f' ? 'f' : r['tempUnit'] === 'c' ? 'c' : d.tempUnit,
+    windUnit: r['windUnit'] === 'mph' ? 'mph' : r['windUnit'] === 'kmh' ? 'kmh' : d.windUnit,
     personality: {
       ...sanitizePersonality(r['personality']),
       assistantName: name || d.assistantName,

@@ -10,6 +10,8 @@ import { playSfx } from '@renderer/voice/sfx';
 import { playChime } from '@renderer/voice/alarm';
 import { Field, Section, Segmented, Select, Slider, TextField, Toggle } from './controls';
 import { AiSection } from './AiSection';
+import { PlaceSearch } from '@renderer/components/weather/PlaceSearch';
+import { placeLabel } from '@shared/weather';
 import { HotkeyRecorder, prettyAccel } from './HotkeyRecorder';
 
 function useAppInfo(deps: unknown[] = []): AppInfo | null {
@@ -42,6 +44,51 @@ export function GeneralTab() {
             value={s.assistantName}
             onChange={(v) => void update({ assistantName: v.toUpperCase() })}
             maxLength={24}
+          />
+        </Field>
+      </Section>
+      <Section title="Weather">
+        <Field
+          label="Location"
+          hint={
+            s.weatherPlace
+              ? `${placeLabel(s.weatherPlace)}. Only its map position is sent to Open-Meteo (free, no account).`
+              : 'Search for your town. Only its map position is sent to Open-Meteo (free, no account).'
+          }
+        >
+          <div className="flex w-64 shrink-0 flex-col gap-1.5">
+            <PlaceSearch />
+            {s.weatherPlace && (
+              <button
+                type="button"
+                className="hud-button self-start"
+                onClick={() => void update({ weatherPlace: null })}
+              >
+                Turn weather off
+              </button>
+            )}
+          </div>
+        </Field>
+        <Field label="Temperature">
+          <Segmented
+            label="Temperature unit"
+            value={s.tempUnit}
+            onChange={(v) => void update({ tempUnit: v })}
+            options={[
+              { value: 'c', label: '°C' },
+              { value: 'f', label: '°F' },
+            ]}
+          />
+        </Field>
+        <Field label="Wind speed">
+          <Segmented
+            label="Wind speed unit"
+            value={s.windUnit}
+            onChange={(v) => void update({ windUnit: v })}
+            options={[
+              { value: 'mph', label: 'mph' },
+              { value: 'kmh', label: 'km/h' },
+            ]}
           />
         </Field>
       </Section>

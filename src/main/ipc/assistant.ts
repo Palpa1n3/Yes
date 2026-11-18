@@ -1,4 +1,4 @@
-import { app, safeStorage, type BrowserWindow } from 'electron';
+import { app, safeStorage } from 'electron';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
 import { buildSystemPrompt } from '@shared/personalities';
@@ -8,8 +8,9 @@ import {
   type Settings,
   type SystemStats,
   type ToolOutcome,
-  type TimerInfo,
 } from '@shared/types';
+import type { WeatherData } from '@shared/weather';
+import type { MainContext } from '../context';
 import { MockProvider, type AIProvider } from '../services/ai-provider';
 import { AnthropicProvider, OfflineError } from '../services/anthropic-provider';
 import { AppRegistry } from '../services/app-registry';
@@ -21,14 +22,10 @@ const MAX_HISTORY = 40;
 /** How long an action card may wait for Approve / Cancel before the model is told it timed out. */
 const TOOL_TIMEOUT_MS = 10 * 60_000;
 
-export function registerAssistantIpc(
-  getWindow: () => BrowserWindow | null,
-  getStats: () => SystemStats,
-  getSettings: () => Settings,
-  getDetailedStats?: () => Promise<SystemStats & { processesTimedOut?: boolean }>,
-  warmStats?: () => void,
-  getTimers?: () => TimerInfo[],
-): void {
+export function registerAssistantIpc(ctx: MainContext, getWeather: () => WeatherData | null): void {
+  const getWindow = ctx.getWindow;
+  const getStats = (): SystemStats => ctx.telemetry.snapshot();
+  const getSettings = (): Settings => ctx.settings.get();
   const userData = app.getPath('userData');
   const secrets = new SecretStore(join(userData, 'anthropic-key.bin'), safeStorage);
   const registry = new AppRegistry(join(userData, 'apps.json'));
@@ -37,19 +34,24 @@ export function registerAssistantIpc(
     return buildSystemPrompt({ ...s.personality, assistantName: s.assistantName }, s.userName);
   };
 
-  const mock: AIProvider = new MockProvider(getStats, () => {
-    const s = getSettings();
-    return { personality: s.personality, userName: s.userName };
-  });
+  const mock: AIProvider = new MockProvider(
+    getStats,
+    () => {
+      const s = getSettings();
+      return { personality: s.personality, userName: s.userName };
+    },
+    getWeather,
+  );
   const claude = new AnthropicProvider({
     getKey: () => secrets.get(),
     model: () => getSettings().model,
     systemPrompt,
     info,
     stats: getStats,
-    detailedStats: getDetailedStats,
-    warm: warmStats,
-    timers: getTimers,
+    detailedStats: () => ctx.telemetry.snapshotWithProcesses(),
+    warm: () => ctx.telemetry.warmProcesses(),
+    timers: () => ctx.timers.list(),
+    weather: getWeather,
     apps: () => registry.load().map((a) => ({ name: a.name, intents: a.intents })),
   });
 

@@ -8,62 +8,17 @@ import { Sparkline } from '@renderer/components/panels/Sparkline';
 import { Stat } from '@renderer/components/panels/Stat';
 import { CoreDisplay } from '@renderer/components/core/CoreDisplay';
 import { ConsolePanel } from '@renderer/components/transcript/ConsolePanel';
-import { useClock } from '@renderer/hooks/useClock';
 import { useGreeting } from '@renderer/hooks/useGreeting';
 import { usePersona } from '@renderer/hooks/usePersona';
 import { useTween } from '@renderer/hooks/useTween';
-import { fmtBytes, fmtCountdown, fmtRate, fmtUptime, loadTone, pad2 } from '@renderer/lib/format';
-import { schedule } from '@renderer/mocks/dashboard';
+import { fmtBytes, fmtRate, fmtUptime, loadTone } from '@renderer/lib/format';
 import { readAudioLevel, useAssistantStore } from '@renderer/stores/assistantStore';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { useSystemStore } from '@renderer/stores/systemStore';
+import { WeatherPanel } from '@renderer/components/weather/WeatherPanel';
 import { Columns } from './Columns';
 
 /* ── Left ──────────────────────────────────────────── */
-
-function SchedulePanel() {
-  const now = useClock();
-  const minutesNow = now.getHours() * 60 + now.getMinutes();
-  const next = schedule.find((e) => e.minutes > minutesNow);
-  const msToNext = next ? (next.minutes - minutesNow) * 60_000 - now.getSeconds() * 1000 : null;
-
-  return (
-    <Panel
-      code="CAL.02"
-      title="Schedule"
-      chip={<Chip tone="muted">Sample</Chip>}
-      className="min-h-[150px] flex-1"
-      bodyClassName="flex flex-col !py-2"
-    >
-      <div className="flex items-baseline justify-between pb-2">
-        <span className="micro-label">Next event</span>
-        <span className="numeric text-[13px] text-accent">
-          {msToNext === null ? 'Clear' : fmtCountdown(msToNext)}
-        </span>
-      </div>
-      <ul className="min-h-0 flex-1 overflow-y-auto" tabIndex={0} aria-label="Today's events">
-        {schedule.map((e) => {
-          const isNext = e === next;
-          const past = e.minutes <= minutesNow;
-          return (
-            <li
-              key={e.minutes}
-              className={`hud-row grid grid-cols-[3.2rem_1fr_auto] items-center gap-2 border-l-2 py-1.5 pl-2 text-[13px] ${
-                isNext ? 'border-accent bg-accent/[0.07] text-ice' : 'border-transparent'
-              } ${past ? 'opacity-45' : ''}`}
-            >
-              <span className="numeric text-[12px] text-text-muted">
-                {pad2(e.minutes / 60)}:{pad2(e.minutes % 60)}
-              </span>
-              <span className="truncate">{e.title}</span>
-              <span className="micro-label">{e.where}</span>
-            </li>
-          );
-        })}
-      </ul>
-    </Panel>
-  );
-}
 
 function VitalsPanel() {
   const stats = useSystemStore((s) => s.stats);
@@ -287,7 +242,7 @@ export function OverviewTab() {
       left={
         <>
           <TimersPanel className="shrink-0" />
-          <SchedulePanel />
+          <WeatherPanel className="shrink-0" />
           <VitalsPanel />
         </>
       }

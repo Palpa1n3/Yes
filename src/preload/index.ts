@@ -68,6 +68,12 @@ const api: ArcAPI = {
     folders: () => invoke(IPC.apps.folders),
     openFolder: (f) => send(IPC.apps.openFolder, f),
   },
+  weather: {
+    get: () => invoke(IPC.weather.get),
+    refresh: () => invoke(IPC.weather.refresh),
+    search: (q) => invoke(IPC.weather.search, q),
+    onChange: (cb) => subscribe(IPC.weather.onChange, cb),
+  },
   timers: {
     list: () => invoke(IPC.timers.list),
     add: (m, l) => invoke(IPC.timers.add, m, l),

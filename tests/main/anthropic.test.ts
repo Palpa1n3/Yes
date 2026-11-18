@@ -12,6 +12,7 @@ import {
   repairTranscript,
   toIntent,
 } from '../../src/main/services/anthropic-provider';
+import type { WeatherData } from '@shared/weather';
 import { SecretStore, type Encryptor } from '../../src/main/services/secret-store';
 import { snapshot } from '../../src/main/services/system-stats';
 
@@ -225,6 +226,35 @@ describe('AnthropicProvider', () => {
     expect(JSON.parse(results[1]!.content)).toHaveProperty('cpu.loadPct');
   });
 
+  it('answers get_weather locally, or explains when no town is set', async () => {
+    for (const weather of [null, WX]) {
+      const f = fakeClient([
+        { content: [toolUse('w', 'get_weather', {})], stop_reason: 'tool_use' },
+        { content: [text('Rainy.')], stop_reason: 'end_turn' },
+      ]);
+      const p = new AnthropicProvider({
+        getKey: async () => 'sk-ant-test',
+        model: () => 'claude-haiku-5-5',
+        systemPrompt: () => '',
+        info: () => null,
+        stats: snapshot,
+        apps: () => [],
+        weather: () => weather,
+        createClient: () => f.client,
+      });
+      const runTool = vi.fn();
+      await collect(p, 'weather?', runTool);
+      expect(runTool).not.toHaveBeenCalled();
+      const r = (f.calls[1]!['messages'] as Array<{ content: unknown }>).at(-1)!.content as Array<{
+        is_error?: boolean;
+        content: string;
+      }>;
+      if (weather) expect(JSON.parse(r[0]!.content).now.temp).toBe('8°C');
+      else
+        expect(r[0]).toMatchObject({ is_error: true, content: expect.stringMatching(/Settings/) });
+    }
+  });
+
   it('rejects malformed tool input without running anything', async () => {
     const { p, calls } = provider([
       {
@@ -428,3 +458,22 @@ describe('SecretStore', () => {
     await expect(s.set('sk-ant-x')).rejects.toThrow(/cannot encrypt/);
   });
 });
+
+const WX: WeatherData = {
+  place: { name: 'Leeds', lat: 53.8, lon: -1.5 },
+  units: { temp: 'c', wind: 'kmh' },
+  fetchedAt: Date.now(),
+  current: {
+    temp: 8.4,
+    feels: 5,
+    humidity: 80,
+    code: 61,
+    isDay: true,
+    windSpeed: 14,
+    windDir: 225,
+    precipitation: 0,
+  },
+  hourly: [],
+  today: { max: 10, min: 3, rainChance: 70, sunrise: null, sunset: null },
+  tomorrow: null,
+};

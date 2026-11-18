@@ -7,6 +7,7 @@ import { registerAssistantIpc } from './assistant';
 import { registerCommandsIpc } from './commands';
 import { registerInfoIpc } from './info';
 import { registerTimersIpc } from './timers';
+import { registerWeatherIpc } from './weather';
 import { registerSettingsIpc } from './settings';
 import { registerSystemIpc } from './system';
 import { registerWindowIpc } from './window';
@@ -15,14 +16,8 @@ import { registerWindowIpc } from './window';
 export function registerIpc(ctx: MainContext): void {
   registerWindowIpc(ctx);
   registerSystemIpc(ctx);
-  registerAssistantIpc(
-    ctx.getWindow,
-    () => ctx.telemetry.snapshot(),
-    () => ctx.settings.get(),
-    () => ctx.telemetry.snapshotWithProcesses(),
-    () => ctx.telemetry.warmProcesses(),
-    () => ctx.timers.list(),
-  );
+  const weather = registerWeatherIpc(ctx);
+  registerAssistantIpc(ctx, () => weather.get().data);
   const skills = new SkillRegistry({
     settings: () => ctx.settings.get(),
     stats: () => ctx.telemetry.snapshot(),

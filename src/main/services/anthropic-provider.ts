@@ -1,6 +1,7 @@
 /** Claude via the Anthropic Messages API, with ARC's actions as tools.
  *  ARC runs the loop itself so each action passes through the renderer's command cards
  *  (Approve / Cancel, activity log) before its result goes back to the model. */
+import { weatherSummary, type WeatherData } from '@shared/weather';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
   AiModel,
@@ -175,6 +176,12 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'get_weather',
+    description:
+      "Current weather and the forecast for the next few hours, today and tomorrow at the user's saved location, in their units. Use for questions about weather, rain, temperature, or whether to take a coat or umbrella.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'lock_screen',
     description: "Lock the user's computer (Windows lock screen).",
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
@@ -185,7 +192,10 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
 export function toIntent(
   name: string,
   input: unknown,
-): { intent: RawIntent } | { error: string } | { local: 'list_apps' | 'list_timers' } {
+):
+  | { intent: RawIntent }
+  | { error: string }
+  | { local: 'list_apps' | 'list_timers' | 'get_weather' } {
   const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const str = (k: string): string | null =>
     typeof o[k] === 'string' && (o[k] as string).trim()
@@ -261,6 +271,8 @@ export function toIntent(
     }
     case 'list_timers':
       return { local: 'list_timers' };
+    case 'get_weather':
+      return { local: 'get_weather' };
     case 'cancel_timer': {
       const w = str('which');
       return w ? { intent: { action: 'cancel_timer', target: w } } : { error: 'Missing "which".' };
@@ -329,6 +341,7 @@ export interface AnthropicDeps {
   warm?(): void;
   apps(): Array<{ name: string; intents: string[] }>;
   timers?(): TimerInfo[];
+  weather?(): WeatherData | null;
   /** Injectable for tests. */
   createClient?(apiKey: string): Pick<Anthropic, 'beta' | 'models'>;
 }
@@ -381,7 +394,7 @@ export class AnthropicProvider implements AIProvider {
       "You live inside ARC, a desktop assistant HUD on the user's own computer. Replies appear in a small console (and may be read aloud), so write plain sentences: no markdown headings, tables or code fences unless asked.",
       'Use the tools to act rather than describing what you would do. Actions may need the user to approve them; if one is cancelled or fails, say so briefly and suggest an alternative.',
       'Answer questions about the computer from get_system_status, never from guesses.',
-      'You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, and lock the PC.',
+      'You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, check the weather, and lock the PC.',
       machine,
     ];
     // Stable text first and cached: personality changes are rare, so this prefix is reused.
@@ -512,21 +525,34 @@ export class AnthropicProvider implements AIProvider {
             continue;
           }
           if ('local' in plan) {
+            const w = plan.local === 'get_weather' ? (this.deps.weather?.() ?? null) : null;
+            if (plan.local === 'get_weather' && !w) {
+              results.push({
+                type: 'tool_result',
+                tool_use_id: t.id,
+                is_error: true,
+                content:
+                  'No weather available: the user has not set a location (Settings › General › Weather), or the forecast could not be fetched yet.',
+              });
+              continue;
+            }
             results.push({
               type: 'tool_result',
               tool_use_id: t.id,
               content: JSON.stringify(
-                plan.local === 'list_apps'
-                  ? this.deps.apps()
-                  : (this.deps.timers?.() ?? []).map((x) => ({
-                      label: x.label || '(no label)',
-                      status: x.status,
-                      minutesLeft: Math.max(0, Math.round((x.dueAt - Date.now()) / 6000) / 10),
-                      due: new Date(x.dueAt).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      }),
-                    })),
+                w
+                  ? weatherSummary(w)
+                  : plan.local === 'list_apps'
+                    ? this.deps.apps()
+                    : (this.deps.timers?.() ?? []).map((x) => ({
+                        label: x.label || '(no label)',
+                        status: x.status,
+                        minutesLeft: Math.max(0, Math.round((x.dueAt - Date.now()) / 6000) / 10),
+                        due: new Date(x.dueAt).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        }),
+                      })),
               ),
             });
             continue;

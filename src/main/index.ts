@@ -253,7 +253,13 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(() => {
     // One long-lived PowerShell for systeminformation on Windows: far cheaper than one per probe.
     if (process.platform === 'win32') si.powerShellStart();
-    settings.load({ userName: firstNameFromAccount() });
+    // First run: units from the Windows region (UK: °C + mph, US: °F + mph).
+    const region = app.getLocaleCountryCode().toUpperCase();
+    settings.load({
+      userName: firstNameFromAccount(),
+      tempUnit: ['US', 'LR', 'MM'].includes(region) ? 'f' : 'c',
+      windUnit: ['US', 'GB', 'LR', 'MM'].includes(region) ? 'mph' : 'kmh',
+    });
     settings.subscribe(onSettingsChanged);
     registerIpc(ctx);
     mainWindow = createWindow();

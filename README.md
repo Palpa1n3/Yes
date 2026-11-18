@@ -53,7 +53,7 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 
 | Tab      | Shows                                                                                          |
 | -------- | ---------------------------------------------------------------------------------------------- |
-| Overview | Weather & schedule (samples), live vitals, core, console, network, drives, activity log        |
+| Overview | Timers, live weather, vitals, core, console, network, drives, activity log                     |
 | System   | Per-thread CPU, memory, CPU/RAM/GPU history, top processes, GPU                                |
 | Apps     | Your `apps.json` as a launch grid, add installed apps, edit trigger phrases, open your folders |
 | Network  | Live throughput, interfaces, gateway & latency                                                 |
@@ -67,6 +67,13 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 - When one ends: a repeating alarm chime (up to 2 minutes; toggle and volume in Settings › Voice), a Windows notification, a flashing taskbar icon, and a **Time's up** banner with **Dismiss** / **Snooze 5**.
 - Timers are saved to `%APPDATA%\ARC\timers.json`, so they survive restarts; anything that finished while ARC was closed rings on the next start.
 - Cancel by voice/text: _"cancel the oven timer"_, _"cancel all timers"_.
+
+### Weather
+
+- Set your town in **Settings › General › Weather** (or straight from the Weather panel). Choose °C/°F and mph/km/h there too.
+- The Weather panel shows now, feels-like, wind, the next 8 hours with rain chance, sunrise/sunset and tomorrow; the temperature also sits beside the clock.
+- Data comes from [Open-Meteo](https://open-meteo.com) (free, no account or key). Only the town's map position is sent. It refreshes every 15 minutes and the last reading is kept in `%APPDATA%\ARC\weather.json` for when you're offline.
+- Ask _"what's the weather?"_, _"do I need an umbrella?"_, _"will it rain later?"_. Claude uses the `get_weather` tool; the offline brain answers simple ones.
 
 ### Your data
 
@@ -144,7 +151,7 @@ ARC works offline with a built-in mock, or with Claude for real conversation and
 How it works (`src/main/services/anthropic-provider.ts`):
 
 - The key is validated, then encrypted with the OS keychain (`safeStorage`, DPAPI on Windows) into `%APPDATA%\ARC\anthropic-key.bin`. It never reaches the renderer, logs or settings.
-- ARC runs a streaming Messages API tool loop. Claude can `launch_app`, `close_app` (always confirmed unless the personality never asks; polite close, never force-kill, never Windows/ARC processes), `set_volume`, `media_control`, `open_folder`, `find_files` (your own folders only), `reveal_file` (shows, never runs), `set_timer` (Windows notification), `lock_screen`, `open_url`, `search_web`, `get_system_status` and `list_apps`. Every action except `list_apps` goes through ARC's command cards (approval per your personality, activity log), and the outcome, including "cancelled", is sent back to Claude.
+- ARC runs a streaming Messages API tool loop. Claude can `launch_app`, `close_app` (always confirmed unless the personality never asks; polite close, never force-kill, never Windows/ARC processes), `set_volume`, `media_control`, `open_folder`, `find_files` (your own folders only), `reveal_file` (shows, never runs), `set_timer` (Windows notification), `lock_screen`, `open_url`, `search_web`, `get_system_status`, `get_weather` and `list_apps`. Every action except `list_apps` goes through ARC's command cards (approval per your personality, activity log), and the outcome, including "cancelled", is sent back to Claude.
 - Effort is `low` (chat), the personality prompt is cached, at most 8 model steps run per reply, and Sonnet/Opus use Anthropic's default server-side fallback. Haiku has none, so a refusal shows a message.
 - No key, or offline: ARC says so and answers with the mock. Bad key, no credit or rate limits produce plain-English messages.
 

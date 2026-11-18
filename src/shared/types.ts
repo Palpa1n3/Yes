@@ -1,3 +1,4 @@
+import type { TempUnit, WeatherPlace, WindUnit } from './weather';
 import { DEFAULT_PERSONALITY, type Personality } from './personalities';
 
 /** Shared domain types used by main, preload and renderer. No runtime code. */
@@ -129,6 +130,10 @@ export interface Settings {
   launchAtLogin: boolean;
   /** Keep the conversation between restarts (stored locally in userData). */
   persistHistory: boolean;
+  /** Town for the weather panel (only its coordinates are sent to the weather service). */
+  weatherPlace: WeatherPlace | null;
+  tempUnit: TempUnit;
+  windUnit: WindUnit;
   /* Personality */
   personality: Personality;
   /* Appearance */
@@ -168,6 +173,9 @@ export const DEFAULT_SETTINGS: Settings = {
   closeToTray: true,
   launchAtLogin: false,
   persistHistory: true,
+  weatherPlace: null,
+  tempUnit: 'c',
+  windUnit: 'kmh',
   personality: DEFAULT_PERSONALITY,
   theme: 'arc-cyan',
   scanlines: false,

@@ -29,6 +29,7 @@ describe('IPC channel contract', () => {
         'storage',
         'system',
         'timers',
+        'weather',
         'window',
       ].sort(),
     );

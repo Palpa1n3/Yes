@@ -15,6 +15,7 @@ import type {
   ToolDef,
   ToolOutcome,
 } from '@shared/types';
+import { describeWeather, rainSoon, tempSymbol, type WeatherData } from '@shared/weather';
 import { snapshot } from './system-stats';
 
 export interface SendOptions {
@@ -103,6 +104,7 @@ export function plan(
   turn: number,
   getStats: () => SystemStats,
   persona: Persona,
+  getWeather: () => WeatherData | null = () => null,
 ): Plan {
   const { personality: p } = persona;
   const title = resolveTitle(p.userTitle, persona.userName);
@@ -270,6 +272,39 @@ export function plan(
       after: ` Processor is at ${cpu}% across ${s.cpu.cores.length} threads, memory ${gb(s.memory.used)} of ${gb(s.memory.total)} GB, and we've been up ${hrs} hours. ${verdict}`,
     };
   }
+  if (
+    /\b(weather|forecast|rain(ing|y)?|umbrella|coat|jacket|temperature|how (hot|cold|warm))\b/.test(
+      lower,
+    )
+  ) {
+    const w = getWeather();
+    if (!w)
+      return {
+        text:
+          v <= 1
+            ? 'No location set. Settings › General › Weather.'
+            : "I don't know where you are yet. Add your town in Settings › General › Weather and I'll keep an eye on the sky.",
+      };
+    const T = tempSymbol(w.units.temp);
+    const now = describeWeather(w.current.code, w.current.isDay).label.toLowerCase();
+    const temp = `${Math.round(w.current.temp)}${T}`;
+    const rain = rainSoon(w);
+    if (v <= 1)
+      return {
+        text: `${temp}, ${now}. High ${Math.round(w.today.max)}${T}.${rain !== null ? ` Rain ${rain}%.` : ''}`,
+      };
+    const advice =
+      rain !== null && rain >= 50
+        ? ' Take an umbrella.'
+        : w.current.feels <= (w.units.temp === 'f' ? 45 : 7)
+          ? t(' Wrap up warm{,title}.')
+          : rain !== null && rain >= 25
+            ? ' Possible showers later.'
+            : '';
+    return {
+      text: `It's ${temp} and ${now} in ${w.place.name}, feeling like ${Math.round(w.current.feels)}${T}. Today ${Math.round(w.today.min)} to ${Math.round(w.today.max)}${T}${rain !== null ? `, ${rain}% chance of rain over the next few hours` : ''}.${advice}`,
+    };
+  }
   if (/\b(time|date|day is it)\b/.test(lower)) {
     const d = new Date();
     const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -333,13 +368,14 @@ export class MockProvider implements AIProvider {
     /** Live telemetry when available; a basic `os` snapshot otherwise (e.g. in tests). */
     private readonly getStats: () => SystemStats = snapshot,
     private readonly getPersona: () => Persona | null = () => null,
+    private readonly getWeather: () => WeatherData | null = () => null,
   ) {}
 
   async *send(messages: ChatMessage[], opts: SendOptions): AsyncIterable<ProviderChunk> {
     const { signal } = opts;
     const last = [...messages].reverse().find((m) => m.role === 'user');
     const persona = this.getPersona() ?? { personality: DEFAULT_PERSONALITY, userName: '' };
-    const p = plan(last?.content ?? '', this.turn++, this.getStats, persona);
+    const p = plan(last?.content ?? '', this.turn++, this.getStats, persona, this.getWeather);
 
     await sleep(350 + Math.random() * 450, signal); // "thinking"
     if (signal?.aborted) return;
