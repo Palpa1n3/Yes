@@ -9,6 +9,7 @@ import type {
   SystemInfo,
   SystemStats,
   ToolOutcome,
+  TimerInfo,
 } from '@shared/types';
 import type { AIProvider, SendOptions } from './ai-provider';
 
@@ -73,13 +74,118 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     description: "List the apps in the user's app registry with the phrases that open them.",
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  {
+    name: 'close_app',
+    description:
+      'Politely ask a running app to close (like clicking its X), so it can still ask to save. The user is asked to approve first. Use the app name as the user would say it or as shown in get_system_status topProcesses (e.g. "opera", "spotify").',
+    input_schema: {
+      type: 'object',
+      properties: { app: { type: 'string' } },
+      required: ['app'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'set_volume',
+    description:
+      'Set the system output volume (0-100) and/or mute or unmute it. Give at least one of level or mute.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        level: { type: 'integer', minimum: 0, maximum: 100 },
+        mute: { type: 'boolean' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'media_control',
+    description: 'Press a media key for whatever is playing (Spotify, a browser video, etc.).',
+    input_schema: {
+      type: 'object',
+      properties: { action: { type: 'string', enum: ['play_pause', 'next', 'previous', 'stop'] } },
+      required: ['action'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'open_folder',
+    description: "Open one of the user's folders in File Explorer.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        folder: {
+          type: 'string',
+          enum: ['documents', 'downloads', 'desktop', 'pictures', 'videos', 'music'],
+        },
+      },
+      required: ['folder'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'find_files',
+    description:
+      "Search file names in the user's Documents, Downloads, Desktop, Pictures, Videos and Music (newest first, up to 15). Use short distinctive words from the file name.",
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'reveal_file',
+    description:
+      'Show a file (by full path, e.g. from find_files) selected in File Explorer. It does not open or run the file.',
+    input_schema: {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'set_timer',
+    description:
+      'Set a timer or reminder. When it ends the user gets a Windows notification with the label.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        minutes: { type: 'number', exclusiveMinimum: 0, maximum: 1440 },
+        label: { type: 'string' },
+      },
+      required: ['minutes'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_timers',
+    description: 'List running and ringing timers/reminders with their labels and time left.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'cancel_timer',
+    description: 'Cancel timers whose label contains the given words, or "all".',
+    input_schema: {
+      type: 'object',
+      properties: { which: { type: 'string' } },
+      required: ['which'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'lock_screen',
+    description: "Lock the user's computer (Windows lock screen).",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
 ].map((t) => ({ ...t, eager_input_streaming: true }) as Anthropic.Beta.BetaTool);
 
 /** Validate a (tolerantly parsed) tool input; returns the intent to run, or an error. */
 export function toIntent(
   name: string,
   input: unknown,
-): { intent: RawIntent } | { error: string } | { local: 'list_apps' } {
+): { intent: RawIntent } | { error: string } | { local: 'list_apps' | 'list_timers' } {
   const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const str = (k: string): string | null =>
     typeof o[k] === 'string' && (o[k] as string).trim()
@@ -102,6 +208,65 @@ export function toIntent(
       return { intent: { action: 'system_query', target: 'overview' } };
     case 'list_apps':
       return { local: 'list_apps' };
+    case 'close_app': {
+      const app = str('app');
+      return app ? { intent: { action: 'close_app', target: app } } : { error: 'Missing "app".' };
+    }
+    case 'set_volume': {
+      const level =
+        typeof o['level'] === 'number' && Number.isFinite(o['level'])
+          ? Math.round(o['level'] as number)
+          : undefined;
+      const mute = typeof o['mute'] === 'boolean' ? (o['mute'] as boolean) : undefined;
+      if (level === undefined && mute === undefined)
+        return { error: 'Give "level" (0-100) and/or "mute".' };
+      if (level !== undefined && (level < 0 || level > 100))
+        return { error: '"level" must be 0-100.' };
+      return {
+        intent: {
+          action: 'set_volume',
+          target: level === undefined ? '' : String(level),
+          ...(mute === undefined ? {} : { args: [mute ? 'mute' : 'unmute'] }),
+        },
+      };
+    }
+    case 'media_control': {
+      const a = str('action');
+      return a && ['play_pause', 'next', 'previous', 'stop'].includes(a)
+        ? { intent: { action: 'media_control', target: a } }
+        : { error: '"action" must be play_pause, next, previous or stop.' };
+    }
+    case 'open_folder': {
+      const f = str('folder')?.toLowerCase();
+      return f ? { intent: { action: 'open_folder', target: f } } : { error: 'Missing "folder".' };
+    }
+    case 'find_files': {
+      const q = str('query');
+      return q ? { intent: { action: 'find_files', target: q } } : { error: 'Missing "query".' };
+    }
+    case 'reveal_file': {
+      const p = str('path');
+      return p ? { intent: { action: 'reveal_file', target: p } } : { error: 'Missing "path".' };
+    }
+    case 'set_timer': {
+      const m =
+        typeof o['minutes'] === 'number' && Number.isFinite(o['minutes'])
+          ? (o['minutes'] as number)
+          : NaN;
+      if (!(m > 0 && m <= 1440)) return { error: '"minutes" must be between 0 and 1440.' };
+      const label = str('label');
+      return {
+        intent: { action: 'set_timer', target: String(m), ...(label ? { args: [label] } : {}) },
+      };
+    }
+    case 'list_timers':
+      return { local: 'list_timers' };
+    case 'cancel_timer': {
+      const w = str('which');
+      return w ? { intent: { action: 'cancel_timer', target: w } } : { error: 'Missing "which".' };
+    }
+    case 'lock_screen':
+      return { intent: { action: 'lock_screen' } };
     default:
       return { error: `Unknown tool "${name}".` };
   }
@@ -163,6 +328,7 @@ export interface AnthropicDeps {
   /** Called when a turn starts, to pre-fetch slow data the model may ask for. */
   warm?(): void;
   apps(): Array<{ name: string; intents: string[] }>;
+  timers?(): TimerInfo[];
   /** Injectable for tests. */
   createClient?(apiKey: string): Pick<Anthropic, 'beta' | 'models'>;
 }
@@ -215,6 +381,7 @@ export class AnthropicProvider implements AIProvider {
       "You live inside ARC, a desktop assistant HUD on the user's own computer. Replies appear in a small console (and may be read aloud), so write plain sentences: no markdown headings, tables or code fences unless asked.",
       'Use the tools to act rather than describing what you would do. Actions may need the user to approve them; if one is cancelled or fails, say so briefly and suggest an alternative.',
       'Answer questions about the computer from get_system_status, never from guesses.',
+      'You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, and lock the PC.',
       machine,
     ];
     // Stable text first and cached: personality changes are rare, so this prefix is reused.
@@ -348,7 +515,19 @@ export class AnthropicProvider implements AIProvider {
             results.push({
               type: 'tool_result',
               tool_use_id: t.id,
-              content: JSON.stringify(this.deps.apps()),
+              content: JSON.stringify(
+                plan.local === 'list_apps'
+                  ? this.deps.apps()
+                  : (this.deps.timers?.() ?? []).map((x) => ({
+                      label: x.label || '(no label)',
+                      status: x.status,
+                      minutesLeft: Math.max(0, Math.round((x.dueAt - Date.now()) / 6000) / 10),
+                      due: new Date(x.dueAt).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      }),
+                    })),
+              ),
             });
             continue;
           }

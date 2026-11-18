@@ -81,6 +81,8 @@ export interface AssistantResponse {
 export interface RawIntent {
   action: string;
   target?: string;
+  /** Extra parameters (e.g. a timer label, "mute"). */
+  args?: string[];
 }
 
 export type StreamChunk =
@@ -144,6 +146,9 @@ export interface Settings {
   sfx: boolean;
   sfxVolume: number; // 0–1
   wakeWord: boolean; // placeholder, not implemented yet
+  /** Play an alarm when a timer ends (separate from the quiet effects). */
+  alarmSound: boolean;
+  alarmVolume: number; // 0–1
   /* Hotkeys */
   /** Electron accelerator, e.g. "CommandOrControl+Space". */
   globalHotkey: string;
@@ -176,6 +181,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sfx: true,
   sfxVolume: 0.35,
   wakeWord: false,
+  alarmSound: true,
+  alarmVolume: 0.8,
   globalHotkey: 'CommandOrControl+Space',
   provider: 'mock',
   model: 'claude-haiku-5-5',
@@ -332,4 +339,16 @@ export interface AiStatus {
 export interface AiTestResult {
   ok: boolean;
   message: string;
+}
+
+/* ── Timers ────────────────────────────────────────────────────────────── */
+
+export interface TimerInfo {
+  id: string;
+  label: string;
+  durationMs: number;
+  createdAt: number;
+  dueAt: number;
+  /** 'ringing' until dismissed or snoozed. */
+  status: 'running' | 'ringing';
 }

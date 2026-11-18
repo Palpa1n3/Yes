@@ -9,6 +9,8 @@ import { describeCommand, useConversationStore } from '@renderer/stores/conversa
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { useSystemStore } from '@renderer/stores/systemStore';
 import { ControlButton } from './WindowControls';
+import { RingingBanner } from './RingingBanner';
+import { TimerChip } from './TimerChip';
 
 const STATE_TEXT: Record<AssistantState, string> = {
   idle: 'Ready',
@@ -131,7 +133,10 @@ export function CompactView() {
           >
             · {STATE_TEXT[state]}
           </span>
-          <div className="no-drag -mr-2 ml-auto flex">
+          <div className="ml-auto scale-90">
+            <TimerChip />
+          </div>
+          <div className="no-drag -mr-2 flex">
             <ControlButton
               label="Expand to full HUD"
               onClick={() => window.arc.window.setCompact(false)}
@@ -150,6 +155,7 @@ export function CompactView() {
           <CommandInput assistantName={assistantName} compact autoFocus />
         </div>
       </div>
+      <RingingBanner compact />
     </div>
   );
 }

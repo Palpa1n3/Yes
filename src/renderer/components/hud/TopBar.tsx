@@ -4,6 +4,7 @@ import { fmtClock } from '@renderer/lib/format';
 import { useSystemStore } from '@renderer/stores/systemStore';
 import { useUiStore } from '@renderer/stores/uiStore';
 import { Palette } from './Palette';
+import { TimerChip } from './TimerChip';
 import { TabBar } from './TabBar';
 import { WindowControls } from './WindowControls';
 
@@ -52,6 +53,7 @@ export function TopBar({ assistantName, maximized }: Props) {
       <TabBar />
 
       <div className="ml-auto flex items-center gap-5 pl-4">
+        <TimerChip />
         <Palette />
         <button
           type="button"

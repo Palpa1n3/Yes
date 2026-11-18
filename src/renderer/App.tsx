@@ -13,7 +13,14 @@ import { bindDevStateKeys, DevStateSwitcher } from '@renderer/components/core/De
 import { useFakeAudio } from '@renderer/hooks/useFakeAudio';
 import { SettingsPanel } from '@renderer/components/settings/SettingsPanel';
 import { startSession } from '@renderer/session';
-import { bindAssistantStream, bindHistoryPersistence } from '@renderer/stores/conversationStore';
+import {
+  bindAssistantStream,
+  bindHistoryPersistence,
+  useConversationStore,
+} from '@renderer/stores/conversationStore';
+import { bindTimers, timerTitle, useTimersStore } from '@renderer/stores/timersStore';
+import { startAlarm, stopAlarm } from '@renderer/voice/alarm';
+import { RingingBanner } from '@renderer/components/hud/RingingBanner';
 import { useSpeechOutput } from '@renderer/voice/useSpeechOutput';
 import { BootSequence, shouldBoot } from '@renderer/components/core/BootSequence';
 import { CompactView } from '@renderer/components/hud/CompactView';
@@ -62,6 +69,23 @@ export function App() {
     return () => {
       offStream();
       offHistory();
+    };
+  }, []);
+
+  // Timers: mirror main's list; ring → alarm sound + a console line; silence when none ring.
+  useEffect(() => {
+    const off = bindTimers((t) => {
+      startAlarm();
+      useConversationStore.getState().pushSystem(`⏰ Time's up: ${timerTitle(t)}`);
+    });
+    const unsub = useTimersStore.subscribe((st) => {
+      if (!st.timers.some((t) => t.status === 'ringing')) stopAlarm();
+      else startAlarm();
+    });
+    return () => {
+      off();
+      unsub();
+      stopAlarm();
     };
   }, []);
 
@@ -119,6 +143,7 @@ export function App() {
         </main>
         <StatusBar />
         <SettingsPanel />
+        <RingingBanner />
         {import.meta.env.DEV && <DevStateSwitcher />}
         {booting && <BootSequence onDone={() => setBooting(false)} />}
       </div>

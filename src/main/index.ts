@@ -1,9 +1,9 @@
-import { app, BrowserWindow, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, nativeImage, Notification, shell } from 'electron';
 import os from 'node:os';
 import { join } from 'node:path';
 import si from 'systeminformation';
 import { IPC } from '@shared/ipc';
-import type { AppCommand, Settings } from '@shared/types';
+import type { AppCommand, Settings, TimerInfo } from '@shared/types';
 import { CompactController } from './compact';
 import type { MainContext } from './context';
 import { Hotkey, prettyAccelerator } from './hotkey';
@@ -11,6 +11,7 @@ import { registerIpc } from './ipc';
 import { emit } from './ipc/handle';
 import { SettingsStore } from './services/settings-store';
 import { TelemetryService } from './services/telemetry';
+import { TimerService, describeDuration } from './services/timer-service';
 import { WinProcessReader } from './services/win-processes';
 import { ArcTray, resourcePath } from './tray';
 import { DEFAULT_SIZE, MIN_SIZE, loadWindowState, trackWindowState } from './window-state';
@@ -19,6 +20,7 @@ let mainWindow: BrowserWindow | null = null;
 let quitting = false;
 let rendererReady = false;
 let hintedTray = false;
+let timersLoaded = false;
 const pending: AppCommand[] = [];
 
 const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'));
@@ -46,6 +48,11 @@ const ctx: MainContext = {
     },
   ),
   hotkey: new Hotkey(() => ctx.toggleWindow()),
+  timers: new TimerService({
+    file: join(app.getPath('userData'), 'timers.json'),
+    onChange: (list) => emit(getWindow(), IPC.timers.onChange, list),
+    onRing: (t) => ringTimer(t),
+  }),
   updateSettings: (patch) => settings.set(patch),
   setCompact: (on) => {
     ctx.showWindow(on);
@@ -86,6 +93,26 @@ const ctx: MainContext = {
 };
 
 const tray = new ArcTray(ctx);
+
+/** A timer is up: Windows notification (with sound), flash the taskbar, tell the UI
+ *  (which plays the alarm and shows Dismiss / Snooze). */
+function ringTimer(t: TimerInfo): void {
+  const name = settings.get().assistantName;
+  const body = t.label || `${describeDuration(t.durationMs / 60_000)} timer finished`;
+  if (Notification.isSupported()) {
+    const n = new Notification({
+      title: `⏰ ${name} · Time's up`,
+      body,
+      silent: false,
+      urgency: 'critical',
+    });
+    n.on('click', () => ctx.showWindow());
+    n.show();
+  }
+  const w = getWindow();
+  if (w && !w.isFocused()) w.flashFrame(true);
+  emit(w, IPC.timers.onRing, t);
+}
 
 function applyHotkey(accel: string): void {
   const { active, fellBack } = ctx.hotkey.register(accel);
@@ -165,6 +192,10 @@ function createWindow(): BrowserWindow {
   win.webContents.on('did-finish-load', () => {
     rendererReady = true;
     for (const c of pending.splice(0)) emit(win, IPC.app.onCommand, c);
+    if (!timersLoaded) {
+      timersLoaded = true;
+      ctx.timers.load(); // rings anything that came due while ARC was closed
+    }
   });
   win.webContents.on('did-start-loading', () => {
     rendererReady = false;
@@ -180,6 +211,7 @@ function createWindow(): BrowserWindow {
   win.on('hide', syncTelemetry);
   win.on('minimize', syncTelemetry);
   win.on('restore', syncTelemetry);
+  win.on('focus', () => win.flashFrame(false));
   win.on('maximize', () => ctx.pushWindowState());
   win.on('unmaximize', () => ctx.pushWindowState());
 
@@ -241,6 +273,7 @@ if (!app.requestSingleInstanceLock()) {
     settings.saveNow();
     ctx.hotkey.unregister();
     ctx.telemetry.stop();
+    ctx.timers.dispose();
     tray.destroy();
     if (process.platform === 'win32') si.powerShellRelease();
   });

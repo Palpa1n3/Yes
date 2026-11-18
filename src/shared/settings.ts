@@ -50,6 +50,11 @@ export function sanitizeSettings(raw: unknown): Settings {
         ? r['sfxVolume']
         : d.sfxVolume,
     wakeWord: bool('wakeWord'),
+    alarmSound: bool('alarmSound'),
+    alarmVolume:
+      typeof r['alarmVolume'] === 'number' && r['alarmVolume'] >= 0 && r['alarmVolume'] <= 1
+        ? r['alarmVolume']
+        : d.alarmVolume,
     globalHotkey: str('globalHotkey', 60).trim() || d.globalHotkey,
     provider: r['provider'] === 'anthropic' ? 'anthropic' : 'mock',
     model: (AI_MODELS as readonly string[]).includes(r['model'] as string)

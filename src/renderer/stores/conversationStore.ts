@@ -46,10 +46,43 @@ interface ConversationState {
 
 const ACTIVITY_KIND: Record<CanonicalCommand['action'], ActivityKind> = {
   launch_app: 'app',
+  close_app: 'app',
   open_url: 'net',
   search_web: 'net',
   system_query: 'sys',
+  set_volume: 'sys',
+  media_control: 'sys',
+  lock_screen: 'sys',
+  set_timer: 'rtn',
+  cancel_timer: 'rtn',
+  open_folder: 'dsk',
+  find_files: 'dsk',
+  reveal_file: 'dsk',
   unknown: 'msg',
+};
+
+const VERB: Record<CanonicalCommand['action'], string> = {
+  launch_app: 'Launching',
+  close_app: 'Closing',
+  open_url: 'Opening',
+  search_web: 'Searching',
+  system_query: 'Diagnostics',
+  set_volume: 'Volume',
+  media_control: 'Media',
+  open_folder: 'Folder',
+  find_files: 'Finding',
+  reveal_file: 'Showing',
+  set_timer: 'Timer',
+  cancel_timer: 'Cancel timer',
+  lock_screen: 'Locking',
+  unknown: 'Unknown',
+};
+
+const MEDIA_LABEL: Record<string, string> = {
+  play_pause: 'Play / pause',
+  next: 'Next track',
+  previous: 'Previous track',
+  stop: 'Stop',
 };
 
 const uid = (): string => crypto.randomUUID();
@@ -84,19 +117,41 @@ export function deriveState(
 
 /** Verb + display target for command cards and the core's executing label. */
 export function describeCommand(cmd: CanonicalCommand): { verb: string; target: string } {
-  const verb = {
-    launch_app: 'Launching',
-    open_url: 'Opening',
-    search_web: 'Searching',
-    system_query: 'Diagnostics',
-    unknown: 'Unknown',
-  }[cmd.action];
-  if (cmd.action === 'system_query') return { verb, target: 'System' };
+  const verb = VERB[cmd.action];
   const t = cmd.target ?? '';
-  const known = cmd.action === 'launch_app' ? useAppsStore.getState().find(t) : undefined;
-  const pretty =
-    known?.name ?? (cmd.action === 'launch_app' ? t.replace(/\b\w/g, (c) => c.toUpperCase()) : t);
-  return { verb, target: pretty || '—' };
+  const cap = (x: string): string => x.replace(/\b\w/g, (c) => c.toUpperCase());
+  switch (cmd.action) {
+    case 'system_query':
+      return { verb, target: 'System' };
+    case 'lock_screen':
+      return { verb, target: 'PC' };
+    case 'set_volume': {
+      const mute = cmd.args?.includes('mute')
+        ? 'Mute'
+        : cmd.args?.includes('unmute')
+          ? 'Unmute'
+          : '';
+      return { verb, target: [t ? `${t}%` : '', mute].filter(Boolean).join(' · ') || '—' };
+    }
+    case 'media_control':
+      return { verb, target: MEDIA_LABEL[t] ?? t };
+    case 'set_timer':
+      return {
+        verb,
+        target: `${Number(t) < 1 ? `${Math.round(Number(t) * 60)} s` : `${+Number(t).toFixed(1)} min`}${cmd.args?.[0] ? ` · ${cmd.args[0]}` : ''}`,
+      };
+    case 'open_folder':
+      return { verb, target: cap(t) };
+    case 'reveal_file':
+      return { verb, target: t.split(/[\\/]/).pop() || t };
+    case 'launch_app':
+    case 'close_app': {
+      const known = useAppsStore.getState().find(t);
+      return { verb, target: known?.name ?? (cap(t) || '—') };
+    }
+    default:
+      return { verb, target: t || '—' };
+  }
 }
 
 /** ARC's spoken follow-up when a command fails: what happened, then what to try next. */
@@ -110,6 +165,15 @@ export function failureLine(cmd: CanonicalCommand, reason: string): string {
     open_url: 'Check the address and try again.',
     search_web: 'Give it another go in a moment.',
     system_query: 'I can try the diagnostic again if you like.',
+    close_app: 'If it has unsaved work, save it and try again, or close it yourself.',
+    set_volume: 'You can also use the volume keys or the taskbar speaker icon.',
+    media_control: 'Make sure something is playing in a media app.',
+    open_folder: 'Try Documents, Downloads, Desktop, Pictures, Videos or Music.',
+    find_files: 'Try fewer or different words from the file name.',
+    reveal_file: 'I can only show files inside your own folders.',
+    set_timer: 'Try something like “remind me in 10 minutes to stretch”.',
+    cancel_timer: 'Your timers are listed in the Timers panel on the Overview.',
+    lock_screen: 'You can always press Windows+L.',
     unknown: 'Type /help to see what I can do.',
   };
   // Terse personalities skip the coaching.

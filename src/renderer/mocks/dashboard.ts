@@ -1,24 +1,6 @@
 /** Sample data for panels whose real sources need an online service or account access
- *  (weather, calendar) or haven't been built yet (routine execution). Each is labelled
+ *  (calendar) or haven't been built yet (routine execution). Each is labelled
  *  SAMPLE / PREVIEW in the UI so it's never mistaken for real data. */
-
-export const weather = {
-  location: 'Home',
-  temp: 14,
-  condition: 'Partly cloudy',
-  wind: '11 KM/H SW',
-  humidity: 64,
-  feelsLike: 12,
-  rain: 20,
-  hourly: [
-    { h: 9, t: 12 },
-    { h: 12, t: 15 },
-    { h: 15, t: 16 },
-    { h: 18, t: 13 },
-    { h: 21, t: 11 },
-    { h: 0, t: 9 },
-  ],
-};
 
 export interface CalEvent {
   minutes: number; // minutes after midnight

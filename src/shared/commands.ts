@@ -4,11 +4,24 @@ import type { RawIntent } from './types';
 
 export const CANONICAL_ACTIONS = [
   'launch_app',
+  'close_app',
   'open_url',
   'search_web',
   'system_query',
+  'set_volume',
+  'media_control',
+  'open_folder',
+  'find_files',
+  'reveal_file',
+  'set_timer',
+  'cancel_timer',
+  'lock_screen',
   'unknown',
 ] as const;
+
+/** Fixed vocabularies for actions whose target is one of a few values. */
+export const MEDIA_KEYS = ['play_pause', 'next', 'previous', 'stop'] as const;
+export type MediaKey = (typeof MEDIA_KEYS)[number];
 export type CanonicalAction = (typeof CANONICAL_ACTIONS)[number];
 
 export type CommandRisk = 'safe' | 'sensitive' | 'destructive';
@@ -90,6 +103,79 @@ const SYNONYMS: Record<Exclude<CanonicalAction, 'unknown'>, string[]> = {
     'navigate_url',
     'go_to_url',
   ],
+  close_app: [
+    'close_app',
+    'close app',
+    'close',
+    'quit',
+    'quit app',
+    'exit app',
+    'kill app',
+    'stop app',
+    'end task',
+    'terminate app',
+  ],
+  set_volume: [
+    'set_volume',
+    'set volume',
+    'volume',
+    'change volume',
+    'adjust volume',
+    'mute',
+    'unmute',
+    'mute audio',
+    'unmute audio',
+  ],
+  media_control: [
+    'media_control',
+    'media',
+    'media key',
+    'play pause',
+    'pause music',
+    'play music',
+    'next track',
+    'previous track',
+    'skip track',
+  ],
+  open_folder: ['open_folder', 'open folder', 'show folder', 'browse folder', 'open directory'],
+  find_files: [
+    'find_files',
+    'find files',
+    'find file',
+    'search files',
+    'file search',
+    'locate file',
+    'look for file',
+  ],
+  reveal_file: ['reveal_file', 'reveal file', 'show file', 'show in folder', 'show in explorer'],
+  set_timer: [
+    'set_timer',
+    'set timer',
+    'timer',
+    'start timer',
+    'reminder',
+    'set reminder',
+    'remind me',
+    'remind',
+  ],
+  cancel_timer: [
+    'cancel_timer',
+    'cancel timer',
+    'stop timer',
+    'delete timer',
+    'cancel reminder',
+    'clear timers',
+    'cancel alarm',
+    'stop alarm',
+  ],
+  lock_screen: [
+    'lock_screen',
+    'lock screen',
+    'lock',
+    'lock pc',
+    'lock computer',
+    'lock workstation',
+  ],
   search_web: [
     'search_web',
     'search',
@@ -152,13 +238,30 @@ export function canonIntent(action: string): CanonicalAction {
 
 const RISK: Record<CanonicalAction, CommandRisk> = {
   launch_app: 'safe',
+  // Closing can lose unsaved work, so it asks first unless the personality says "never ask".
+  close_app: 'destructive',
   open_url: 'safe',
   search_web: 'safe',
   system_query: 'safe',
+  set_volume: 'safe',
+  media_control: 'safe',
+  open_folder: 'safe',
+  find_files: 'safe',
+  reveal_file: 'safe',
+  set_timer: 'safe',
+  cancel_timer: 'safe',
+  lock_screen: 'sensitive',
   unknown: 'sensitive',
 };
 
 export function toCommand(intent: RawIntent, id: string): CanonicalCommand {
   const action = canonIntent(intent.action);
-  return { id, action, target: intent.target, risk: RISK[action], rawAction: intent.action };
+  return {
+    id,
+    action,
+    target: intent.target,
+    ...(intent.args?.length ? { args: intent.args } : {}),
+    risk: RISK[action],
+    rawAction: intent.action,
+  };
 }

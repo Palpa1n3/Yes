@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { ActivityLogPanel } from '@renderer/components/panels/ActivityLogPanel';
+import { TimersPanel } from '@renderer/components/panels/TimersPanel';
 import { Chip } from '@renderer/components/panels/Chip';
 import { panelVariants, Panel } from '@renderer/components/panels/Panel';
 import { SegmentBar } from '@renderer/components/panels/SegmentBar';
@@ -12,49 +13,13 @@ import { useGreeting } from '@renderer/hooks/useGreeting';
 import { usePersona } from '@renderer/hooks/usePersona';
 import { useTween } from '@renderer/hooks/useTween';
 import { fmtBytes, fmtCountdown, fmtRate, fmtUptime, loadTone, pad2 } from '@renderer/lib/format';
-import { schedule, weather } from '@renderer/mocks/dashboard';
+import { schedule } from '@renderer/mocks/dashboard';
 import { readAudioLevel, useAssistantStore } from '@renderer/stores/assistantStore';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { useSystemStore } from '@renderer/stores/systemStore';
 import { Columns } from './Columns';
 
 /* ── Left ──────────────────────────────────────────── */
-
-function WeatherPanel() {
-  return (
-    <Panel
-      code="WX.01"
-      title="Weather"
-      chip={<Chip tone="muted">Sample</Chip>}
-      className="shrink-0"
-    >
-      <div className="flex items-start justify-between">
-        <div className="numeric text-[40px] font-extralight leading-none text-ice text-glow">
-          {weather.temp}
-          <span className="align-top text-[14px] text-text-muted">°C</span>
-        </div>
-        <div className="text-right">
-          <div className="panel-title text-text-primary">{weather.location}</div>
-          <div className="micro-label mt-1">{weather.condition}</div>
-          <div className="micro-label text-accent">Rain {weather.rain}%</div>
-        </div>
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <Stat label="Wind" value={weather.wind} />
-        <Stat label="Humidity" value={`${weather.humidity}%`} />
-        <Stat label="Feels" value={`${weather.feelsLike}°`} />
-      </div>
-      <div className="mt-3 grid grid-cols-6 border border-line/50">
-        {weather.hourly.map((h) => (
-          <div key={h.h} className="border-r border-line/50 py-1 text-center last:border-0">
-            <div className="numeric text-[10px] text-text-muted">{pad2(h.h)}h</div>
-            <div className="numeric text-[12px] text-text-primary">{h.t}°</div>
-          </div>
-        ))}
-      </div>
-    </Panel>
-  );
-}
 
 function SchedulePanel() {
   const now = useClock();
@@ -321,7 +286,7 @@ export function OverviewTab() {
     <Columns
       left={
         <>
-          <WeatherPanel />
+          <TimersPanel className="shrink-0" />
           <SchedulePanel />
           <VitalsPanel />
         </>

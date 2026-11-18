@@ -116,6 +116,98 @@ export function plan(
   if (/^(hi|hello|hey|good (morning|afternoon|evening)|yo)\b/.test(lower)) {
     return { text: pickGreeting(p, title, new Date().getHours(), (turn * 0.61) % 1) };
   }
+  const ok = (detail: string): string => (v <= 1 ? detail : `${ack()} ${detail}`);
+
+  // ── System actions (checked before "open X", which would otherwise swallow "open downloads") ──
+  if (
+    (m = lower.match(
+      /^(?:please\s+)?(?:open|show)\s+(?:my\s+|the\s+)?(documents|downloads|desktop|pictures|videos|music)(?:\s+folder)?[.!]?$/,
+    ))
+  ) {
+    return {
+      text: ok(`Opening your ${m[1]} folder.`),
+      intent: { action: 'open_folder', target: m[1] },
+    };
+  }
+  if ((m = lower.match(/^(?:please\s+)?(?:close|quit|exit)\s+(.+?)[.!]?$/))) {
+    return {
+      text: ok(`Closing ${appName(m[1] ?? '')}.`),
+      intent: { action: 'close_app', target: (m[1] ?? '').trim() },
+    };
+  }
+  if ((m = lower.match(/^(un)?mute(?:\s+(?:the\s+)?(?:sound|audio|volume))?[.!]?$/))) {
+    return {
+      text: ok(m[1] ? 'Unmuting.' : 'Muting.'),
+      intent: { action: 'set_volume', target: '', args: [m[1] ? 'unmute' : 'mute'] },
+    };
+  }
+  if (
+    (m = lower.match(/\bvolume\s+(?:to\s+|at\s+)?(\d{1,3})\s*%?/)) ||
+    (m = lower.match(/^(?:set\s+)?(?:the\s+)?(?:sound|volume)\s+(?:to\s+)?(\d{1,3})/))
+  ) {
+    return {
+      text: ok(`Setting the volume to ${m[1]}%.`),
+      intent: { action: 'set_volume', target: m[1] },
+    };
+  }
+  if (
+    /^(?:pause|play|resume)(?:\s+(?:the\s+)?(?:music|song|video|playback|track))?[.!]?$/.test(lower)
+  ) {
+    return {
+      text: ok('Toggling playback.'),
+      intent: { action: 'media_control', target: 'play_pause' },
+    };
+  }
+  if (/^(?:next|skip)(?:\s+(?:this\s+)?(?:song|track))?[.!]?$/.test(lower)) {
+    return {
+      text: ok('Skipping to the next track.'),
+      intent: { action: 'media_control', target: 'next' },
+    };
+  }
+  if (/^(?:previous|last|go back(?:\s+a)?)\s+(?:song|track)[.!]?$/.test(lower)) {
+    return {
+      text: ok('Going back a track.'),
+      intent: { action: 'media_control', target: 'previous' },
+    };
+  }
+  if (
+    (m = lower.match(
+      /(?:remind me|set (?:a )?(?:timer|reminder)|timer)\s+(?:for\s+|in\s+)?(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b(?:\s+(?:to|that|for|about)\s+(.+?))?[.!]?$/,
+    ))
+  ) {
+    const n = Number(m[1]);
+    const unit = m[2] ?? 'minutes';
+    const minutes = unit.startsWith('s') ? n / 60 : unit.startsWith('h') ? n * 60 : n;
+    const label = m[3]?.trim();
+    return {
+      text: ok(`Timer set for ${m[1]} ${unit}${label ? ` to ${label}` : ''}.`),
+      intent: { action: 'set_timer', target: String(minutes), ...(label ? { args: [label] } : {}) },
+    };
+  }
+  if (
+    (m = lower.match(
+      /^(?:cancel|stop|delete|clear)\s+(?:my\s+|the\s+)?(all\s+)?(?:(.+?)\s+)?(?:timers?|reminders?|alarms?)[.!]?$/,
+    ))
+  ) {
+    const which = m[1] ? 'all' : (m[2]?.trim() ?? 'all');
+    return {
+      text: ok(which === 'all' ? 'Cancelling your timers.' : `Cancelling the ${which} timer.`),
+      intent: { action: 'cancel_timer', target: which },
+    };
+  }
+  if (/^lock(?:\s+(?:my|the))?(?:\s+(?:pc|computer|screen|workstation))?[.!]?$/.test(lower)) {
+    return { text: ok('Locking your computer.'), intent: { action: 'lock_screen' } };
+  }
+  if (
+    (m = lower.match(
+      /^(?:find|locate|where(?:'s| is))\s+(?:my\s+)?(?:the\s+)?(?:files?\s+(?:called|named)\s+)?(.+?)[?.!]?$/,
+    ))
+  ) {
+    return {
+      text: ok(`Looking for “${m[1]}” in your folders.`),
+      intent: { action: 'find_files', target: m[1] },
+    };
+  }
   if (
     (m = lower.match(/^(?:please\s+)?(?:open|launch|start|run|fire up)\s+(?:up\s+)?(.+?)[.!]?$/))
   ) {

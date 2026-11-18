@@ -7,6 +7,8 @@ import { AppRegistry } from '../services/app-registry';
 import { createExecutor } from '../services/command-executor';
 import { osDeps } from '../services/os-launch';
 import { SkillRegistry } from '../services/skills';
+import { createSystemActions } from '../services/system-actions';
+import type { TimerService } from '../services/timer-service';
 import { handle, on } from './handle';
 
 const FOLDER_NAMES: Record<UserFolder, string> = {
@@ -18,10 +20,17 @@ const FOLDER_NAMES: Record<UserFolder, string> = {
   music: 'Music',
 };
 
-export function registerCommandsIpc(skills: SkillRegistry): void {
+export function registerCommandsIpc(skills: SkillRegistry, timers: TimerService): void {
   const registry = new AppRegistry(join(app.getPath('userData'), 'apps.json'));
   registry.load();
-  const deps = { ...osDeps(), registry };
+  const system = createSystemActions({
+    platform: process.platform,
+    getPath: (id) => app.getPath(id),
+    openPath: (p) => shell.openPath(p),
+    showItemInFolder: (p) => shell.showItemInFolder(p),
+    timers,
+  });
+  const deps = { ...osDeps(), registry, system };
   const execute = createExecutor(deps);
 
   handle(IPC.commands.execute, async (cmd) => {

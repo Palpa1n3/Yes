@@ -7,6 +7,7 @@ import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { THEMES, THEME_TOKENS } from '@renderer/themes/themes';
 import { unavailableSpeechInput, webSpeechOutput, type VoiceInfo } from '@renderer/voice/providers';
 import { playSfx } from '@renderer/voice/sfx';
+import { playChime } from '@renderer/voice/alarm';
 import { Field, Section, Segmented, Select, Slider, TextField, Toggle } from './controls';
 import { AiSection } from './AiSection';
 import { HotkeyRecorder, prettyAccel } from './HotkeyRecorder';
@@ -250,6 +251,31 @@ export function VoiceTab() {
             disabled
           />
         </Field>
+      </Section>
+      <Section title="Timer alarm">
+        <Field
+          label="Alarm sound"
+          hint="Plays a repeating chime when a timer ends, until you dismiss it (up to 2 minutes). Windows also shows a notification."
+        >
+          <Toggle
+            label="Alarm sound"
+            checked={s.alarmSound}
+            onChange={(v) => void update({ alarmSound: v })}
+          />
+        </Field>
+        <div className="flex items-end gap-3 py-3">
+          <Slider
+            label="Alarm volume"
+            value={Math.round(s.alarmVolume * 10)}
+            min={0}
+            max={10}
+            labels={Array.from({ length: 11 }, (_, i) => `${i * 10}%`)}
+            onChange={(v) => void update({ alarmVolume: v / 10 })}
+          />
+          <button type="button" className="hud-button mb-4" onClick={() => playChime(true)}>
+            Test
+          </button>
+        </div>
       </Section>
       <Section title="Sound effects">
         <Field label="Sound effects" hint="Soft cues on send, success, error and start-up.">

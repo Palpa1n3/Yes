@@ -92,7 +92,9 @@ export function CommandCard({
       {awaiting && (
         <div className="mt-1.5 flex items-center gap-2">
           <span className="flex-1 text-[12px] text-text-muted">
-            {RISK_TEXT[command.cmd.risk] ||
+            {(command.cmd.action === 'close_app'
+              ? 'Unsaved work in that app could be lost.'
+              : RISK_TEXT[command.cmd.risk]) ||
               'Your personality settings ask me to check before acting.'}
           </span>
           <button

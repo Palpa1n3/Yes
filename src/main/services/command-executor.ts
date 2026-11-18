@@ -3,7 +3,14 @@
  *  lookup by name. Launched apps are detached so they outlive ARC. URLs and searches
  *  open in the default browser. Every failure is a readable CommandResult, never a throw.
  *  OS access is injected (ExecutorDeps) so the logic is testable without Electron. */
-import type { CanonicalCommand, CommandResult } from '@shared/commands';
+import {
+  MEDIA_KEYS,
+  type CanonicalCommand,
+  type CommandResult,
+  type MediaKey,
+} from '@shared/commands';
+import { USER_FOLDERS, type UserFolder } from '@shared/types';
+import type { SystemActions } from './system-actions';
 import type { AppEntry, AppRegistry } from './app-registry';
 
 export interface StartApp {
@@ -25,7 +32,62 @@ export interface ExecutorDeps {
   /** Whether an installed app handles a URI scheme like "spotify". The OS accepts
    *  unhandled links too, so without this check a missing app would look like success. */
   uriHandlerExists(scheme: string): Promise<boolean>;
+  /** Closing apps, volume, media, folders, files, timers, lock (optional per platform). */
+  system?: SystemActions;
 }
+
+/** Common display names → Windows process names (without .exe). */
+const PROCESS_ALIASES: Record<string, string[]> = {
+  'vs code': ['Code'],
+  'visual studio code': ['Code'],
+  vscode: ['Code'],
+  code: ['Code'],
+  'google chrome': ['chrome'],
+  chrome: ['chrome'],
+  'microsoft edge': ['msedge'],
+  edge: ['msedge'],
+  firefox: ['firefox'],
+  opera: ['opera'],
+  'opera gx': ['opera'],
+  spotify: ['Spotify'],
+  discord: ['Discord'],
+  steam: ['steam'],
+  obs: ['obs64'],
+  'obs studio': ['obs64'],
+  obsidian: ['Obsidian'],
+  notepad: ['notepad'],
+  'task manager': ['Taskmgr'],
+  calculator: ['CalculatorApp'],
+  terminal: ['WindowsTerminal'],
+  teams: ['ms-teams', 'Teams'],
+  outlook: ['olk', 'OUTLOOK'],
+  word: ['WINWORD'],
+  excel: ['EXCEL'],
+};
+
+/** Candidate process names for an app the user named. */
+export function processNamesFor(target: string, registry: AppRegistry): string[] {
+  const q = norm(target);
+  const entry = registry.find(target);
+  const names = [
+    ...(PROCESS_ALIASES[q] ?? []),
+    ...(entry ? (PROCESS_ALIASES[norm(entry.name)] ?? []) : []),
+    ...(entry?.path && /\.exe$/i.test(entry.path)
+      ? [(entry.path.split(/[\\/]/).pop() ?? '').replace(/\.exe$/i, '')]
+      : []),
+    q.replace(/ /g, ''),
+  ];
+  return [...new Set(names.filter(Boolean))];
+}
+
+const FOLDERS = new Set<string>(USER_FOLDERS);
+const MEDIA = new Set<string>(MEDIA_KEYS);
+const MEDIA_LABEL: Record<MediaKey, string> = {
+  play_pause: 'Play/pause',
+  next: 'Next track',
+  previous: 'Previous track',
+  stop: 'Stop',
+};
 
 const norm = (s: string): string =>
   s
@@ -132,6 +194,102 @@ export function createExecutor(
     return { ok: false, reason };
   };
 
+  const runSystemAction = async (cmd: CanonicalCommand, target: string): Promise<CommandResult> => {
+    const done = (status: CommandResult['status'], message: string): CommandResult => ({
+      commandId: cmd.id,
+      status,
+      message,
+      timestamp: Date.now(),
+    });
+    const sys = deps.system;
+    if (cmd.action === 'unknown')
+      return done('failed', `I don't know how to “${cmd.rawAction ?? 'do that'}” yet.`);
+    if (!sys) return done('failed', "That action isn't available on this system.");
+    switch (cmd.action) {
+      case 'close_app': {
+        if (!target) return done('failed', 'Which app should I close?');
+        const r = await sys.closeApp(processNamesFor(target, deps.registry));
+        return done(r.ok ? 'success' : 'failed', r.message);
+      }
+      case 'set_volume': {
+        const level = target ? Number(target) : undefined;
+        if (level !== undefined && (!Number.isFinite(level) || level < 0 || level > 100))
+          return done('failed', 'Volume must be between 0 and 100.');
+        const mute = cmd.args?.includes('mute')
+          ? true
+          : cmd.args?.includes('unmute')
+            ? false
+            : undefined;
+        if (level === undefined && mute === undefined)
+          return done('failed', 'Tell me a volume level or mute/unmute.');
+        const r = await sys.setVolume({ level, mute });
+        return done('success', r.muted ? `Muted (volume ${r.level}%).` : `Volume is ${r.level}%.`);
+      }
+      case 'media_control': {
+        if (!MEDIA.has(target)) return done('failed', `Unknown media action “${target}”.`);
+        await sys.mediaKey(target as MediaKey);
+        return done('success', `${MEDIA_LABEL[target as MediaKey]} sent to your media player.`);
+      }
+      case 'open_folder': {
+        const id = target.toLowerCase();
+        if (!FOLDERS.has(id)) return done('failed', `I can open ${USER_FOLDERS.join(', ')}.`);
+        return (await sys.openFolder(id as UserFolder))
+          ? done('success', `Opened your ${id} folder.`)
+          : done('failed', `Your ${id} folder doesn't exist.`);
+      }
+      case 'find_files': {
+        if (target.length < 2) return done('failed', 'What should I search for?');
+        const hits = await sys.findFiles(target);
+        if (hits.length === 0)
+          return done(
+            'success',
+            `No files matching “${target}” in your Documents, Downloads, Desktop, Pictures, Videos or Music.`,
+          );
+        const list = hits
+          .map((h) => `${h.path} (${new Date(h.modified).toLocaleDateString()})`)
+          .join('\n');
+        return done('success', `Found ${hits.length} file${hits.length > 1 ? 's' : ''}:\n${list}`);
+      }
+      case 'reveal_file':
+        return (await sys.revealFile(target))
+          ? done('success', 'Shown in File Explorer.')
+          : done(
+              'failed',
+              'I can only show files that exist inside your own folders (Documents, Downloads, Desktop, Pictures, Videos, Music).',
+            );
+      case 'set_timer': {
+        const minutes = Number(target);
+        if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 24 * 60)
+          return done('failed', 'Timers can be from a few seconds up to 24 hours.');
+        const label = (cmd.args?.[0] ?? '').slice(0, 120);
+        const due = sys.setTimer(minutes, label);
+        return done(
+          'success',
+          `Timer set for ${due.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${label ? `: ${label}` : ''}.`,
+        );
+      }
+      case 'cancel_timer': {
+        const gone = sys.cancelTimers(target);
+        if (gone.length === 0)
+          return done(
+            'failed',
+            target && target !== 'all'
+              ? `No timer matching “${target}”.`
+              : 'There are no timers running.',
+          );
+        return done(
+          'success',
+          `Cancelled ${gone.length === 1 ? gone[0] : `${gone.length} timers`}.`,
+        );
+      }
+      case 'lock_screen':
+        await sys.lockScreen();
+        return done('success', 'Locked.');
+      default:
+        return done('failed', `I can't do “${cmd.action}” yet.`);
+    }
+  };
+
   return async (cmd) => {
     const done = (status: CommandResult['status'], message: string): CommandResult => ({
       commandId: cmd.id,
@@ -175,8 +333,8 @@ export function createExecutor(
         }
         case 'system_query':
           return done('success', 'System diagnostic complete.');
-        case 'unknown':
-          return done('failed', `I don't know how to “${cmd.rawAction ?? 'do that'}” yet.`);
+        default:
+          return await runSystemAction(cmd, target);
       }
     } catch (err) {
       return done('failed', err instanceof Error ? err.message : 'That command failed.');

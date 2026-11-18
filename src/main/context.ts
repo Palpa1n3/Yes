@@ -4,12 +4,14 @@ import type { CompactController } from './compact';
 import type { Hotkey } from './hotkey';
 import type { SettingsStore } from './services/settings-store';
 import type { TelemetryService } from './services/telemetry';
+import type { TimerService } from './services/timer-service';
 
 /** Everything main-process modules share. Built once in index.ts. */
 export interface MainContext {
   getWindow(): BrowserWindow | null;
   settings: SettingsStore;
   telemetry: TelemetryService;
+  timers: TimerService;
   compact: CompactController;
   hotkey: Hotkey;
   updateSettings(patch: Partial<Settings>): void;

@@ -45,7 +45,7 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 - **Ctrl+Space** (anywhere) shows/hides ARC and focuses the input. If another app owns it, ARC falls back to Ctrl+Shift+Space and says so. Change it in **Settings › Hotkeys**.
 - **Closing** the window hides ARC to the **tray**; quit from the tray menu. (Linux: closing quits.)
 - **Compact mode** (⤡ in the title bar, `/mode compact`, or the tray): a 420×120 always-on-top pill.
-- Try: `open spotify`, `search for cheap flights`, `go to github.com`, `how's my system?`, `tell me a joke`.
+- Try: `open spotify`, `close opera`, `volume 30`, `mute`, `pause`, `next song`, `open my downloads`, `find invoice`, `remind me in 10 minutes to stretch`, `lock my pc`, `search for cheap flights`, `how's my system?`.
 - **Keys:** `/` command palette · ↑/↓ history · Esc clear/stop/close · Ctrl+1…6 tabs · Ctrl+, settings · Enter/Esc approve/cancel a command card.
 - **Slash commands:** `/help` `/clear` `/settings` `/personality` `/mode compact` `/mode full`.
 
@@ -59,6 +59,14 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 | Network  | Live throughput, interfaces, gateway & latency                                                 |
 | Storage  | Drive gauges, recent downloads, folder sizes on demand                                         |
 | Routines | Saved routines (preview; running them is planned)                                              |
+
+### Timers and reminders
+
+- Start one from the **Timers** panel (Overview: 5/10/25 min or custom, with a label), or say _"remind me in 20 minutes to check the oven"_.
+- The next countdown also shows beside the clock (and in compact mode). **+5** extends a running timer; **×** cancels it.
+- When one ends: a repeating alarm chime (up to 2 minutes; toggle and volume in Settings › Voice), a Windows notification, a flashing taskbar icon, and a **Time's up** banner with **Dismiss** / **Snooze 5**.
+- Timers are saved to `%APPDATA%\ARC\timers.json`, so they survive restarts; anything that finished while ARC was closed rings on the next start.
+- Cancel by voice/text: _"cancel the oven timer"_, _"cancel all timers"_.
 
 ### Your data
 
@@ -136,7 +144,7 @@ ARC works offline with a built-in mock, or with Claude for real conversation and
 How it works (`src/main/services/anthropic-provider.ts`):
 
 - The key is validated, then encrypted with the OS keychain (`safeStorage`, DPAPI on Windows) into `%APPDATA%\ARC\anthropic-key.bin`. It never reaches the renderer, logs or settings.
-- ARC runs a streaming Messages API tool loop. Claude can `launch_app`, `open_url`, `search_web`, `get_system_status` and `list_apps`. Every action except `list_apps` goes through ARC's command cards (approval per your personality, activity log), and the outcome, including "cancelled", is sent back to Claude.
+- ARC runs a streaming Messages API tool loop. Claude can `launch_app`, `close_app` (always confirmed unless the personality never asks; polite close, never force-kill, never Windows/ARC processes), `set_volume`, `media_control`, `open_folder`, `find_files` (your own folders only), `reveal_file` (shows, never runs), `set_timer` (Windows notification), `lock_screen`, `open_url`, `search_web`, `get_system_status` and `list_apps`. Every action except `list_apps` goes through ARC's command cards (approval per your personality, activity log), and the outcome, including "cancelled", is sent back to Claude.
 - Effort is `low` (chat), the personality prompt is cached, at most 8 model steps run per reply, and Sonnet/Opus use Anthropic's default server-side fallback. Haiku has none, so a refusal shows a message.
 - No key, or offline: ARC says so and answers with the mock. Bad key, no credit or rate limits produce plain-English messages.
 

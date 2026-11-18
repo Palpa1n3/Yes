@@ -5,6 +5,7 @@ import type {
   AiStatus,
   AiTestResult,
   ToolOutcome,
+  TimerInfo,
   AppCommand,
   AppEntry,
   AppInfo,
@@ -65,6 +66,14 @@ export const IPC = {
     folders: 'apps:folders',
     openFolder: 'apps:open-folder',
   },
+  timers: {
+    list: 'timers:list',
+    add: 'timers:add',
+    cancel: 'timers:cancel',
+    snooze: 'timers:snooze',
+    onChange: 'timers:changed',
+    onRing: 'timers:ring',
+  },
   ai: {
     status: 'ai:status',
     setKey: 'ai:set-key',
@@ -105,6 +114,8 @@ export interface InvokeMap {
   [IPC.settings.set]: { args: [patch: Partial<Settings>]; result: undefined };
   [IPC.history.get]: { args: []; result: StoredMessage[] };
   [IPC.ai.status]: { args: []; result: AiStatus };
+  [IPC.timers.list]: { args: []; result: TimerInfo[] };
+  [IPC.timers.add]: { args: [minutes: number, label: string]; result: TimerInfo[] };
   [IPC.ai.setKey]: { args: [key: string]; result: AiTestResult };
   [IPC.ai.clearKey]: { args: []; result: AiStatus };
   [IPC.ai.test]: { args: []; result: AiTestResult };
@@ -130,6 +141,8 @@ export interface SendMap {
   [IPC.window.setCompact]: [value: boolean];
   [IPC.system.setDetail]: [detail: TelemetryDetail];
   [IPC.history.save]: [messages: StoredMessage[]];
+  [IPC.timers.cancel]: [id: string];
+  [IPC.timers.snooze]: [id: string, minutes: number];
   [IPC.storage.reveal]: [downloadName: string];
   [IPC.storage.openSpecial]: [target: 'temp' | 'recycleBin'];
   [IPC.apps.openFolder]: [folder: UserFolder];
@@ -147,6 +160,8 @@ export interface EventMap {
   [IPC.assistant.onStream]: StreamChunk;
   [IPC.settings.onChange]: Settings;
   [IPC.app.onCommand]: AppCommand;
+  [IPC.timers.onChange]: TimerInfo[];
+  [IPC.timers.onRing]: TimerInfo;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -201,6 +216,15 @@ export interface ArcAPI {
     remove(id: string): Promise<AppEntry[]>;
     folders(): Promise<FolderInfo[]>;
     openFolder(folder: UserFolder): void;
+  };
+  timers: {
+    list(): Promise<TimerInfo[]>;
+    add(minutes: number, label: string): Promise<TimerInfo[]>;
+    /** Cancel a running timer, or dismiss a ringing one. */
+    cancel(id: string): void;
+    snooze(id: string, minutes: number): void;
+    onChange(cb: (list: TimerInfo[]) => void): Unsubscribe;
+    onRing(cb: (timer: TimerInfo) => void): Unsubscribe;
   };
   ai: {
     status(): Promise<AiStatus>;

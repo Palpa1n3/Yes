@@ -68,6 +68,14 @@ const api: ArcAPI = {
     folders: () => invoke(IPC.apps.folders),
     openFolder: (f) => send(IPC.apps.openFolder, f),
   },
+  timers: {
+    list: () => invoke(IPC.timers.list),
+    add: (m, l) => invoke(IPC.timers.add, m, l),
+    cancel: (id) => send(IPC.timers.cancel, id),
+    snooze: (id, m) => send(IPC.timers.snooze, id, m),
+    onChange: (cb) => subscribe(IPC.timers.onChange, cb),
+    onRing: (cb) => subscribe(IPC.timers.onRing, cb),
+  },
   ai: {
     status: () => invoke(IPC.ai.status),
     setKey: (k) => invoke(IPC.ai.setKey, k),

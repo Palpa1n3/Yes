@@ -18,7 +18,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     hint: 'What I can do',
     run: () =>
       say(
-        'Try: “open vscode”, “search for cheap flights”, “go to github.com”, “how’s my system?”, “tell me a joke”.\nKeys: ↑/↓ history · Esc clear or stop · / commands · Ctrl+Space show/hide from anywhere.',
+        'Try: “open spotify”, “close opera”, “volume 30”, “pause”, “next song”, “open my downloads”, “find invoice”, “remind me in 10 minutes to stretch”, “lock my pc”, “search for cheap flights”, “how’s my system?”.\nKeys: ↑/↓ history · Esc clear or stop · / commands · Ctrl+Space show/hide from anywhere.',
       ),
   },
   {

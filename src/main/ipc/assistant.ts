@@ -8,6 +8,7 @@ import {
   type Settings,
   type SystemStats,
   type ToolOutcome,
+  type TimerInfo,
 } from '@shared/types';
 import { MockProvider, type AIProvider } from '../services/ai-provider';
 import { AnthropicProvider, OfflineError } from '../services/anthropic-provider';
@@ -26,6 +27,7 @@ export function registerAssistantIpc(
   getSettings: () => Settings,
   getDetailedStats?: () => Promise<SystemStats & { processesTimedOut?: boolean }>,
   warmStats?: () => void,
+  getTimers?: () => TimerInfo[],
 ): void {
   const userData = app.getPath('userData');
   const secrets = new SecretStore(join(userData, 'anthropic-key.bin'), safeStorage);
@@ -47,6 +49,7 @@ export function registerAssistantIpc(
     stats: getStats,
     detailedStats: getDetailedStats,
     warm: warmStats,
+    timers: getTimers,
     apps: () => registry.load().map((a) => ({ name: a.name, intents: a.intents })),
   });
 
