@@ -17,6 +17,8 @@ import {
   ROUTINE_ICONS,
   STEP_KINDS,
   STEP_META,
+  DAY_LETTERS,
+  describeSchedule,
   describeStep,
   sanitizeRoutine,
   stepProblem,
@@ -259,7 +261,8 @@ function Tips() {
         <li>If a step fails, the rest still run, and you can see why here.</li>
         <li>
           Tick <span className="text-text-primary">Run when ARC starts</span> for a briefing every
-          day.
+          day, or <span className="text-text-primary">Run at a set time</span> for things like a
+          bedtime routine. Timed routines run while ARC is open or in the tray.
         </li>
       </ul>
     </Panel>
@@ -384,6 +387,7 @@ export function RoutinesTab() {
                       <span className="block truncate text-[12px] text-text-muted">
                         {r.steps.length} step{r.steps.length === 1 ? '' : 's'}
                         {r.runAtStartup ? ' · at startup' : ''}
+                        {r.schedule ? ` · ${describeSchedule(r.schedule)}` : ''}
                         {r.phrases[0] ? ` · “${r.phrases[0]}”` : ''}
                       </span>
                     </span>
@@ -477,6 +481,87 @@ export function RoutinesTab() {
                   />
                   Run when ARC starts (once a day)
                 </label>
+                <span className="micro-label">Schedule</span>
+                <div className="flex flex-wrap items-center gap-2 text-[12px] text-text-primary">
+                  <label className="flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!!current.schedule}
+                      onChange={(e) =>
+                        setDraft((d) => {
+                          if (!d) return d;
+                          const { schedule: _old, ...rest } = d;
+                          void _old;
+                          return e.target.checked
+                            ? { ...rest, schedule: { time: '08:30', days: [1, 2, 3, 4, 5] } }
+                            : rest;
+                        })
+                      }
+                      className="accent-[rgb(var(--accent))]"
+                    />
+                    Run at a set time
+                  </label>
+                  {current.schedule && (
+                    <>
+                      <input
+                        type="time"
+                        aria-label="Time"
+                        value={current.schedule.time}
+                        onChange={(e) =>
+                          setDraft((d) =>
+                            d?.schedule
+                              ? {
+                                  ...d,
+                                  schedule: {
+                                    ...d.schedule,
+                                    time: e.target.value || d.schedule.time,
+                                  },
+                                }
+                              : d,
+                          )
+                        }
+                        className={`${fieldCls} w-28 [color-scheme:dark]`}
+                      />
+                      <span className="flex gap-1" role="group" aria-label="Days">
+                        {DAY_LETTERS.map((l, day) => {
+                          const on = current.schedule?.days.includes(day) ?? false;
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              aria-pressed={on}
+                              aria-label={
+                                [
+                                  'Sunday',
+                                  'Monday',
+                                  'Tuesday',
+                                  'Wednesday',
+                                  'Thursday',
+                                  'Friday',
+                                  'Saturday',
+                                ][day]
+                              }
+                              onClick={() =>
+                                setDraft((d) => {
+                                  if (!d?.schedule) return d;
+                                  const days = on
+                                    ? d.schedule.days.filter((x) => x !== day)
+                                    : [...d.schedule.days, day].sort();
+                                  return days.length
+                                    ? { ...d, schedule: { ...d.schedule, days } }
+                                    : d;
+                                })
+                              }
+                              className={`grid h-7 w-7 place-items-center border font-mono text-[11px] ${on ? 'border-accent bg-accent/15 text-accent' : 'border-line/60 text-text-muted hover:text-accent'}`}
+                            >
+                              {l}
+                            </button>
+                          );
+                        })}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
 
               <ol className="relative space-y-2 pl-8" aria-label="Steps">

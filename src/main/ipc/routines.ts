@@ -33,6 +33,19 @@ export function registerRoutinesIpc(
   });
   service.load();
 
+  // Timed routines: checked every 20 s; the renderer runs them as normal routine cards.
+  const fired = new Set<string>();
+  setInterval(() => {
+    const minute = Math.floor(Date.now() / 60_000);
+    for (const r of service.dueNow()) {
+      const key = `${r.id}@${minute}`;
+      if (fired.has(key)) continue;
+      fired.add(key);
+      ctx.command({ type: 'run-routine', id: r.id });
+    }
+    if (fired.size > 200) fired.clear();
+  }, 20_000).unref();
+
   // Startup routines are handed out once per launch, so a renderer reload doesn't repeat them.
   let startupServed = false;
   handle(IPC.routines.list, () => service.list());

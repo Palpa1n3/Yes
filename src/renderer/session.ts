@@ -5,7 +5,13 @@ import { useConversationStore } from '@renderer/stores/conversationStore';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 
 /** Startup: load settings, restore the saved conversation, then greet (or run startup routines). */
+let started = false;
+
 export async function startSession(): Promise<void> {
+  // Once per launch: React runs start-up effects twice in development, and both runs
+  // would otherwise get past the checks below before either finished (double greeting).
+  if (started) return;
+  started = true;
   const settings = await window.arc.settings.get();
   useSettingsStore.setState({ settings, loaded: true });
   void useAppsStore.getState().load(); // friendly names for command cards

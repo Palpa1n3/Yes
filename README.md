@@ -23,11 +23,15 @@ If you ever see **`Error: Electron uninstall`**, run `npm run setup:electron` (s
 
 ### Install it like a normal app
 
-```bash
-npm run package:win
+Close ARC, then in the `arc` folder run:
+
+```bat
+npm run installer
 ```
 
-This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<version>-x64-portable.exe`. Run the installer to get a Start-menu entry, desktop shortcut and (optionally) launch-at-login.
+It takes a few minutes and creates `dist\ARC-<version>-x64-nsis.exe`. Run that to install ARC with a desktop icon and Start-menu entry. Windows may show **"Windows protected your PC"** because the app isn't code-signed: click **More info** → **Run anyway**. After installing, open ARC from the Start menu instead of `npm run dev`; your settings, keys, routines and timers carry over. Turn on **Settings › General › Launch at login** so it starts quietly in the tray. To update later: extract the new zip, run `npm install` if asked, then `npm run installer` again and install over the top.
+
+If the build fails with "Cannot create symbolic link", open Command Prompt **as administrator** (or turn on Windows Settings › System › For developers › Developer Mode) and run it again.
 
 ## Scripts
 
@@ -55,6 +59,7 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 | -------- | ---------------------------------------------------------------------------------------------- |
 | Overview | Timers, live weather, vitals, core, console, network, drives, activity log                     |
 | System   | Per-thread CPU, memory, CPU/RAM/GPU history, top processes, GPU                                |
+| Tasks    | Built-in Task Manager: every app and process with CPU and memory, search, sort, End task       |
 | Apps     | Your `apps.json` as a launch grid, add installed apps, edit trigger phrases, open your folders |
 | Network  | Live throughput, interfaces, gateway & latency                                                 |
 | Storage  | Drive gauges, recent downloads, folder sizes on demand                                         |
@@ -82,7 +87,15 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 - Run one by typing or saying its name or one of its phrases (_"work mode"_, _"good morning"_). This runs straight away without using AI credit. You can also press **Run** in the Routines tab, or ask Claude (_"start my focus routine"_).
 - Steps go through the same command system as chat, so the same safety rules apply. Closing an app is always a polite close. If a step fails, the rest still run and the Routines tab shows why.
 - **Morning briefing**: the time, your weather, running timers, and anything wrong with the PC (drives over 90% full, high memory use, a hot processor, low battery, or no restart for a week). Tick **Run when ARC starts (once a day)** to get it each day in place of the usual greeting.
+- **Timed routines:** tick **Run at a set time**, pick a time and the days (weekdays are pre-selected). They run while ARC is open or sitting in the tray; if the PC is off or asleep at that time, that run is skipped.
 - Three examples come built in (Morning briefing, Focus mode, Wind down). They're saved in `%APPDATA%\ARC\routines.json`.
+
+### Task Manager (Tasks tab)
+
+- Every running app and process, grouped like Windows Task Manager (**Apps**, **Background processes**, **Windows processes**), updated every 2 seconds. Click CPU, Memory or Name to sort; search by name.
+- **End task** asks the app to close, like clicking × (it can still ask you to save). If it doesn't close, ARC offers **Force end**, which only happens after you confirm, and unsaved work in that app is lost.
+- Windows' own processes and ARC itself show a lock and can't be ended. Claude can never force-end anything.
+- Frozen apps show **Not responding** in red, with their End task button always visible.
 
 ### Weather
 

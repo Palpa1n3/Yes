@@ -9,6 +9,7 @@ import { OverviewTab } from '@renderer/components/tabs/OverviewTab';
 import { RoutinesTab } from '@renderer/components/tabs/RoutinesTab';
 import { StorageTab } from '@renderer/components/tabs/StorageTab';
 import { SystemTab } from '@renderer/components/tabs/SystemTab';
+import { TasksTab } from '@renderer/components/tabs/TasksTab';
 import { bindDevStateKeys, DevStateSwitcher } from '@renderer/components/core/DevStateSwitcher';
 import { useFakeAudio } from '@renderer/hooks/useFakeAudio';
 import { SettingsPanel } from '@renderer/components/settings/SettingsPanel';
@@ -40,6 +41,7 @@ import { applyTheme } from '@renderer/themes/themes';
 const VIEWS: Record<TabId, ComponentType> = {
   overview: OverviewTab,
   system: SystemTab,
+  tasks: TasksTab,
   apps: AppsTab,
   network: NetworkTab,
   storage: StorageTab,

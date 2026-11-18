@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 
-export const TAB_IDS = ['overview', 'system', 'apps', 'network', 'storage', 'routines'] as const;
+export const TAB_IDS = [
+  'overview',
+  'system',
+  'tasks',
+  'apps',
+  'network',
+  'storage',
+  'routines',
+] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
 export const SETTINGS_TABS = [

@@ -2,7 +2,7 @@ import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { TABS } from '@renderer/components/tabs/registry';
 import { useUiStore } from '@renderer/stores/uiStore';
 
-/** Top navigation. Arrow keys move between tabs; Ctrl/Cmd+1…6 jumps from anywhere. */
+/** Top navigation. Arrow keys move between tabs; Ctrl/Cmd+1…7 jumps from anywhere. */
 export function TabBar() {
   const { tab, setTab } = useUiStore();
   const refs = useRef<Array<HTMLButtonElement | null>>([]);

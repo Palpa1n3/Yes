@@ -75,6 +75,10 @@ const api: ArcAPI = {
     search: (q) => invoke(IPC.weather.search, q),
     onChange: (cb) => subscribe(IPC.weather.onChange, cb),
   },
+  tasks: {
+    list: () => invoke(IPC.tasks.list),
+    end: (n, f) => invoke(IPC.tasks.end, n, f),
+  },
   voice: {
     status: () => invoke(IPC.voice.status),
     setFishKey: (k) => invoke(IPC.voice.setFishKey, k),

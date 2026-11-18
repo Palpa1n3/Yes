@@ -46,6 +46,10 @@ export function installArcMock(): ArcAPI {
       onChange: vi.fn(() => () => undefined),
       onRing: vi.fn(() => () => undefined),
     },
+    tasks: {
+      list: vi.fn(async () => ({ tasks: [], at: 0 })),
+      end: vi.fn(async () => ({ ok: true, message: '' })),
+    },
     voice: {
       status: vi.fn(async () => ({
         fishKey: false,

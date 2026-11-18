@@ -7,6 +7,8 @@ import { FishSpeaker } from './fishSpeech';
 import { webSpeechOutput } from './providers';
 
 const spoken = new Set<string>();
+/** Messages from before this launch (restored history) are never read out. */
+const launchedAt = Date.now();
 
 /** Stop whatever ARC is saying (e.g. when the mic opens). */
 export let stopSpeaking: () => void = () => webSpeechOutput.cancel();
@@ -72,6 +74,10 @@ export function useSpeechOutput(): void {
       const useFish = voiceEngine === 'fish' && useVoiceStore.getState().status.fishKey;
       for (const m of s.messages) {
         if (m.role !== 'assistant' || m.streaming || spoken.has(m.id)) continue;
+        if (m.timestamp < launchedAt) {
+          spoken.add(m.id);
+          continue;
+        }
         spoken.add(m.id);
         if (!speakReplies || voiceMuted || (!useFish && !webSpeechOutput.available)) continue;
         assistant().setSpeechActive(true);

@@ -8,7 +8,11 @@ import { AppRegistry } from '../services/app-registry';
 import { createExecutor } from '../services/command-executor';
 import { osDeps } from '../services/os-launch';
 import { SkillRegistry } from '../services/skills';
-import { createSystemActions } from '../services/system-actions';
+import { createSystemActions, isSafeProcessName } from '../services/system-actions';
+import { TaskManager } from '../services/task-manager';
+import { sampleWindowsProcesses } from '../services/win-processes';
+import type { EndTaskResult } from '@shared/tasks';
+import si from 'systeminformation';
 import type { TimerService } from '../services/timer-service';
 import { handle, on } from './handle';
 
@@ -50,6 +54,36 @@ export function registerCommandsIpc(skills: SkillRegistry, timers: TimerService)
     registry.load(); // pick up edits to apps.json without restarting
     if (cmd.action === 'run_routine' && runRoutine) return runRoutine(cmd);
     return executeAny(cmd);
+  });
+
+  // Task Manager tab.
+  const tasks = new TaskManager({
+    sample:
+      process.platform === 'win32'
+        ? () => sampleWindowsProcesses()
+        : async () =>
+            (await si.processes()).list.map((p) => ({
+              pid: p.pid,
+              name: p.name,
+              cpuSec: 0,
+              cpuPct: Math.max(0, p.cpu),
+              mem: p.memRss * 1024,
+            })),
+    isProtected: (n) => !isSafeProcessName(n),
+  });
+  handle(IPC.tasks.list, () => tasks.list());
+  handle(IPC.tasks.end, async (rawName, force): Promise<EndTaskResult> => {
+    const name = String(rawName).replace(/\.exe$/i, '');
+    if (!isSafeProcessName(name))
+      return {
+        ok: false,
+        message: `${name} is part of Windows or ARC, so it can't be ended here.`,
+      };
+    if (process.platform !== 'win32')
+      return { ok: false, message: 'Ending tasks is only available on Windows.' };
+    if (force) return system.forceEnd(name);
+    const r = await system.closeApp([name]);
+    return r.ok ? r : { ...r, canForce: !/doesn't seem to be running/.test(r.message) };
   });
 
   handle(IPC.apps.list, () => registry.load());

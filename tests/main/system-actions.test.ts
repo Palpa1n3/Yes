@@ -28,6 +28,7 @@ function fakeSystem(over: Partial<SystemActions> = {}): SystemActions {
       ok: true,
       message: `Asked ${names[0]} to close.`,
     })),
+    forceEnd: vi.fn(async (n: string) => ({ ok: true, message: `Ended ${n}.` })),
     setVolume: vi.fn(async ({ level, mute }) => ({ level: level ?? 40, muted: mute ?? false })),
     mediaKey: vi.fn(async () => undefined),
     lockScreen: vi.fn(async () => undefined),

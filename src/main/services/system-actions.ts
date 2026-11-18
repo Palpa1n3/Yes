@@ -18,6 +18,9 @@ export interface FoundFile {
 export interface SystemActions {
   /** Ask an app to close (like clicking its X), never force-kill. */
   closeApp(processNames: string[]): Promise<{ ok: boolean; message: string }>;
+  /** Force-end an app (Task Manager's End task when the polite close didn't work).
+   *  Only ever called from the Task Manager after the user confirms; never by the AI. */
+  forceEnd(processName: string): Promise<{ ok: boolean; message: string }>;
   setVolume(opts: { level?: number; mute?: boolean }): Promise<{ level: number; muted: boolean }>;
   mediaKey(key: MediaKey): Promise<void>;
   lockScreen(): Promise<void>;
@@ -241,6 +244,24 @@ export function createSystemActions(d: SystemActionDeps): SystemActions {
           };
       }
       return { ok: false, message: `${safe[0]} doesn't seem to be running.` };
+    },
+
+    async forceEnd(name) {
+      if (!win) notWindows();
+      if (!isSafeProcessName(name))
+        return {
+          ok: false,
+          message: "That one can't be ended: it's part of Windows or ARC itself.",
+        };
+      const image = name.toLowerCase().endsWith('.exe') ? name : `${name}.exe`;
+      const r = await run('taskkill.exe', ['/F', '/IM', image, '/T']);
+      if (r.code === 0) return { ok: true, message: `Ended ${basename(image, '.exe')}.` };
+      if (r.code === 128)
+        return { ok: true, message: `${basename(image, '.exe')} has already closed.` };
+      return {
+        ok: false,
+        message: `Windows wouldn't end ${basename(image, '.exe')}. It may be running as administrator.`,
+      };
     },
 
     async setVolume({ level, mute }) {

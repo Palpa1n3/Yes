@@ -30,6 +30,7 @@ import type {
 } from './types';
 import type { Routine } from './routines';
 import type { FishKeyResult, VoiceStatus } from './voice';
+import type { EndTaskResult, TaskList } from './tasks';
 
 export const IPC = {
   window: {
@@ -76,6 +77,10 @@ export const IPC = {
     refresh: 'weather:refresh',
     search: 'weather:search',
     onChange: 'weather:changed',
+  },
+  tasks: {
+    list: 'tasks:list',
+    end: 'tasks:end',
   },
   voice: {
     status: 'voice:status',
@@ -146,6 +151,8 @@ export interface InvokeMap {
   [IPC.timers.list]: { args: []; result: TimerInfo[] };
   [IPC.routines.list]: { args: []; result: Routine[] };
   [IPC.voice.status]: { args: []; result: VoiceStatus };
+  [IPC.tasks.list]: { args: []; result: TaskList };
+  [IPC.tasks.end]: { args: [name: string, force: boolean]; result: EndTaskResult };
   [IPC.voice.setFishKey]: { args: [key: string]; result: FishKeyResult };
   [IPC.voice.clearFishKey]: { args: []; result: VoiceStatus };
   [IPC.voice.speak]: { args: [text: string]; result: Uint8Array };
@@ -273,6 +280,12 @@ export interface ArcAPI {
     /** Find towns by name (Open-Meteo geocoding). */
     search(query: string): Promise<WeatherPlace[]>;
     onChange(cb: (s: WeatherState) => void): Unsubscribe;
+  };
+  tasks: {
+    /** Every running app/process, grouped by name (tasks is null on the first call). */
+    list(): Promise<TaskList>;
+    /** End task: a polite close, or (force) taskkill /F after the user confirms. */
+    end(name: string, force: boolean): Promise<EndTaskResult>;
   };
   voice: {
     status(): Promise<VoiceStatus>;

@@ -1,4 +1,3 @@
-import { X } from 'lucide-react';
 import { Chip } from '@renderer/components/panels/Chip';
 import { Panel } from '@renderer/components/panels/Panel';
 import { RingGauge } from '@renderer/components/panels/RingGauge';
@@ -8,6 +7,7 @@ import { KeyValue, Stat } from '@renderer/components/panels/Stat';
 import { useTween } from '@renderer/hooks/useTween';
 import { fmtBytes, fmtUptime, loadTone } from '@renderer/lib/format';
 import { useSystemStore } from '@renderer/stores/systemStore';
+import { useUiStore } from '@renderer/stores/uiStore';
 import { Columns } from './Columns';
 
 function CoresPanel() {
@@ -143,7 +143,15 @@ function ProcessesPanel() {
     <Panel
       code="PRC.05"
       title="Top processes"
-      chip={<Chip tone="muted">By CPU</Chip>}
+      chip={
+        <button
+          type="button"
+          className="font-mono text-[10px] uppercase tracking-[0.14em] text-accent hover:text-ice"
+          onClick={() => useUiStore.getState().setTab('tasks')}
+        >
+          Task manager →
+        </button>
+      }
       className="flex-1"
       bodyClassName="!px-0 !py-0 overflow-y-auto"
     >
@@ -153,9 +161,6 @@ function ProcessesPanel() {
             <th className="px-4 py-2 font-normal">Name</th>
             <th className="py-2 text-right font-normal">CPU</th>
             <th className="py-2 text-right font-normal">Mem</th>
-            <th className="w-10">
-              <span className="sr-only">Actions</span>
-            </th>
           </tr>
         </thead>
         <tbody>
@@ -173,17 +178,6 @@ function ProcessesPanel() {
                 {p.cpu.toFixed(1)}%
               </td>
               <td className="numeric py-1.5 text-right text-text-muted">{fmtBytes(p.mem, 0)}</td>
-              <td className="pr-3 text-right">
-                <button
-                  type="button"
-                  disabled
-                  aria-label={`End ${p.name}`}
-                  title="Ending processes arrives with the command executor (Stage 7)"
-                  className="text-text-muted opacity-0 transition-opacity group-hover:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <X size={13} strokeWidth={1.5} />
-                </button>
-              </td>
             </tr>
           ))}
         </tbody>

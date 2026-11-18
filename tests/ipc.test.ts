@@ -29,6 +29,7 @@ describe('IPC channel contract', () => {
         'settings',
         'storage',
         'system',
+        'tasks',
         'timers',
         'voice',
         'weather',

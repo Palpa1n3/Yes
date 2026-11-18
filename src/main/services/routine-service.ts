@@ -10,6 +10,7 @@ import {
   MAX_WAIT_S,
   describeStep,
   isToday,
+  scheduleMatches,
   newRoutineId,
   sanitizeRoutine,
   sanitizeRoutines,
@@ -90,6 +91,19 @@ export class RoutineService {
     this.routines = this.routines.filter((r) => r.id !== id);
     this.changed();
     return this.list();
+  }
+
+  /** Routines whose schedule is this minute and that haven't just run. */
+  dueNow(): Routine[] {
+    const now = this.now();
+    const d = new Date(now);
+    return this.routines.filter(
+      (r) =>
+        r.schedule &&
+        scheduleMatches(r.schedule, d) &&
+        !(r.lastRun && now - r.lastRun < 90_000) &&
+        this.running?.id !== r.id,
+    );
   }
 
   /** Routines set to run at startup that haven't run today. */

@@ -222,7 +222,8 @@ export type AppCommand =
   | { type: 'focus-input' }
   | { type: 'open-settings' }
   | { type: 'notice'; text: string }
-  | { type: 'voice-toggle' };
+  | { type: 'voice-toggle' }
+  | { type: 'run-routine'; id: string };
 
 /** What extra (expensive) telemetry the renderer currently needs. */
 export interface TelemetryDetail {

@@ -11,11 +11,14 @@ export interface RawProc {
   name: string;
   cpuSec: number; // cumulative CPU time
   mem: number; // working set, bytes
+  /** Has a visible main window (an "app" in Task Manager terms). */
+  window?: boolean;
+  responding?: boolean;
 }
 
 const SCRIPT =
   '[Console]::OutputEncoding=[Text.Encoding]::UTF8;' +
-  'Get-Process | ForEach-Object { [pscustomobject]@{i=$_.Id;n=$_.ProcessName;c=$_.CPU;m=$_.WorkingSet64} } | ConvertTo-Json -Compress';
+  'Get-Process | ForEach-Object { [pscustomobject]@{i=$_.Id;n=$_.ProcessName;c=$_.CPU;m=$_.WorkingSet64;w=[int]($_.MainWindowHandle -ne 0);r=[int][bool]$_.Responding} } | ConvertTo-Json -Compress';
 
 export function sampleWindowsProcesses(timeoutMs = 8_000): Promise<RawProc[]> {
   return new Promise((resolve, reject) => {
@@ -40,7 +43,7 @@ export function parseSample(json: string): RawProc[] {
   const list = Array.isArray(raw) ? raw : [raw];
   return list
     .filter(
-      (x): x is { i: number; n: string; c: number | null; m: number } =>
+      (x): x is { i: number; n: string; c: number | null; m: number; w?: number; r?: number } =>
         !!x && typeof x.i === 'number' && typeof x.n === 'string',
     )
     .map((x) => ({
@@ -48,6 +51,8 @@ export function parseSample(json: string): RawProc[] {
       name: x.n,
       cpuSec: typeof x.c === 'number' ? x.c : 0,
       mem: typeof x.m === 'number' ? x.m : 0,
+      ...(typeof x.w === 'number' ? { window: x.w === 1 } : {}),
+      ...(typeof x.r === 'number' ? { responding: x.r === 1 } : {}),
     }));
 }
 

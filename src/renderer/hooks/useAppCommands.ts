@@ -19,6 +19,9 @@ export function useAppCommands(compact: boolean): void {
           case 'open-settings':
             useUiStore.getState().openSettings();
             break;
+          case 'run-routine':
+            void useConversationStore.getState().perform({ action: 'run_routine', target: c.id });
+            break;
           case 'voice-toggle':
             toggleListening();
             break;

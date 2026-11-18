@@ -2,6 +2,7 @@ import {
   Activity,
   AppWindow,
   HardDrive,
+  ListChecks,
   LayoutDashboard,
   Network,
   Workflow,
@@ -19,6 +20,7 @@ export interface TabDef {
 export const TABS: TabDef[] = [
   { id: 'overview', label: 'Overview', code: 'SEC.01', icon: LayoutDashboard },
   { id: 'system', label: 'System', code: 'SEC.02', icon: Activity },
+  { id: 'tasks', label: 'Tasks', code: 'SEC.07', icon: ListChecks },
   { id: 'apps', label: 'Apps', code: 'SEC.03', icon: AppWindow },
   { id: 'network', label: 'Network', code: 'SEC.04', icon: Network },
   { id: 'storage', label: 'Storage', code: 'SEC.05', icon: HardDrive },

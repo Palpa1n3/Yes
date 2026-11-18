@@ -1,7 +1,7 @@
 /** Claude via the Anthropic Messages API, with ARC's actions as tools.
  *  ARC runs the loop itself so each action passes through the renderer's command cards
  *  (Approve / Cancel, activity log) before its result goes back to the model. */
-import { describeStep, type Routine } from '@shared/routines';
+import { describeSchedule, describeStep, type Routine } from '@shared/routines';
 import { weatherSummary, type WeatherData } from '@shared/weather';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
@@ -623,6 +623,7 @@ export class AnthropicProvider implements AIProvider {
                         name: r.name,
                         phrases: r.phrases,
                         steps: r.steps.map(describeStep),
+                        schedule: r.schedule ? describeSchedule(r.schedule) : null,
                       }))
                     : plan.local === 'list_apps'
                       ? this.deps.apps()

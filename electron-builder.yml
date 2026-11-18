@@ -10,7 +10,11 @@ files:
   - resources/**
   - package.json
   - '!**/*.map'
+  # Transformers.js bundles the browser runtime it needs; the separate package is unused.
+  - '!node_modules/onnxruntime-web/**'
 asar: true
+# No auto-update server: builds are made and installed locally.
+publish: null
 # Native speech-recognition runtime (Whisper) must sit outside the asar archive.
 asarUnpack:
   - node_modules/onnxruntime-node/**

@@ -53,7 +53,53 @@ export interface Routine {
   steps: RoutineStep[];
   /** Run when ARC starts, at most once a day. */
   runAtStartup: boolean;
+  /** Run automatically at a time of day on chosen days (while ARC is running). */
+  schedule?: RoutineSchedule;
   lastRun?: number;
+}
+
+export interface RoutineSchedule {
+  /** 24-hour "HH:MM", local time. */
+  time: string;
+  /** 0 = Sunday … 6 = Saturday. */
+  days: number[];
+}
+
+export const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export function sanitizeSchedule(raw: unknown): RoutineSchedule | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  const m = typeof o['time'] === 'string' ? /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(o['time']) : null;
+  if (!m) return undefined;
+  const days = Array.isArray(o['days'])
+    ? [
+        ...new Set(o['days'].filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6)),
+      ].sort()
+    : [];
+  if (!days.length) return undefined;
+  return { time: `${(m[1] ?? '').padStart(2, '0')}:${m[2] ?? '00'}`, days };
+}
+
+/** "Weekdays at 08:30", "Every day at 23:00", "Mon, Thu at 07:15". */
+export function describeSchedule(s: RoutineSchedule): string {
+  const key = s.days.join(',');
+  const when =
+    key === '0,1,2,3,4,5,6'
+      ? 'Every day'
+      : key === '1,2,3,4,5'
+        ? 'Weekdays'
+        : key === '0,6'
+          ? 'Weekends'
+          : s.days.map((d) => DAY_NAMES[d]).join(', ');
+  return `${when} at ${s.time}`;
+}
+
+/** Whether a schedule fires at this minute. */
+export function scheduleMatches(s: RoutineSchedule, now: Date): boolean {
+  const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  return s.days.includes(now.getDay()) && hhmm === s.time;
 }
 
 export const MAX_ROUTINES = 30;
@@ -175,6 +221,7 @@ export function sanitizeRoutine(raw: unknown): Routine | null {
         .slice(0, MAX_STEPS)
     : [];
   const lastRun = typeof o['lastRun'] === 'number' && o['lastRun'] > 0 ? o['lastRun'] : undefined;
+  const schedule = sanitizeSchedule(o['schedule']);
   return {
     id,
     name,
@@ -182,6 +229,7 @@ export function sanitizeRoutine(raw: unknown): Routine | null {
     phrases,
     steps,
     runAtStartup: o['runAtStartup'] === true,
+    ...(schedule ? { schedule } : {}),
     ...(lastRun ? { lastRun } : {}),
   };
 }

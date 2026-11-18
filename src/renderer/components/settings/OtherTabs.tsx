@@ -289,7 +289,7 @@ export function HotkeysTab() {
   const info = useAppInfo([s.globalHotkey, s.voiceHotkey]);
   const fallback = info?.activeHotkey && info.activeHotkey !== s.globalHotkey;
   const keys: Array<[string, string]> = [
-    ['Ctrl + 1…6', 'Switch tabs'],
+    ['Ctrl + 1…7', 'Switch tabs'],
     ['/', 'Command palette (from anywhere)'],
     ['↑ / ↓', 'Recall earlier messages'],
     ['Esc', 'Clear input, stop a reply, or close panels'],
