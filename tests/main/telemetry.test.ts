@@ -189,3 +189,45 @@ describe('mappers', () => {
     expect(mapDisks(fs, []).map((d) => [d.mount, d.label])).toEqual([['/', 'System']]);
   });
 });
+
+describe('on-demand process sample', () => {
+  it('includes top processes even when the System tab is closed', async () => {
+    vi.useFakeTimers();
+    const { src, calls } = fakeSi();
+    const t = new TelemetryService(src, vi.fn());
+    const p = t.snapshotWithProcesses();
+    await vi.advanceTimersByTimeAsync(1100);
+    const s = await p;
+    expect(s.processes.map((x) => x.name)).toEqual(['Code.exe', 'chrome.exe']);
+    expect(calls['procs']).toBe(2); // a pair of samples for a CPU% delta
+    expect(t.snapshot().processes).toEqual([]); // the live stream stays lean
+    vi.useRealTimers();
+  });
+});
+
+describe('slow process listing (Windows WMI)', () => {
+  it('times out instead of leaving the caller waiting', async () => {
+    vi.useFakeTimers();
+    const { src } = fakeSi();
+    (src as { processes: unknown }).processes = () => new Promise(() => undefined); // never returns
+    const t = new TelemetryService(src, vi.fn());
+    const p = t.snapshotWithProcesses(5000);
+    await vi.advanceTimersByTimeAsync(5001);
+    const s = await p;
+    expect(s).toMatchObject({ processes: [], processesTimedOut: true });
+    vi.useRealTimers();
+  });
+
+  it('a warm-up sample is reused, so the on-demand read needs only one more', async () => {
+    vi.useFakeTimers();
+    const { src, calls } = fakeSi();
+    const t = new TelemetryService(src, vi.fn());
+    t.warmProcesses();
+    t.warmProcesses(); // second call is a no-op while warming
+    await vi.advanceTimersByTimeAsync(0);
+    const s = await t.snapshotWithProcesses();
+    expect(calls['procs']).toBe(2); // warm-up + one more, no extra 1s pair
+    expect(s.processes.length).toBeGreaterThan(0);
+    vi.useRealTimers();
+  });
+});

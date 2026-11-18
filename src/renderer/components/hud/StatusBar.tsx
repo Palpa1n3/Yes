@@ -10,7 +10,15 @@ export function StatusBar() {
   const { info, stats, source } = useSystemStore();
   const def = TABS.find((t) => t.id === tab);
   const latency = useConversationStore((s) => s.lastLatencyMs);
-  const { voiceMuted: muted, speakReplies, personality } = useSettingsStore((s) => s.settings);
+  const {
+    voiceMuted: muted,
+    speakReplies,
+    personality,
+    provider,
+    model,
+  } = useSettingsStore((s) => s.settings);
+  const modelLabel =
+    provider === 'mock' ? 'mock' : model.replace('claude-', '').replace(/-(\d)-(\d)$/, ' $1.$2');
 
   return (
     <footer className="relative z-10 flex h-6 shrink-0 items-center gap-4 whitespace-nowrap px-6 font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted">
@@ -29,7 +37,7 @@ export function StatusBar() {
       </span>
       <span>· Uptime {stats ? fmtUptime(stats.uptime) : '—'}</span>
       <span className="hidden hud:inline">
-        · Model: mock · Latency {latency === null ? '—' : `${latency}ms`}
+        · Model: {modelLabel} · Latency {latency === null ? '—' : `${latency}ms`}
       </span>
       <span className="hidden wide:inline">
         · Voice: {muted ? 'muted' : speakReplies ? 'on' : 'off'} · Personality: {personality.name}

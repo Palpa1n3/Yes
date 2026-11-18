@@ -163,6 +163,9 @@ function ProcessesPanel() {
             <tr key={p.pid} className="hud-row group border-t border-line/30">
               <td className="max-w-0 truncate px-4 py-1.5 text-text-primary" title={`PID ${p.pid}`}>
                 {p.name}
+                {p.count && p.count > 1 ? (
+                  <span className="ml-1 font-mono text-[10px] text-text-muted">×{p.count}</span>
+                ) : null}
               </td>
               <td
                 className={`numeric py-1.5 text-right ${p.cpu > 20 ? 'text-amber' : 'text-accent'}`}

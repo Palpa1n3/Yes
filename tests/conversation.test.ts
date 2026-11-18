@@ -142,3 +142,34 @@ describe('conversation loop', () => {
     expect(deriveState({ messages: [], activeResponseId: null })).toBe('idle');
   });
 });
+
+describe('real-model actions', () => {
+  it('reports the action outcome back to the model, without ARC adding its own failure line', async () => {
+    void conv().send('open nonexistent');
+    conv().handleChunk({
+      type: 'intent',
+      responseId: rid(),
+      intent: { action: 'launch_app', target: 'nonexistent' },
+      toolUseId: 'tu9',
+    });
+    resolveExec?.(false);
+    await vi.waitFor(() =>
+      expect(window.arc.assistant.toolResult).toHaveBeenCalledWith(rid(), 'tu9', {
+        status: 'failed',
+        message: 'nope',
+      }),
+    );
+    expect(assistantTexts()).toEqual([]); // Claude explains failures itself
+  });
+
+  it('notices appear as info lines without ending the reply', () => {
+    void conv().send('hi');
+    conv().handleChunk({ type: 'notice', responseId: rid(), message: 'Offline, using the mock.' });
+    expect(conv().messages.at(-1)).toMatchObject({
+      role: 'system',
+      tone: 'info',
+      text: 'Offline, using the mock.',
+    });
+    expect(conv().activeResponseId).toBe(rid());
+  });
+});

@@ -17,8 +17,10 @@ export interface DiskStats {
 export interface ProcessStats {
   pid: number;
   name: string;
-  cpu: number; // %
+  cpu: number; // % of the whole machine
   mem: number; // bytes
+  /** How many processes were grouped under this name (Windows groups by app). */
+  count?: number;
 }
 
 export interface SystemStats {
@@ -83,7 +85,10 @@ export interface RawIntent {
 
 export type StreamChunk =
   | { type: 'text'; responseId: string; delta: string }
-  | { type: 'intent'; responseId: string; intent: RawIntent }
+  /** `toolUseId` is set when a real model asked for the action and is waiting for its result. */
+  | { type: 'intent'; responseId: string; intent: RawIntent; toolUseId?: string }
+  /** Informational line for the transcript (e.g. "offline, using the mock"). */
+  | { type: 'notice'; responseId: string; message: string }
   | { type: 'done'; responseId: string }
   | { type: 'error'; responseId: string; message: string };
 
@@ -143,8 +148,14 @@ export interface Settings {
   /** Electron accelerator, e.g. "CommandOrControl+Space". */
   globalHotkey: string;
   /* Advanced */
-  provider: 'mock';
+  /** 'anthropic' needs an API key (stored encrypted in main, never in settings). */
+  provider: AiProvider;
+  model: AiModel;
 }
+
+export type AiProvider = 'mock' | 'anthropic';
+export const AI_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'] as const;
+export type AiModel = (typeof AI_MODELS)[number];
 
 export const DEFAULT_SETTINGS: Settings = {
   assistantName: 'ARC',
@@ -167,6 +178,7 @@ export const DEFAULT_SETTINGS: Settings = {
   wakeWord: false,
   globalHotkey: 'CommandOrControl+Space',
   provider: 'mock',
+  model: 'claude-haiku-5-5',
 };
 
 export interface WindowStatePayload {
@@ -190,6 +202,9 @@ export interface CommandInfoShared {
   /** 'awaiting' = waiting for Approve / Cancel. */
   status: 'awaiting' | 'pending' | 'success' | 'failed' | 'cancelled';
   result?: import('./commands').CommandResult;
+  /** Set when a real model is waiting on this action's outcome. */
+  toolUseId?: string;
+  responseId?: string;
 }
 
 export type StoredMessage =
@@ -298,4 +313,23 @@ export interface FolderSize {
   complete: boolean;
   /** Bytes in files untouched for 90+ days (Downloads/Temp only). */
   oldBytes?: number;
+}
+
+/* ── AI provider ───────────────────────────────────────────────────────── */
+
+/** What the renderer reports back to the model after running (or declining) an action. */
+export interface ToolOutcome {
+  status: 'success' | 'failed' | 'cancelled';
+  message: string;
+}
+
+export interface AiStatus {
+  hasKey: boolean;
+  /** False if the OS can't encrypt secrets (then keys can't be saved). */
+  encryptionAvailable: boolean;
+}
+
+export interface AiTestResult {
+  ok: boolean;
+  message: string;
 }

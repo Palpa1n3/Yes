@@ -8,6 +8,7 @@ import { THEMES, THEME_TOKENS } from '@renderer/themes/themes';
 import { unavailableSpeechInput, webSpeechOutput, type VoiceInfo } from '@renderer/voice/providers';
 import { playSfx } from '@renderer/voice/sfx';
 import { Field, Section, Segmented, Select, Slider, TextField, Toggle } from './controls';
+import { AiSection } from './AiSection';
 import { HotkeyRecorder, prettyAccel } from './HotkeyRecorder';
 
 function useAppInfo(deps: unknown[] = []): AppInfo | null {
@@ -343,17 +344,7 @@ export function AdvancedTab() {
   return (
     <>
       <Section title="AI model">
-        <Field
-          label="Provider"
-          hint="Real models (Claude and others) plug in here later; API keys will be stored encrypted by the OS."
-        >
-          <Select
-            label="Provider"
-            value="mock"
-            onChange={() => undefined}
-            options={[{ value: 'mock', label: 'Mock (offline)' }]}
-          />
-        </Field>
+        <AiSection />
         <Field
           label="System prompt"
           hint="Generated from the personality; sent to a real model."

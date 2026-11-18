@@ -109,10 +109,17 @@ export class TelemetryService {
   private active = false;
   private iface = '';
 
+  /** Top processes, or null when only a baseline sample was taken (CPU% needs two). */
+  private readonly readProcesses: () => Promise<ProcessStats[] | null>;
+
   constructor(
     private readonly si: SiSource,
     private readonly emit: (s: SystemStats) => void,
+    /** Override the process source (Windows uses a faster reader than systeminformation). */
+    readProcesses?: () => Promise<ProcessStats[] | null>,
   ) {
+    this.readProcesses =
+      readProcesses ?? (async () => mapProcesses((await this.si.processes()).list));
     const total = os.totalmem();
     this.stats = {
       cpu: {
@@ -282,10 +289,69 @@ export class TelemetryService {
     });
   }
 
+  /** One-off process sample for on-demand questions ("what's using my CPU?"), even when
+   *  the System tab is closed. Per-process CPU is measured between two samples, so the
+   *  first is taken early by warmProcesses(). Listing processes is slow on Windows (a WMI
+   *  query), so the whole thing is time-boxed: on timeout the stats come back without
+   *  processes rather than leaving the caller waiting. */
+  async snapshotWithProcesses(
+    timeoutMs = 5_000,
+  ): Promise<SystemStats & { processesTimedOut?: boolean }> {
+    const work = (async (): Promise<SystemStats> => {
+      if (this.warming) await this.warming; // reuse an in-flight first sample
+      const pause = (): Promise<void> => new Promise((r) => setTimeout(r, 1000));
+      if (Date.now() - this.lastProcessSample > 15_000) {
+        await this.readProcesses();
+        await pause();
+      }
+      let list = await this.readProcesses();
+      if (list === null) {
+        // The reader had no baseline after all: one more short interval.
+        await pause();
+        list = await this.readProcesses();
+      }
+      this.lastProcessSample = Date.now();
+      return { ...this.stats, processes: list ?? [] };
+    })();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<SystemStats & { processesTimedOut: true }>((resolve) => {
+      timer = setTimeout(
+        () => resolve({ ...this.stats, processes: [], processesTimedOut: true }),
+        timeoutMs,
+      );
+    });
+    try {
+      return await Promise.race([work, timeout]);
+    } catch {
+      return this.stats;
+    } finally {
+      clearTimeout(timer);
+      work.catch(() => undefined); // a late finish is harmless
+    }
+  }
+
+  /** Take the first process sample in the background (e.g. when a question is sent), so a
+   *  following snapshotWithProcesses() only needs the second, fast-to-reach sample. */
+  warmProcesses(): void {
+    if (this.warming || Date.now() - this.lastProcessSample < 15_000) return;
+    this.warming = this.readProcesses()
+      .then(() => {
+        this.lastProcessSample = Date.now();
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        this.warming = null;
+      });
+  }
+
+  private warming: Promise<void> | null = null;
+  private lastProcessSample = 0;
+
   private refreshProcesses(): Promise<void> {
     return this.once('processes', async () => {
-      const p = await this.si.processes();
-      if (this.detail.processes) this.patch({ processes: mapProcesses(p.list) });
+      const list = await this.readProcesses();
+      this.lastProcessSample = Date.now();
+      if (list && this.detail.processes) this.patch({ processes: list });
     });
   }
 }

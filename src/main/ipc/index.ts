@@ -18,6 +18,8 @@ export function registerIpc(ctx: MainContext): void {
     ctx.getWindow,
     () => ctx.telemetry.snapshot(),
     () => ctx.settings.get(),
+    () => ctx.telemetry.snapshotWithProcesses(),
+    () => ctx.telemetry.warmProcesses(),
   );
   const skills = new SkillRegistry({
     settings: () => ctx.settings.get(),

@@ -7,18 +7,29 @@ import {
   resolveTitle,
   type Personality,
 } from '@shared/personalities';
-import type { ChatMessage, ProviderChunk, RawIntent, SystemStats, ToolDef } from '@shared/types';
+import type {
+  ChatMessage,
+  ProviderChunk,
+  RawIntent,
+  SystemStats,
+  ToolDef,
+  ToolOutcome,
+} from '@shared/types';
 import { snapshot } from './system-stats';
 
 export interface SendOptions {
   systemPrompt: string;
   tools?: ToolDef[];
   signal?: AbortSignal;
+  /** Run an action through ARC (cards, approval) and resolve with its outcome. */
+  runTool?(toolUseId: string, intent: RawIntent): Promise<ToolOutcome>;
 }
 
 export interface AIProvider {
   id: string;
   send(messages: ChatMessage[], opts: SendOptions): AsyncIterable<ProviderChunk>;
+  /** Forget any conversation state the provider keeps. */
+  reset?(): void;
 }
 
 /** What the mock needs to imitate a personality (a real model gets the system prompt). */

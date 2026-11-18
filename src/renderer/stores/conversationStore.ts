@@ -163,6 +163,12 @@ export const useConversationStore = create<ConversationState>((set, get) => {
       };
     }
     setCommand(messageId, { status: result.status, result });
+    if (info.toolUseId && info.responseId) {
+      window.arc.assistant.toolResult(info.responseId, info.toolUseId, {
+        status: result.status,
+        message: result.message,
+      });
+    }
     playSfx(result.status === 'success' ? 'success' : 'error');
     const { verb, target } = describeCommand(info.cmd);
     logActivity({
@@ -174,7 +180,8 @@ export const useConversationStore = create<ConversationState>((set, get) => {
       useAppsStore.getState().noteLaunched(info.cmd.target ?? '');
     if (result.status === 'failed') {
       // Don't leave the user with just a red card: say what happened and what to try.
-      get().pushAssistant(failureLine(info.cmd, result.message));
+      // A real model explains failures itself; the mock needs ARC to say something.
+      if (!info.toolUseId) get().pushAssistant(failureLine(info.cmd, result.message));
       setState('error');
       setTimeout(sync, 0);
     }
@@ -262,6 +269,12 @@ export const useConversationStore = create<ConversationState>((set, get) => {
       const m = get().messages.find((x) => x.id === messageId);
       if (m?.role !== 'command' || m.command.status !== 'awaiting') return;
       setCommand(messageId, { status: 'cancelled' });
+      if (m.command.toolUseId && m.command.responseId) {
+        window.arc.assistant.toolResult(m.command.responseId, m.command.toolUseId, {
+          status: 'cancelled',
+          message: 'The user cancelled this action.',
+        });
+      }
       const { verb, target } = describeCommand(m.command.cmd);
       useAssistantStore.getState().logActivity({
         kind: ACTIVITY_KIND[m.command.cmd.action],
@@ -318,7 +331,14 @@ export const useConversationStore = create<ConversationState>((set, get) => {
         case 'intent': {
           const cmd = toCommand(chunk.intent, uid());
           const confirm = needsConfirmation(cmd, persona().confirm);
-          const info: CommandInfo = { cmd, status: confirm ? 'awaiting' : 'pending' };
+          const info: CommandInfo = {
+            cmd,
+            status: confirm ? 'awaiting' : 'pending',
+            // A real model waits for this action's outcome.
+            ...(chunk.toolUseId
+              ? { toolUseId: chunk.toolUseId, responseId: chunk.responseId }
+              : {}),
+          };
           const mid = uid();
           // Close the current text bubble; follow-up text opens a new one below the card.
           set({ activeBubbleId: null });
@@ -329,6 +349,13 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           if (!confirm) void runCommand(info, mid);
           break;
         }
+        case 'notice':
+          set({ activeBubbleId: null });
+          update((ms) => [
+            ...closeBubble(ms),
+            { id: uid(), role: 'system', text: chunk.message, timestamp: now(), tone: 'info' },
+          ]);
+          break;
         case 'error': {
           set({ activeResponseId: null, activeBubbleId: null });
           const lead = persona().phrase(

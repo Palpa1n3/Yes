@@ -33,8 +33,15 @@ export function installArcMock(): ArcAPI {
     assistant: {
       send: vi.fn(),
       cancel: vi.fn(),
+      toolResult: vi.fn(),
       reset: vi.fn(),
       onStream: vi.fn(() => () => undefined),
+    },
+    ai: {
+      status: vi.fn(async () => ({ hasKey: false, encryptionAvailable: true })),
+      setKey: vi.fn(async () => ({ ok: true, message: 'ok' })),
+      clearKey: vi.fn(async () => ({ hasKey: false, encryptionAvailable: true })),
+      test: vi.fn(async () => ({ ok: true, message: 'ok' })),
     },
     commands: { execute: vi.fn() },
     settings: {

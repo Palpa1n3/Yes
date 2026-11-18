@@ -125,9 +125,22 @@ export const weatherSkill: ArcSkill = {
 
 Register it in `src/main/ipc/index.ts` (`skills.register(weatherSkill)`). See `systemReportSkill` in `src/main/services/skills.ts` for a working example, and `tests/main/skills.test.ts` for how to test one.
 
-## Adding a real AI model
+## AI: Claude
 
-Implement `AIProvider` (`src/main/services/ai-provider.ts`): `send(messages, { systemPrompt, tools, signal })` yields `text` / `intent` / `done` / `error` chunks. Swap it in `src/main/ipc/assistant.ts`. Keep API keys in main (use Electron `safeStorage`), never in the renderer.
+ARC works offline with a built-in mock, or with Claude for real conversation and actions.
+
+1. Get an API key at <https://console.anthropic.com> (API Keys). Add a little credit and, ideally, a monthly limit under **Limits**.
+2. In ARC: **Settings › Advanced › AI → Claude**, paste the key, **Save & test**. The test uses the Models API, so it costs nothing.
+3. Pick a model: **Haiku 5.5** (default; fastest and cheapest), **Sonnet 5.5** (~20× Haiku per message) or **Opus 5.5** (~40×). Switch any time; the status bar shows the active one.
+
+How it works (`src/main/services/anthropic-provider.ts`):
+
+- The key is validated, then encrypted with the OS keychain (`safeStorage`, DPAPI on Windows) into `%APPDATA%\ARC\anthropic-key.bin`. It never reaches the renderer, logs or settings.
+- ARC runs a streaming Messages API tool loop. Claude can `launch_app`, `open_url`, `search_web`, `get_system_status` and `list_apps`. Every action except `list_apps` goes through ARC's command cards (approval per your personality, activity log), and the outcome, including "cancelled", is sent back to Claude.
+- Effort is `low` (chat), the personality prompt is cached, at most 8 model steps run per reply, and Sonnet/Opus use Anthropic's default server-side fallback. Haiku has none, so a refusal shows a message.
+- No key, or offline: ARC says so and answers with the mock. Bad key, no credit or rate limits produce plain-English messages.
+
+To add another provider, implement `AIProvider` (`src/main/services/ai-provider.ts`) and select it in `src/main/ipc/assistant.ts`.
 
 ## Voice
 

@@ -18,6 +18,7 @@ describe('IPC channel contract', () => {
   it('exposes the groups the ArcAPI requires', () => {
     expect(Object.keys(IPC).sort()).toEqual(
       [
+        'ai',
         'app',
         'apps',
         'assistant',

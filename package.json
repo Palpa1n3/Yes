@@ -58,6 +58,7 @@
     "zustand": "5.1.0"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.10.0",
     "systeminformation": "5.33.23"
   },
   "author": "ARC"

@@ -11,6 +11,7 @@ import { registerIpc } from './ipc';
 import { emit } from './ipc/handle';
 import { SettingsStore } from './services/settings-store';
 import { TelemetryService } from './services/telemetry';
+import { WinProcessReader } from './services/win-processes';
 import { ArcTray, resourcePath } from './tray';
 import { DEFAULT_SIZE, MIN_SIZE, loadWindowState, trackWindowState } from './window-state';
 
@@ -30,7 +31,12 @@ const isShown = (w: BrowserWindow): boolean => w.isVisible() && !w.isMinimized()
 const ctx: MainContext = {
   getWindow,
   settings,
-  telemetry: new TelemetryService(si, (s) => emit(getWindow(), IPC.system.onStats, s)),
+  telemetry: new TelemetryService(
+    si,
+    (s) => emit(getWindow(), IPC.system.onStats, s),
+    // Windows: Get-Process is far faster than the WMI query systeminformation uses.
+    process.platform === 'win32' ? new WinProcessReader().read : undefined,
+  ),
   compact: new CompactController(
     getWindow,
     () => settings.get().alwaysOnTop,

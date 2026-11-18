@@ -2,6 +2,9 @@
  *  Both the preload bridge and main handlers import from here. */
 import type { CanonicalCommand, CommandResult } from './commands';
 import type {
+  AiStatus,
+  AiTestResult,
+  ToolOutcome,
   AppCommand,
   AppEntry,
   AppInfo,
@@ -42,6 +45,7 @@ export const IPC = {
   assistant: {
     send: 'assistant:send',
     cancel: 'assistant:cancel',
+    toolResult: 'assistant:tool-result',
     reset: 'assistant:reset',
     onStream: 'assistant:stream',
   },
@@ -60,6 +64,12 @@ export const IPC = {
     remove: 'apps:remove',
     folders: 'apps:folders',
     openFolder: 'apps:open-folder',
+  },
+  ai: {
+    status: 'ai:status',
+    setKey: 'ai:set-key',
+    clearKey: 'ai:clear-key',
+    test: 'ai:test',
   },
   network: {
     details: 'network:details',
@@ -94,6 +104,10 @@ export interface InvokeMap {
   [IPC.settings.get]: { args: []; result: Settings };
   [IPC.settings.set]: { args: [patch: Partial<Settings>]; result: undefined };
   [IPC.history.get]: { args: []; result: StoredMessage[] };
+  [IPC.ai.status]: { args: []; result: AiStatus };
+  [IPC.ai.setKey]: { args: [key: string]; result: AiTestResult };
+  [IPC.ai.clearKey]: { args: []; result: AiStatus };
+  [IPC.ai.test]: { args: []; result: AiTestResult };
   [IPC.network.details]: { args: []; result: NetworkDetails };
   [IPC.network.latency]: { args: []; result: LatencyResult[] };
   [IPC.storage.downloads]: { args: []; result: DownloadItem[] };
@@ -122,6 +136,7 @@ export interface SendMap {
   [IPC.history.clear]: [];
   [IPC.app.openPath]: [target: OpenTarget];
   [IPC.assistant.cancel]: [];
+  [IPC.assistant.toolResult]: [responseId: string, toolUseId: string, outcome: ToolOutcome];
   [IPC.assistant.reset]: [];
 }
 
@@ -164,6 +179,8 @@ export interface ArcAPI {
     send(msg: UserMessage): Promise<AssistantResponse>;
     /** Stop the in-flight response. */
     cancel(): void;
+    /** Report an action's outcome to the model that requested it. */
+    toolResult(responseId: string, toolUseId: string, outcome: ToolOutcome): void;
     /** Cancel and forget the conversation history held for the provider. */
     reset(): void;
     onStream(cb: (chunk: StreamChunk) => void): Unsubscribe;
@@ -184,6 +201,14 @@ export interface ArcAPI {
     remove(id: string): Promise<AppEntry[]>;
     folders(): Promise<FolderInfo[]>;
     openFolder(folder: UserFolder): void;
+  };
+  ai: {
+    status(): Promise<AiStatus>;
+    /** Validate and store an API key (encrypted by the OS). The key never comes back. */
+    setKey(key: string): Promise<AiTestResult>;
+    clearKey(): Promise<AiStatus>;
+    /** Check the stored key and model without spending credit. */
+    test(): Promise<AiTestResult>;
   };
   network: {
     details(): Promise<NetworkDetails>;

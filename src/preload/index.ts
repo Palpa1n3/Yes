@@ -48,6 +48,7 @@ const api: ArcAPI = {
   assistant: {
     send: (msg) => invoke(IPC.assistant.send, msg),
     cancel: () => send(IPC.assistant.cancel),
+    toolResult: (r, t, o) => send(IPC.assistant.toolResult, r, t, o),
     reset: () => send(IPC.assistant.reset),
     onStream: (cb) => subscribe(IPC.assistant.onStream, cb),
   },
@@ -66,6 +67,12 @@ const api: ArcAPI = {
     remove: (id) => invoke(IPC.apps.remove, id),
     folders: () => invoke(IPC.apps.folders),
     openFolder: (f) => send(IPC.apps.openFolder, f),
+  },
+  ai: {
+    status: () => invoke(IPC.ai.status),
+    setKey: (k) => invoke(IPC.ai.setKey, k),
+    clearKey: () => invoke(IPC.ai.clearKey),
+    test: () => invoke(IPC.ai.test),
   },
   network: {
     details: () => invoke(IPC.network.details),

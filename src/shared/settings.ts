@@ -1,7 +1,14 @@
 /** Pure validation for stored settings: unknown keys dropped, wrong types replaced by
  *  defaults, so a hand-edited or corrupted settings.json can't break the app. */
 import { sanitizePersonality } from './personalities';
-import { DEFAULT_SETTINGS, type ReduceMotion, type Settings, type ThemeId } from './types';
+import {
+  AI_MODELS,
+  DEFAULT_SETTINGS,
+  type AiModel,
+  type ReduceMotion,
+  type Settings,
+  type ThemeId,
+} from './types';
 
 const THEMES: ThemeId[] = ['arc-cyan', 'solar-gold', 'crimson', 'mono'];
 const MOTION: ReduceMotion[] = ['system', 'on', 'off'];
@@ -44,6 +51,9 @@ export function sanitizeSettings(raw: unknown): Settings {
         : d.sfxVolume,
     wakeWord: bool('wakeWord'),
     globalHotkey: str('globalHotkey', 60).trim() || d.globalHotkey,
-    provider: 'mock',
+    provider: r['provider'] === 'anthropic' ? 'anthropic' : 'mock',
+    model: (AI_MODELS as readonly string[]).includes(r['model'] as string)
+      ? (r['model'] as AiModel)
+      : d.model,
   };
 }
