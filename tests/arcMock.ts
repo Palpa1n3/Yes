@@ -1,0 +1,92 @@
+import { vi } from 'vitest';
+import type { ArcAPI } from '@shared/ipc';
+import { DEFAULT_SETTINGS } from '@shared/types';
+
+/** A fake window.arc for renderer tests. */
+export function installArcMock(): ArcAPI {
+  const api: ArcAPI = {
+    window: {
+      minimize: vi.fn(),
+      toggleMaximize: vi.fn(),
+      close: vi.fn(),
+      setAlwaysOnTop: vi.fn(),
+      getState: vi.fn(async () => ({ maximized: false, compact: false })),
+      setCompact: vi.fn(),
+      onState: vi.fn(() => () => undefined),
+    },
+    system: {
+      getStats: vi.fn(),
+      getInfo: vi.fn(async () => ({
+        hostname: 'TEST-PC',
+        username: 'me',
+        platform: 'win32',
+        osName: 'Windows 11',
+        osRelease: '10.0.22631',
+        arch: 'x64',
+        cpuModel: 'Test CPU',
+        cpuThreads: 8,
+        memTotal: 16 * 1024 ** 3,
+      })),
+      setDetail: vi.fn(),
+      onStats: vi.fn(() => () => undefined),
+    },
+    assistant: {
+      send: vi.fn(),
+      cancel: vi.fn(),
+      reset: vi.fn(),
+      onStream: vi.fn(() => () => undefined),
+    },
+    commands: { execute: vi.fn() },
+    settings: {
+      get: vi.fn(async () => DEFAULT_SETTINGS),
+      set: vi.fn(async () => undefined),
+      onChange: vi.fn(() => () => undefined),
+    },
+    apps: {
+      list: vi.fn(async () => [
+        {
+          id: 'vscode',
+          name: 'VS Code',
+          startMenu: 'Visual Studio Code',
+          intents: ['vs code', 'my editor'],
+        },
+      ]),
+      installed: vi.fn(async () => []),
+      save: vi.fn(async () => []),
+      remove: vi.fn(async () => []),
+      folders: vi.fn(async () => []),
+      openFolder: vi.fn(),
+    },
+    network: {
+      details: vi.fn(async () => ({
+        hostname: 'TEST-PC',
+        gateway: null,
+        dns: [],
+        interfaces: [],
+        wifi: null,
+      })),
+      latency: vi.fn(async () => []),
+    },
+    storage: {
+      downloads: vi.fn(async () => []),
+      scan: vi.fn(async () => []),
+      reveal: vi.fn(),
+      openSpecial: vi.fn(),
+    },
+    history: { get: vi.fn(async () => []), save: vi.fn(), clear: vi.fn() },
+    app: {
+      onCommand: vi.fn(() => () => undefined),
+      getInfo: vi.fn(async () => ({
+        version: '0.1.0',
+        electron: '45',
+        platform: 'win32',
+        userDataPath: 'C:/x',
+        activeHotkey: 'CommandOrControl+Space',
+      })),
+      openPath: vi.fn(),
+      resetSettings: vi.fn(async () => DEFAULT_SETTINGS),
+    },
+  };
+  window.arc = api;
+  return api;
+}

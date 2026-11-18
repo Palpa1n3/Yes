@@ -1,0 +1,244 @@
+import { app, BrowserWindow, nativeImage, shell } from 'electron';
+import os from 'node:os';
+import { join } from 'node:path';
+import si from 'systeminformation';
+import { IPC } from '@shared/ipc';
+import type { AppCommand, Settings } from '@shared/types';
+import { CompactController } from './compact';
+import type { MainContext } from './context';
+import { Hotkey, prettyAccelerator } from './hotkey';
+import { registerIpc } from './ipc';
+import { emit } from './ipc/handle';
+import { SettingsStore } from './services/settings-store';
+import { TelemetryService } from './services/telemetry';
+import { ArcTray, resourcePath } from './tray';
+import { DEFAULT_SIZE, MIN_SIZE, loadWindowState, trackWindowState } from './window-state';
+
+let mainWindow: BrowserWindow | null = null;
+let quitting = false;
+let rendererReady = false;
+let hintedTray = false;
+const pending: AppCommand[] = [];
+
+const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'));
+/** Started by "launch at login": stay in the tray until summoned. */
+const startHidden = process.argv.includes('--hidden');
+const getWindow = (): BrowserWindow | null =>
+  mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+const isShown = (w: BrowserWindow): boolean => w.isVisible() && !w.isMinimized();
+
+const ctx: MainContext = {
+  getWindow,
+  settings,
+  telemetry: new TelemetryService(si, (s) => emit(getWindow(), IPC.system.onStats, s)),
+  compact: new CompactController(
+    getWindow,
+    () => settings.get().alwaysOnTop,
+    () => {
+      ctx.pushWindowState();
+      tray.refresh();
+    },
+  ),
+  hotkey: new Hotkey(() => ctx.toggleWindow()),
+  updateSettings: (patch) => settings.set(patch),
+  setCompact: (on) => {
+    ctx.showWindow(on);
+    ctx.compact.set(on);
+  },
+  showWindow: (focusInput = false) => {
+    const w = getWindow();
+    if (!w) return;
+    if (w.isMinimized()) w.restore();
+    w.show();
+    w.focus();
+    if (focusInput) ctx.command({ type: 'focus-input' });
+  },
+  toggleWindow: () => {
+    const w = getWindow();
+    if (!w) return;
+    if (isShown(w) && w.isFocused()) w.hide();
+    else ctx.showWindow(true);
+  },
+  openSettings: () => {
+    if (ctx.compact.isCompact) ctx.compact.set(false);
+    ctx.showWindow();
+    ctx.command({ type: 'open-settings' });
+  },
+  command: (c) => {
+    if (rendererReady) emit(getWindow(), IPC.app.onCommand, c);
+    else pending.push(c);
+  },
+  pushWindowState: () => {
+    const w = getWindow();
+    if (w)
+      emit(w, IPC.window.onState, { maximized: w.isMaximized(), compact: ctx.compact.isCompact });
+  },
+  quit: () => {
+    quitting = true;
+    app.quit();
+  },
+};
+
+const tray = new ArcTray(ctx);
+
+function applyHotkey(accel: string): void {
+  const { active, fellBack } = ctx.hotkey.register(accel);
+  if (fellBack) {
+    ctx.command({
+      type: 'notice',
+      text: active
+        ? `${prettyAccelerator(accel)} is in use by another app, so I'm using ${prettyAccelerator(active)} to show and hide.`
+        : `I couldn't register a global shortcut; ${prettyAccelerator(accel)} may be taken by another app.`,
+    });
+  }
+  tray.refresh();
+}
+
+function applyLoginItem(on: boolean): void {
+  // Only meaningful for an installed app; in dev it would register the Electron binary.
+  if (!app.isPackaged || process.platform === 'linux') return;
+  app.setLoginItemSettings({ openAtLogin: on, args: ['--hidden'] });
+}
+
+/** "jack.jones" / "JackJ" → "Jack". Used once, to pre-fill your name. */
+function firstNameFromAccount(): string {
+  const raw = os.userInfo().username.split(/[._\s-]/)[0] ?? '';
+  const word = raw.match(/^[A-Z]?[a-z]+/)?.[0] ?? raw;
+  return word ? (word[0] ?? '').toUpperCase() + word.slice(1).toLowerCase() : '';
+}
+
+function onSettingsChanged(next: Settings, prev: Settings): void {
+  emit(getWindow(), IPC.settings.onChange, next);
+  if (next.globalHotkey !== prev.globalHotkey) applyHotkey(next.globalHotkey);
+  if (next.alwaysOnTop !== prev.alwaysOnTop && !ctx.compact.isCompact)
+    getWindow()?.setAlwaysOnTop(next.alwaysOnTop);
+  if (next.launchAtLogin !== prev.launchAtLogin) applyLoginItem(next.launchAtLogin);
+  tray.refresh();
+}
+
+function createWindow(): BrowserWindow {
+  const saved = loadWindowState();
+
+  const win = new BrowserWindow({
+    ...(saved ? saved.bounds : DEFAULT_SIZE),
+    center: !saved,
+    minWidth: MIN_SIZE.width,
+    minHeight: MIN_SIZE.height,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    show: false,
+    title: 'ARC',
+    icon: nativeImage.createFromPath(resourcePath('icon.png')),
+    alwaysOnTop: settings.get().alwaysOnTop,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+    },
+  });
+
+  if (saved?.maximized) win.maximize();
+  win.once('ready-to-show', () => {
+    if (!startHidden || !tray.exists) win.show();
+  });
+
+  // Lock the renderer down: no new windows, no navigation away from the app.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url !== win.webContents.getURL()) event.preventDefault();
+  });
+
+  // Deliver anything queued (hotkey notices etc.) once the UI can receive it.
+  win.webContents.on('did-finish-load', () => {
+    rendererReady = true;
+    for (const c of pending.splice(0)) emit(win, IPC.app.onCommand, c);
+  });
+  win.webContents.on('did-start-loading', () => {
+    rendererReady = false;
+  });
+
+  // Telemetry only runs while the window is actually on screen.
+  const syncTelemetry = (): void => {
+    if (isShown(win)) ctx.telemetry.start();
+    else ctx.telemetry.stop();
+    tray.refresh();
+  };
+  win.on('show', syncTelemetry);
+  win.on('hide', syncTelemetry);
+  win.on('minimize', syncTelemetry);
+  win.on('restore', syncTelemetry);
+  win.on('maximize', () => ctx.pushWindowState());
+  win.on('unmaximize', () => ctx.pushWindowState());
+
+  // Close hides to the tray (if there is one); Quit lives in the tray menu.
+  win.on('close', (e) => {
+    // Linux trays are unreliable (many desktops have none), so closing quits there.
+    if (quitting || !settings.get().closeToTray || !tray.exists || process.platform === 'linux')
+      return;
+    e.preventDefault();
+    win.hide();
+    if (!hintedTray) {
+      hintedTray = true;
+      tray.notifyHidden();
+    }
+  });
+
+  trackWindowState(win, () => !ctx.compact.isCompact);
+
+  const devUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (!app.isPackaged && devUrl) void win.loadURL(devUrl);
+  else void win.loadFile(join(__dirname, '../renderer/index.html'));
+
+  win.on('closed', () => {
+    mainWindow = null;
+    ctx.telemetry.stop();
+  });
+  return win;
+}
+
+// Transparent windows on Linux need this to composite correctly.
+if (process.platform === 'linux') app.commandLine.appendSwitch('enable-transparent-visuals');
+if (process.platform === 'win32') app.setAppUserModelId('com.arc.assistant');
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => ctx.showWindow(true));
+
+  void app.whenReady().then(() => {
+    // One long-lived PowerShell for systeminformation on Windows: far cheaper than one per probe.
+    if (process.platform === 'win32') si.powerShellStart();
+    settings.load({ userName: firstNameFromAccount() });
+    settings.subscribe(onSettingsChanged);
+    registerIpc(ctx);
+    mainWindow = createWindow();
+    tray.create();
+    applyHotkey(settings.get().globalHotkey);
+
+    app.on('activate', () => {
+      if (!getWindow()) mainWindow = createWindow();
+      else ctx.showWindow();
+    });
+  });
+
+  app.on('before-quit', () => {
+    quitting = true;
+  });
+  app.on('will-quit', () => {
+    settings.saveNow();
+    ctx.hotkey.unregister();
+    ctx.telemetry.stop();
+    tray.destroy();
+    if (process.platform === 'win32') si.powerShellRelease();
+  });
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+  });
+}

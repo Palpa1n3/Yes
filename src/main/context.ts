@@ -1,0 +1,24 @@
+import type { BrowserWindow } from 'electron';
+import type { AppCommand, Settings } from '@shared/types';
+import type { CompactController } from './compact';
+import type { Hotkey } from './hotkey';
+import type { SettingsStore } from './services/settings-store';
+import type { TelemetryService } from './services/telemetry';
+
+/** Everything main-process modules share. Built once in index.ts. */
+export interface MainContext {
+  getWindow(): BrowserWindow | null;
+  settings: SettingsStore;
+  telemetry: TelemetryService;
+  compact: CompactController;
+  hotkey: Hotkey;
+  updateSettings(patch: Partial<Settings>): void;
+  setCompact(on: boolean): void;
+  showWindow(focusInput?: boolean): void;
+  toggleWindow(): void;
+  openSettings(): void;
+  /** Send a request to the renderer (queued until it has loaded). */
+  command(c: AppCommand): void;
+  pushWindowState(): void;
+  quit(): void;
+}

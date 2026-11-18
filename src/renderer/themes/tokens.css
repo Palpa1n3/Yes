@@ -1,0 +1,24 @@
+/* Default (Arc Cyan) tokens for first paint. Runtime themes overwrite these via
+   applyTheme() in themes.ts — keep the two in sync (tests/themes.test.ts checks). */
+:root {
+  --bg-void: 5 8 13; /* #05080D */
+  --bg-panel: 10 18 32; /* #0A1220 */
+  --bg-panel-raised: 15 27 46; /* #0F1B2E */
+  --line: 28 58 90; /* #1C3A5A */
+  --accent: 63 208 255; /* #3FD0FF */
+  --ice: 191 239 255; /* #BFEFFF */
+  --text-primary: 216 230 243; /* #D8E6F3 */
+  --text-muted: 107 130 153; /* #6B8299 */
+  --amber: 255 181 71; /* #FFB547 */
+  --alert: 255 77 94; /* #FF4D5E */
+  --ok: 61 255 176; /* #3DFFB0 */
+
+  /* Glow recipe — derived from the accent so every theme glows in its own colour. */
+  --glow-sm: 0 0 6px rgb(var(--accent) / 0.35);
+  --glow-md: 0 0 14px rgb(var(--accent) / 0.35), 0 0 2px rgb(var(--accent) / 0.8);
+  --glow-lg: 0 0 32px rgb(var(--accent) / 0.25), 0 0 8px rgb(var(--accent) / 0.6);
+
+  --titlebar-h: 32px;
+  --shell-radius: 10px;
+  --panel-radius: 4px;
+}

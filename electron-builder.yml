@@ -1,0 +1,37 @@
+# Packaging: `npm run package:win` on Windows produces an installer and a portable .exe in dist/.
+appId: com.arc.assistant
+productName: ARC
+copyright: ARC
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - out/**
+  - resources/**
+  - package.json
+  - '!**/*.map'
+asar: true
+win:
+  icon: resources/icon@2x.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}-${target}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ARC
+  deleteAppDataOnUninstall: false
+mac:
+  icon: resources/icon@2x.png
+  category: public.app-category.productivity
+  target: [dmg]
+linux:
+  icon: resources/icon@2x.png
+  category: Utility
+  target: [AppImage]

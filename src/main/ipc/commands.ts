@@ -1,0 +1,55 @@
+import { app, shell } from 'electron';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { IPC } from '@shared/ipc';
+import { USER_FOLDERS, type FolderInfo, type UserFolder } from '@shared/types';
+import { AppRegistry } from '../services/app-registry';
+import { createExecutor } from '../services/command-executor';
+import { osDeps } from '../services/os-launch';
+import { SkillRegistry } from '../services/skills';
+import { handle, on } from './handle';
+
+const FOLDER_NAMES: Record<UserFolder, string> = {
+  documents: 'Documents',
+  downloads: 'Downloads',
+  desktop: 'Desktop',
+  pictures: 'Pictures',
+  videos: 'Videos',
+  music: 'Music',
+};
+
+export function registerCommandsIpc(skills: SkillRegistry): void {
+  const registry = new AppRegistry(join(app.getPath('userData'), 'apps.json'));
+  registry.load();
+  const deps = { ...osDeps(), registry };
+  const execute = createExecutor(deps);
+
+  handle(IPC.commands.execute, async (cmd) => {
+    registry.load(); // pick up edits to apps.json without restarting
+    // Skills get first refusal; anything they don't claim goes to the built-in executor.
+    return (await skills.handle(cmd)) ?? execute(cmd);
+  });
+
+  handle(IPC.apps.list, () => registry.load());
+  handle(IPC.apps.installed, async () =>
+    (await deps.listStartApps()).sort((a, b) => a.name.localeCompare(b.name)),
+  );
+  handle(IPC.apps.save, (entry) => registry.upsert(entry));
+  handle(IPC.apps.remove, (id) => registry.remove(id));
+
+  handle(IPC.apps.folders, (): FolderInfo[] =>
+    USER_FOLDERS.map((id) => {
+      const path = app.getPath(id);
+      return { id, name: FOLDER_NAMES[id], path, exists: existsSync(path) };
+    }),
+  );
+  // Fixed set of well-known folders only: never an arbitrary path from the renderer.
+  on(
+    IPC.apps.openFolder,
+    (_w, folder) => {
+      if ((USER_FOLDERS as readonly string[]).includes(folder))
+        void shell.openPath(app.getPath(folder));
+    },
+    () => null,
+  );
+}

@@ -1,0 +1,242 @@
+@import '../themes/tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    /* Transparent so the frameless window's rounded, glowing edge floats on the desktop. */
+    background: transparent;
+  }
+
+  body {
+    @apply font-body text-[14px] leading-[1.6] text-text-primary antialiased;
+    user-select: none;
+  }
+
+  :focus-visible {
+    outline: 1px solid rgb(var(--accent));
+    outline-offset: 2px;
+    box-shadow: var(--glow-sm);
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--line));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--accent) / 0.6);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* The floating HUD shell — fills the transparent window. */
+  .app-shell {
+    @apply relative flex h-full flex-col overflow-hidden border border-line bg-void;
+    border-radius: var(--shell-radius);
+    box-shadow:
+      inset 0 0 0 1px rgb(var(--accent) / 0.05),
+      0 0 24px rgb(var(--accent) / 0.08);
+  }
+  .app-shell[data-compact='true'] {
+    border-radius: 20px;
+    border-color: rgb(var(--accent) / 0.45);
+    box-shadow:
+      inset 0 0 0 1px rgb(var(--accent) / 0.08),
+      0 0 18px rgb(var(--accent) / 0.18);
+  }
+  .app-shell[data-maximized='true'] {
+    border-radius: 0;
+    border-color: transparent;
+  }
+
+  /* Glass panel with HUD corner brackets (top-left + bottom-right). */
+  /* No backdrop-filter: blurring live content (particles) under every panel forces a
+     re-blur per frame and was the single biggest idle-CPU cost. A denser fill reads the same. */
+  .hud-panel {
+    position: relative;
+    background: rgb(var(--bg-panel) / 0.84);
+    border: 1px solid rgb(var(--line) / 0.9);
+    border-radius: var(--panel-radius);
+  }
+  .hud-panel::before,
+  .hud-panel::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+    border-color: rgb(var(--accent) / 0.85);
+  }
+  .hud-panel::before {
+    top: -1px;
+    left: -1px;
+    border-top: 1px solid;
+    border-left: 1px solid;
+    border-top-left-radius: var(--panel-radius);
+  }
+  .hud-panel::after {
+    right: -1px;
+    bottom: -1px;
+    border-right: 1px solid;
+    border-bottom: 1px solid;
+    border-bottom-right-radius: var(--panel-radius);
+  }
+
+  /* Panel header text: spaced uppercase mono, like a terminal readout. */
+  .panel-title {
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.18em];
+  }
+
+  /* Tiny uppercase Orbitron label. Labels only — never paragraphs. */
+  .hud-label {
+    @apply font-display text-[11px] uppercase tracking-hud text-text-muted;
+  }
+
+  .micro-label {
+    @apply font-mono text-[10px] uppercase tracking-[0.12em] text-text-muted;
+  }
+
+  .numeric {
+    @apply font-mono;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hud-row {
+    @apply transition-colors duration-150;
+  }
+  .hud-row:hover {
+    background: rgb(var(--accent) / 0.06);
+  }
+
+  .hud-button {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[2px] border border-line px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted transition-[color,border-color,box-shadow] duration-150;
+  }
+  .hud-button:hover:not(:disabled) {
+    @apply border-accent text-accent shadow-glow-sm;
+  }
+  .hud-button:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+}
+
+@layer utilities {
+  .drag {
+    -webkit-app-region: drag;
+  }
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+  .text-glow {
+    text-shadow: var(--glow-sm);
+  }
+  .text-glow-md {
+    text-shadow: 0 0 14px rgb(var(--accent) / 0.45);
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.animate-blink {
+  animation: blink 1.05s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-blink {
+    animation: none;
+  }
+}
+
+/* Command input focus: a glowing highlight sweeps around the border. */
+@property --sweep {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+.sweep-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--sweep),
+    transparent 0deg,
+    rgb(var(--accent)) 50deg,
+    transparent 110deg,
+    transparent 180deg,
+    rgb(var(--accent) / 0.6) 230deg,
+    transparent 290deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.sweep-border:focus-within::before {
+  opacity: 1;
+  animation: sweep 2.6s linear infinite;
+}
+@keyframes sweep {
+  to {
+    --sweep: 360deg;
+  }
+}
+.caret-block {
+  caret-shape: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sweep-border:focus-within::before {
+    animation: none;
+  }
+}
+
+/* HUD range slider */
+.hud-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 16px;
+  background: transparent;
+}
+.hud-range::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(90deg, rgb(var(--accent) / 0.8), rgb(var(--line)));
+}
+.hud-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5px;
+  background: rgb(var(--bg-void));
+  border: 2px solid rgb(var(--accent));
+  box-shadow: var(--glow-sm);
+}
+.hud-range:focus-visible {
+  outline: none;
+}
+.hud-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: var(--glow-md);
+}
+select option {
+  background: rgb(var(--bg-panel-raised));
+}
