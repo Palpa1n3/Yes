@@ -21,6 +21,7 @@ import {
 } from '@renderer/stores/conversationStore';
 import { bindWeather } from '@renderer/stores/weatherStore';
 import { bindVoice } from '@renderer/stores/voiceStore';
+import { bindCalendar } from '@renderer/stores/calendarStore';
 import { bindRoutines } from '@renderer/stores/routinesStore';
 import { bindTimers, timerTitle, useTimersStore } from '@renderer/stores/timersStore';
 import { startAlarm, stopAlarm } from '@renderer/voice/alarm';
@@ -81,6 +82,7 @@ export function App() {
 
   useEffect(() => bindWeather(), []);
   useEffect(() => bindVoice(), []);
+  useEffect(() => bindCalendar((text) => useConversationStore.getState().pushAssistant(text)), []);
   useEffect(() => bindRoutines((text) => useConversationStore.getState().pushAssistant(text)), []);
 
   // Timers: mirror main's list; ring → alarm sound + a console line; silence when none ring.

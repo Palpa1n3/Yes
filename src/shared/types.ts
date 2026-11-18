@@ -135,6 +135,8 @@ export interface Settings {
   weatherPlace: WeatherPlace | null;
   tempUnit: TempUnit;
   windUnit: WindUnit;
+  /** Heads-up this many minutes before timed calendar events (0 = off). */
+  calendarReminder: number;
   /* Personality */
   personality: Personality;
   /* Appearance */
@@ -186,6 +188,7 @@ export const DEFAULT_SETTINGS: Settings = {
   weatherPlace: null,
   tempUnit: 'c',
   windUnit: 'kmh',
+  calendarReminder: 10,
   personality: DEFAULT_PERSONALITY,
   theme: 'arc-cyan',
   scanlines: false,

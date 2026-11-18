@@ -97,6 +97,14 @@ If the build fails with "Cannot create symbolic link", open Command Prompt **as 
 - Windows' own processes and ARC itself show a lock and can't be ended. Claude can never force-end anything.
 - Frozen apps show **Not responding** in red, with their End task button always visible.
 
+### Calendar (Google)
+
+- **Settings › General › Calendar.** In Google Calendar on the web, open ⚙ **Settings**, click your calendar under **Settings for my calendars**, open **Integrate calendar**, and copy **Secret address in iCal format**. Paste it into ARC and press **Connect**.
+- That address works like a password (anyone with it can read your calendar), so ARC stores it encrypted and never shows it again. Don't paste it into chats. If it ever leaks, use **Reset** next to it in Google Calendar and connect the new one.
+- ARC can read the calendar but can't change it. It refreshes every 10 minutes and shows today and tomorrow in the **Agenda** panel (Overview), with a countdown to the next event.
+- The morning briefing includes your day, and you can ask _"what's on today?"_ or _"what have I got tomorrow?"_.
+- **Heads-up before events** (default 10 minutes): a Windows notification, and ARC says it.
+
 ### Weather
 
 - Set your town in **Settings › General › Weather** (or straight from the Weather panel). Choose °C/°F and mph/km/h there too.

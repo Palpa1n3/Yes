@@ -5,6 +5,7 @@ import { MEDIA_KEYS } from './commands';
 import { dayPart, resolveTitle, type Personality } from './personalities';
 import type { RawIntent, SystemStats, TimerInfo, UserFolder } from './types';
 import { USER_FOLDERS } from './types';
+import { agendaSentence, type CalEvent } from './calendar';
 import { describeWeather, rainSoon, tempSymbol, type WeatherData } from './weather';
 
 export const STEP_KINDS = [
@@ -380,6 +381,8 @@ export interface BriefingInput {
   weatherConfigured: boolean;
   timers: TimerInfo[];
   stats: SystemStats | null;
+  /** Upcoming events, or null when no calendar is connected. */
+  calendar?: CalEvent[] | null;
 }
 
 const GREETING: Record<ReturnType<typeof dayPart>, string> = {
@@ -429,6 +432,8 @@ export function buildBriefing(b: BriefingInput): string {
         : 'Add your town in Settings to get the weather here.',
     );
   }
+
+  if (b.calendar) parts.push(agendaSentence(b.calendar, b.now, terse));
 
   const ringing = b.timers.filter((t) => t.status === 'ringing');
   const running = b.timers.filter((t) => t.status === 'running').sort((x, y) => x.dueAt - y.dueAt);

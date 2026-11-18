@@ -53,6 +53,9 @@ export function sanitizeSettings(raw: unknown): Settings {
     weatherPlace: validPlace(r['weatherPlace']),
     tempUnit: r['tempUnit'] === 'f' ? 'f' : r['tempUnit'] === 'c' ? 'c' : d.tempUnit,
     windUnit: r['windUnit'] === 'mph' ? 'mph' : r['windUnit'] === 'kmh' ? 'kmh' : d.windUnit,
+    calendarReminder: [0, 5, 10, 15, 30].includes(r['calendarReminder'] as number)
+      ? (r['calendarReminder'] as number)
+      : d.calendarReminder,
     personality: {
       ...sanitizePersonality(r['personality']),
       assistantName: name || d.assistantName,

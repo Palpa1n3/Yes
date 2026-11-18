@@ -46,6 +46,19 @@ export function installArcMock(): ArcAPI {
       onChange: vi.fn(() => () => undefined),
       onRing: vi.fn(() => () => undefined),
     },
+    calendar: {
+      get: vi.fn(async () => ({ configured: false, events: [], fetchedAt: null, error: null })),
+      refresh: vi.fn(async () => ({ configured: false, events: [], fetchedAt: null, error: null })),
+      setUrl: vi.fn(async () => ({ ok: true, message: '' })),
+      clearUrl: vi.fn(async () => ({
+        configured: false,
+        events: [],
+        fetchedAt: null,
+        error: null,
+      })),
+      onChange: vi.fn(() => () => undefined),
+      onReminder: vi.fn(() => () => undefined),
+    },
     tasks: {
       list: vi.fn(async () => ({ tasks: [], at: 0 })),
       end: vi.fn(async () => ({ ok: true, message: '' })),

@@ -9,6 +9,7 @@ import { registerInfoIpc } from './info';
 import { registerRoutinesIpc } from './routines';
 import { registerTimersIpc } from './timers';
 import { registerWeatherIpc } from './weather';
+import { registerCalendarIpc } from './calendar';
 import { registerVoiceIpc } from './voice';
 import { registerSettingsIpc } from './settings';
 import { registerSystemIpc } from './system';
@@ -30,11 +31,16 @@ export function registerIpc(ctx: MainContext): void {
   });
   skills.register(systemReportSkill);
   const commands = registerCommandsIpc(skills, ctx.timers);
-  const routines = registerRoutinesIpc(ctx, commands.execute, weather);
+  const calendar = registerCalendarIpc(ctx);
+  const routines = registerRoutinesIpc(ctx, commands.execute, weather, calendar);
   commands.setRoutineRunner(routines.run);
   registerAssistantIpc(ctx, {
     weather: () => weather.get().data,
     routines: () => routines.service.list(),
+    calendar: () => {
+      const s = calendar.state();
+      return s.configured ? s.events : null;
+    },
   });
   registerTimersIpc(ctx);
   registerVoiceIpc(ctx);

@@ -10,6 +10,7 @@ import {
   type ToolOutcome,
 } from '@shared/types';
 import type { Routine } from '@shared/routines';
+import type { CalEvent } from '@shared/calendar';
 import type { WeatherData } from '@shared/weather';
 import type { MainContext } from '../context';
 import { MockProvider, type AIProvider } from '../services/ai-provider';
@@ -25,7 +26,11 @@ const TOOL_TIMEOUT_MS = 10 * 60_000;
 
 export function registerAssistantIpc(
   ctx: MainContext,
-  extra: { weather(): WeatherData | null; routines(): Routine[] },
+  extra: {
+    weather(): WeatherData | null;
+    routines(): Routine[];
+    calendar(): CalEvent[] | null;
+  },
 ): void {
   const getWeather = extra.weather;
   const getWindow = ctx.getWindow;
@@ -46,6 +51,7 @@ export function registerAssistantIpc(
       return { personality: s.personality, userName: s.userName };
     },
     getWeather,
+    extra.calendar,
   );
   const claude = new AnthropicProvider({
     getKey: () => secrets.get(),
@@ -58,6 +64,7 @@ export function registerAssistantIpc(
     timers: () => ctx.timers.list(),
     weather: getWeather,
     routines: extra.routines,
+    calendar: extra.calendar,
     apps: () => registry.load().map((a) => ({ name: a.name, intents: a.intents })),
   });
 

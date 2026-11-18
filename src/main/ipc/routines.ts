@@ -6,12 +6,14 @@ import { buildBriefing, findRoutine } from '@shared/routines';
 import type { MainContext } from '../context';
 import { RoutineService } from '../services/routine-service';
 import type { WeatherService } from '../services/weather';
+import type { CalendarService } from '../services/calendar';
 import { emit, handle, on } from './handle';
 
 export function registerRoutinesIpc(
   ctx: MainContext,
   execute: (cmd: CanonicalCommand) => Promise<CommandResult>,
   weather: WeatherService,
+  calendar: CalendarService,
 ): { service: RoutineService; run(cmd: CanonicalCommand): Promise<CommandResult> } {
   const service = new RoutineService({
     file: join(app.getPath('userData'), 'routines.json'),
@@ -26,6 +28,7 @@ export function registerRoutinesIpc(
         weatherConfigured: s.weatherPlace !== null,
         timers: ctx.timers.list(),
         stats: ctx.telemetry.snapshot(),
+        calendar: calendar.state().configured ? calendar.state().events : null,
       });
     },
     onChange: (list) => emit(ctx.getWindow(), IPC.routines.onChange, list),

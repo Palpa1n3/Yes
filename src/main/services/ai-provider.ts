@@ -16,6 +16,7 @@ import type {
   ToolOutcome,
 } from '@shared/types';
 import { describeWeather, rainSoon, tempSymbol, type WeatherData } from '@shared/weather';
+import { agendaSentence, eventsOn, fmtTime, type CalEvent } from '@shared/calendar';
 import { snapshot } from './system-stats';
 
 export interface SendOptions {
@@ -105,6 +106,7 @@ export function plan(
   getStats: () => SystemStats,
   persona: Persona,
   getWeather: () => WeatherData | null = () => null,
+  getCalendar: () => CalEvent[] | null = () => null,
 ): Plan {
   const { personality: p } = persona;
   const title = resolveTitle(p.userTitle, persona.userName);
@@ -273,6 +275,32 @@ export function plan(
     };
   }
   if (
+    /\b(calendar|schedule|agenda|appointments?|meetings?|what'?s on|what have i got|am i (busy|free)|plans? (for )?(today|tomorrow))\b/.test(
+      lower,
+    )
+  ) {
+    const events = getCalendar();
+    if (!events)
+      return {
+        text:
+          v <= 1
+            ? 'No calendar connected. Settings › General › Calendar.'
+            : 'Your calendar is not connected yet. Add your Google Calendar in Settings › General › Calendar and I will keep you posted.',
+      };
+    const now = Date.now();
+    if (/\btomorrow\b/.test(lower)) {
+      const tm = new Date(now);
+      tm.setDate(tm.getDate() + 1);
+      const list = eventsOn(events, tm.getTime());
+      return {
+        text: list.length
+          ? `Tomorrow: ${list.map((e) => (e.allDay ? e.title : `${e.title} at ${fmtTime(e.start)}`)).join(', ')}.`
+          : t('Nothing in the diary for tomorrow{,title}.'),
+      };
+    }
+    return { text: agendaSentence(events, now, v <= 1) };
+  }
+  if (
     /\b(weather|forecast|rain(ing|y)?|umbrella|coat|jacket|temperature|how (hot|cold|warm))\b/.test(
       lower,
     )
@@ -369,13 +397,21 @@ export class MockProvider implements AIProvider {
     private readonly getStats: () => SystemStats = snapshot,
     private readonly getPersona: () => Persona | null = () => null,
     private readonly getWeather: () => WeatherData | null = () => null,
+    private readonly getCalendar: () => CalEvent[] | null = () => null,
   ) {}
 
   async *send(messages: ChatMessage[], opts: SendOptions): AsyncIterable<ProviderChunk> {
     const { signal } = opts;
     const last = [...messages].reverse().find((m) => m.role === 'user');
     const persona = this.getPersona() ?? { personality: DEFAULT_PERSONALITY, userName: '' };
-    const p = plan(last?.content ?? '', this.turn++, this.getStats, persona, this.getWeather);
+    const p = plan(
+      last?.content ?? '',
+      this.turn++,
+      this.getStats,
+      persona,
+      this.getWeather,
+      this.getCalendar,
+    );
 
     await sleep(350 + Math.random() * 450, signal); // "thinking"
     if (signal?.aborted) return;

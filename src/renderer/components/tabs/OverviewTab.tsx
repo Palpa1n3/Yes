@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { ActivityLogPanel } from '@renderer/components/panels/ActivityLogPanel';
+import { AgendaPanel } from '@renderer/components/panels/AgendaPanel';
 import { TimersPanel } from '@renderer/components/panels/TimersPanel';
 import { Chip } from '@renderer/components/panels/Chip';
 import { panelVariants, Panel } from '@renderer/components/panels/Panel';
@@ -260,7 +261,8 @@ export function OverviewTab() {
         <>
           <NetworkPanel />
           <DrivesPanel />
-          <ActivityLogPanel className="min-h-[150px] flex-1" />
+          <AgendaPanel className="max-h-[260px] shrink-0" />
+          <ActivityLogPanel className="min-h-[120px] flex-1" />
         </>
       }
     />

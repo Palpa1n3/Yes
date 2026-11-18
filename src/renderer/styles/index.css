@@ -45,6 +45,9 @@
   /* The floating HUD shell — fills the transparent window. */
   .app-shell {
     @apply relative flex h-full flex-col overflow-hidden border border-line bg-void;
+    /* clip, not just hidden: focusing something in the sliding Settings drawer must not
+       scroll the whole HUD sideways (overflow: hidden still allows programmatic scroll). */
+    overflow: clip;
     border-radius: var(--shell-radius);
     box-shadow:
       inset 0 0 0 1px rgb(var(--accent) / 0.05),

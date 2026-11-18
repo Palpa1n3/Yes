@@ -10,6 +10,7 @@ import { playChime } from '@renderer/voice/alarm';
 import { Field, Section, Segmented, Slider, TextField, Toggle } from './controls';
 import { AiSection } from './AiSection';
 import { VoiceSection } from './VoiceSection';
+import { CalendarSection } from './CalendarSection';
 import { PlaceSearch } from '@renderer/components/weather/PlaceSearch';
 import { placeLabel } from '@shared/weather';
 import { HotkeyRecorder, prettyAccel } from './HotkeyRecorder';
@@ -92,6 +93,7 @@ export function GeneralTab() {
           />
         </Field>
       </Section>
+      <CalendarSection />
       <Section title="Window">
         <Field
           label="Close to tray"

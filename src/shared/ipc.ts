@@ -31,6 +31,7 @@ import type {
 import type { Routine } from './routines';
 import type { FishKeyResult, VoiceStatus } from './voice';
 import type { EndTaskResult, TaskList } from './tasks';
+import type { CalEvent, CalendarState, CalendarUrlResult } from './calendar';
 
 export const IPC = {
   window: {
@@ -77,6 +78,14 @@ export const IPC = {
     refresh: 'weather:refresh',
     search: 'weather:search',
     onChange: 'weather:changed',
+  },
+  calendar: {
+    get: 'calendar:get',
+    refresh: 'calendar:refresh',
+    setUrl: 'calendar:set-url',
+    clearUrl: 'calendar:clear-url',
+    onChange: 'calendar:changed',
+    onReminder: 'calendar:reminder',
   },
   tasks: {
     list: 'tasks:list',
@@ -152,6 +161,10 @@ export interface InvokeMap {
   [IPC.routines.list]: { args: []; result: Routine[] };
   [IPC.voice.status]: { args: []; result: VoiceStatus };
   [IPC.tasks.list]: { args: []; result: TaskList };
+  [IPC.calendar.get]: { args: []; result: CalendarState };
+  [IPC.calendar.refresh]: { args: []; result: CalendarState };
+  [IPC.calendar.setUrl]: { args: [url: string]; result: CalendarUrlResult };
+  [IPC.calendar.clearUrl]: { args: []; result: CalendarState };
   [IPC.tasks.end]: { args: [name: string, force: boolean]; result: EndTaskResult };
   [IPC.voice.setFishKey]: { args: [key: string]; result: FishKeyResult };
   [IPC.voice.clearFishKey]: { args: []; result: VoiceStatus };
@@ -217,6 +230,8 @@ export interface EventMap {
   [IPC.routines.onChange]: Routine[];
   [IPC.routines.onProgress]: RoutineProgress;
   [IPC.voice.onStatus]: VoiceStatus;
+  [IPC.calendar.onChange]: CalendarState;
+  [IPC.calendar.onReminder]: { event: CalEvent; minutes: number };
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -280,6 +295,15 @@ export interface ArcAPI {
     /** Find towns by name (Open-Meteo geocoding). */
     search(query: string): Promise<WeatherPlace[]>;
     onChange(cb: (s: WeatherState) => void): Unsubscribe;
+  };
+  calendar: {
+    get(): Promise<CalendarState>;
+    refresh(): Promise<CalendarState>;
+    /** Check a private iCal address (fetch + parse), then store it encrypted. */
+    setUrl(url: string): Promise<CalendarUrlResult>;
+    clearUrl(): Promise<CalendarState>;
+    onChange(cb: (s: CalendarState) => void): Unsubscribe;
+    onReminder(cb: (r: { event: CalEvent; minutes: number }) => void): Unsubscribe;
   };
   tasks: {
     /** Every running app/process, grouped by name (tasks is null on the first call). */

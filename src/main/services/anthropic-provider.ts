@@ -2,6 +2,7 @@
  *  ARC runs the loop itself so each action passes through the renderer's command cards
  *  (Approve / Cancel, activity log) before its result goes back to the model. */
 import { describeSchedule, describeStep, type Routine } from '@shared/routines';
+import { fmtTime, type CalEvent } from '@shared/calendar';
 import { weatherSummary, type WeatherData } from '@shared/weather';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
@@ -194,6 +195,12 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'get_calendar',
+    description:
+      "The user's upcoming calendar events (from yesterday to two weeks ahead) with local start/end times. Use for questions about their schedule, appointments, meetings or plans.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'get_weather',
     description:
       "Current weather and the forecast for the next few hours, today and tomorrow at the user's saved location, in their units. Use for questions about weather, rain, temperature, or whether to take a coat or umbrella.",
@@ -213,7 +220,7 @@ export function toIntent(
 ):
   | { intent: RawIntent }
   | { error: string }
-  | { local: 'list_apps' | 'list_timers' | 'get_weather' | 'list_routines' } {
+  | { local: 'list_apps' | 'list_timers' | 'get_weather' | 'list_routines' | 'get_calendar' } {
   const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const str = (k: string): string | null =>
     typeof o[k] === 'string' && (o[k] as string).trim()
@@ -293,6 +300,8 @@ export function toIntent(
       return { local: 'get_weather' };
     case 'list_routines':
       return { local: 'list_routines' };
+    case 'get_calendar':
+      return { local: 'get_calendar' };
     case 'run_routine': {
       const n = str('name');
       return n ? { intent: { action: 'run_routine', target: n } } : { error: 'Missing "name".' };
@@ -309,6 +318,25 @@ export function toIntent(
 }
 
 /** Compact telemetry for the model (bytes → GB, rounded), so tool results stay small. */
+/** Calendar events as local, human-readable times for the model. */
+export function calendarForModel(events: CalEvent[], now = Date.now()): Record<string, unknown> {
+  const day = (t: number): string =>
+    new Date(t).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+  return {
+    now: localTimeText(new Date(now)),
+    events: events
+      .filter((e) => e.end > now - 12 * 3600_000)
+      .slice(0, 60)
+      .map((e) => ({
+        title: e.title,
+        day: day(e.start),
+        ...(e.allDay ? { allDay: true } : { start: fmtTime(e.start), end: fmtTime(e.end) }),
+        ...(e.location ? { location: e.location } : {}),
+        ...(e.end <= now ? { finished: true } : e.start <= now ? { happeningNow: true } : {}),
+      })),
+  };
+}
+
 /** "Wednesday 18 November 2026, 20:37 (Europe/London)": the user's local clock. */
 export function localTimeText(now = new Date()): string {
   const date = now.toLocaleDateString([], {
@@ -380,6 +408,8 @@ export interface AnthropicDeps {
   timers?(): TimerInfo[];
   weather?(): WeatherData | null;
   routines?(): Routine[];
+  /** null = no calendar connected. */
+  calendar?(): CalEvent[] | null;
   /** Injectable for tests. */
   createClient?(apiKey: string): Pick<Anthropic, 'beta' | 'models'>;
 }
@@ -440,7 +470,7 @@ export class AnthropicProvider implements AIProvider {
       'Use the tools to act rather than describing what you would do. Actions may need the user to approve them; if one is cancelled or fails, say so briefly and suggest an alternative.',
       'Answer questions about the computer from get_system_status, never from guesses.',
       "Each user message is followed by a system note with the user's current local date and time, read from this computer's clock. It is accurate: answer questions about the time, date or day directly from it.",
-      "You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, check the weather, run the user's saved routines, and lock the PC.",
+      "You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, check the weather and the user's calendar, run their saved routines, and lock the PC.",
       machine,
     ];
     return `${this.deps.systemPrompt()}\n\n${rules.filter(Boolean).join('\n')}`;
@@ -597,6 +627,21 @@ export class AnthropicProvider implements AIProvider {
               tool_use_id: t.id,
               is_error: true,
               content: plan.error,
+            });
+            continue;
+          }
+          if ('local' in plan && plan.local === 'get_calendar') {
+            const events = this.deps.calendar?.() ?? null;
+            results.push({
+              type: 'tool_result',
+              tool_use_id: t.id,
+              ...(events
+                ? { content: JSON.stringify(calendarForModel(events)) }
+                : {
+                    is_error: true,
+                    content:
+                      'No calendar is connected. The user can add their Google Calendar in Settings › General › Calendar.',
+                  }),
             });
             continue;
           }
