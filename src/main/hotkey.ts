@@ -7,7 +7,10 @@ const FALLBACKS = ['CommandOrControl+Shift+Space', 'Alt+Shift+Space'];
 export class Hotkey {
   private current: string | null = null;
 
-  constructor(private readonly onTrigger: () => void) {}
+  constructor(
+    private readonly onTrigger: () => void,
+    private readonly fallbacks: readonly string[] = FALLBACKS,
+  ) {}
 
   get active(): string | null {
     return this.current;
@@ -15,7 +18,8 @@ export class Hotkey {
 
   register(preferred: string): { active: string | null; fellBack: boolean } {
     this.unregister();
-    for (const accel of [preferred, ...FALLBACKS.filter((f) => f !== preferred)]) {
+    if (!preferred) return { active: null, fellBack: false }; // turned off
+    for (const accel of [preferred, ...this.fallbacks.filter((f) => f !== preferred)]) {
       try {
         if (globalShortcut.register(accel, this.onTrigger)) {
           this.current = accel;

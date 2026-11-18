@@ -72,6 +72,8 @@ This creates `dist\ARC-<version>-x64-nsis.exe` (installer) and `dist\ARC-<versio
 
 - **Talking to ARC:** click the mic in the message box and speak; ARC sends it when you pause (or hold the mic and let go). Esc cancels. Speech is turned into text by Whisper running on your own PC: free, and your voice is never uploaded. The model downloads once the first time (Standard ≈ 75 MB, Better ≈ 250 MB, Settings › Voice) into `%APPDATA%\ARC\models`.
 - **ARC's voice:** Settings › Voice › Voice › **Fish Audio**, paste your Fish Audio API key (fish.audio › API keys) and press **Save & test**. The key is checked, then stored encrypted like the Claude key. The voice ID defaults to the one you chose; you can paste another from any fish.audio voice page. The **S2.1 Pro Free** model is used by default. Reply text is sent to Fish Audio to be spoken; if it fails, ARC falls back to the Windows voice and says why.
+- **Voice shortcut:** press **Ctrl+Alt+Space** from any app (even with ARC hidden) and speak; ARC sends it when you pause, or press it again to send straight away. Change or turn it off in Settings › Hotkeys.
+- **Wake word:** turn on **Wake word "Hey ARC"** in Settings › Voice, then say _"Hey ARC, what's the weather?"_ (or _"Hey ARC"_, wait for the chime, then speak). The mic stays on while it's enabled; only stretches of speech are checked, by Whisper on this PC, and ARC ignores what it hears while it's talking itself. A green dot on the mic button shows it's listening. It follows the assistant name you set.
 - If the mic doesn't work: Windows Settings › Privacy & security › Microphone › turn on **Let desktop apps access your microphone**.
 
 ### Routines and the morning briefing

@@ -286,7 +286,7 @@ export function VoiceTab() {
 
 export function HotkeysTab() {
   const { settings: s, update } = useSettingsStore();
-  const info = useAppInfo([s.globalHotkey]);
+  const info = useAppInfo([s.globalHotkey, s.voiceHotkey]);
   const fallback = info?.activeHotkey && info.activeHotkey !== s.globalHotkey;
   const keys: Array<[string, string]> = [
     ['Ctrl + 1…6', 'Switch tabs'],
@@ -322,6 +322,44 @@ export function HotkeysTab() {
                 onClick={() => void update({ globalHotkey: 'CommandOrControl+Space' })}
               >
                 Reset
+              </button>
+            )}
+          </div>
+        </Field>
+        <Field
+          label="Talk to ARC"
+          hint={
+            !s.voiceHotkey
+              ? 'Off.'
+              : info?.activeVoiceHotkey === null
+                ? 'Could not register it; another app may be using it.'
+                : info?.activeVoiceHotkey && info.activeVoiceHotkey !== s.voiceHotkey
+                  ? `That shortcut was taken, so ${prettyAccel(info.activeVoiceHotkey)} is active instead.`
+                  : 'Works from any app: press once and speak; ARC sends when you pause. Press again to send straight away.'
+          }
+          stacked
+        >
+          <div className="flex items-center gap-2">
+            <HotkeyRecorder
+              value={s.voiceHotkey}
+              onChange={(v) => void update({ voiceHotkey: v })}
+            />
+            {s.voiceHotkey !== 'CommandOrControl+Alt+Space' && (
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => void update({ voiceHotkey: 'CommandOrControl+Alt+Space' })}
+              >
+                Reset
+              </button>
+            )}
+            {s.voiceHotkey && (
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => void update({ voiceHotkey: '' })}
+              >
+                Turn off
               </button>
             )}
           </div>

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useConversationStore } from '@renderer/stores/conversationStore';
 import { useUiStore } from '@renderer/stores/uiStore';
+import { toggleListening } from '@renderer/voice/useSpeechInput';
 
 export const FOCUS_INPUT_EVENT = 'arc:focus-input';
 
@@ -17,6 +18,9 @@ export function useAppCommands(compact: boolean): void {
             break;
           case 'open-settings':
             useUiStore.getState().openSettings();
+            break;
+          case 'voice-toggle':
+            toggleListening();
             break;
           case 'notice':
             useConversationStore.getState().pushSystem(c.text);

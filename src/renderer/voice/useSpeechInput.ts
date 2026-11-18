@@ -142,3 +142,22 @@ export function cancelListening(): boolean {
   void finish(true);
   return true;
 }
+
+/** Keybind / wake word: start listening (click-to-talk style), or finish if already listening. */
+export function toggleListening(): void {
+  if (!useSettingsStore.getState().settings.voiceInput) {
+    useConversationStore
+      .getState()
+      .pushSystem('Voice input is off. Turn it on in Settings › Voice.');
+    return;
+  }
+  if (session) {
+    void finish();
+    return;
+  }
+  pressedAt = 0;
+  void begin();
+}
+
+export const isListening = (): boolean =>
+  session !== null || useVoiceStore.getState().mic !== 'idle';

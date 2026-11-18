@@ -165,6 +165,8 @@ export interface Settings {
   /* Hotkeys */
   /** Electron accelerator, e.g. "CommandOrControl+Space". */
   globalHotkey: string;
+  /** Start/stop talking from any app; '' = off. */
+  voiceHotkey: string;
   /* Advanced */
   /** 'anthropic' needs an API key (stored encrypted in main, never in settings). */
   provider: AiProvider;
@@ -205,6 +207,7 @@ export const DEFAULT_SETTINGS: Settings = {
   alarmSound: true,
   alarmVolume: 0.8,
   globalHotkey: 'CommandOrControl+Space',
+  voiceHotkey: 'CommandOrControl+Alt+Space',
   provider: 'mock',
   model: 'claude-haiku-5-5',
 };
@@ -216,7 +219,10 @@ export interface WindowStatePayload {
 
 /** Main → renderer requests (tray menu, global hotkey). */
 export type AppCommand =
-  { type: 'focus-input' } | { type: 'open-settings' } | { type: 'notice'; text: string };
+  | { type: 'focus-input' }
+  | { type: 'open-settings' }
+  | { type: 'notice'; text: string }
+  | { type: 'voice-toggle' };
 
 /** What extra (expensive) telemetry the renderer currently needs. */
 export interface TelemetryDetail {
@@ -256,6 +262,7 @@ export interface AppInfo {
   userDataPath: string;
   /** Global shortcut actually registered (may differ from the setting if it was taken). */
   activeHotkey: string | null;
+  activeVoiceHotkey: string | null;
 }
 
 /** One entry in userData/apps.json. */

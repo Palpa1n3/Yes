@@ -12,6 +12,7 @@ export function installArcMock(): ArcAPI {
       setAlwaysOnTop: vi.fn(),
       getState: vi.fn(async () => ({ maximized: false, compact: false })),
       setCompact: vi.fn(),
+      peek: vi.fn(),
       onState: vi.fn(() => () => undefined),
     },
     system: {
@@ -127,6 +128,7 @@ export function installArcMock(): ArcAPI {
         platform: 'win32',
         userDataPath: 'C:/x',
         activeHotkey: 'CommandOrControl+Space',
+        activeVoiceHotkey: 'CommandOrControl+Alt+Space',
       })),
       openPath: vi.fn(),
       resetSettings: vi.fn(async () => DEFAULT_SETTINGS),

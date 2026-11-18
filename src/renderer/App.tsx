@@ -25,6 +25,7 @@ import { bindTimers, timerTitle, useTimersStore } from '@renderer/stores/timersS
 import { startAlarm, stopAlarm } from '@renderer/voice/alarm';
 import { RingingBanner } from '@renderer/components/hud/RingingBanner';
 import { useSpeechOutput } from '@renderer/voice/useSpeechOutput';
+import { useWakeWord } from '@renderer/voice/useWakeWord';
 import { BootSequence, shouldBoot } from '@renderer/components/core/BootSequence';
 import { CompactView } from '@renderer/components/hud/CompactView';
 import { useReducedMotion } from '@renderer/hooks/useReducedMotion';
@@ -60,6 +61,7 @@ export function App() {
   useFakeAudio();
   useAppCommands(compact);
   useSpeechOutput();
+  useWakeWord();
 
   useEffect(() => bindSettingsSync(), []);
 

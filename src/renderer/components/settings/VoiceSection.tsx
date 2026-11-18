@@ -226,7 +226,7 @@ export function VoiceSection() {
       <Section title="Voice input">
         <Field
           label="Microphone"
-          hint="Click the mic and speak; ARC sends it when you pause. Or hold the mic and let go. Esc cancels."
+          hint="Click the mic (or press the voice shortcut, see Hotkeys) and speak; ARC sends it when you pause. Or hold the mic and let go. Esc cancels."
         >
           <Toggle
             label="Voice input"
@@ -259,9 +259,14 @@ export function VoiceSection() {
         </Field>
         <Field
           label={`Wake word “Hey ${s.assistantName}”`}
-          hint="Not available yet: listening all the time would keep your processor busy."
+          hint={`Say “Hey ${s.assistantName}” then your request, all in one go or after the chime. The mic stays on while this is on (Windows shows the mic icon); only speech is checked, on this PC. Music or TV nearby makes it work harder.`}
         >
-          <Toggle label="Wake word" checked={false} onChange={() => undefined} disabled />
+          <Toggle
+            label="Wake word"
+            checked={s.wakeWord}
+            onChange={(v) => void update({ wakeWord: v })}
+            disabled={!s.voiceInput}
+          />
         </Field>
       </Section>
     </>

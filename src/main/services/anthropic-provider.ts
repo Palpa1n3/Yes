@@ -309,10 +309,23 @@ export function toIntent(
 }
 
 /** Compact telemetry for the model (bytes → GB, rounded), so tool results stay small. */
+/** "Wednesday 18 November 2026, 20:37 (Europe/London)": the user's local clock. */
+export function localTimeText(now = new Date()): string {
+  const date = now.toLocaleDateString([], {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${date}, ${time} (${Intl.DateTimeFormat().resolvedOptions().timeZone})`;
+}
+
 export function statsForModel(s: SystemStats): Record<string, unknown> {
   const gb = (b: number | null | undefined): number | null =>
     b == null ? null : Math.round((b / 1024 ** 3) * 10) / 10;
   return {
+    localTime: localTimeText(new Date(s.timestamp || Date.now())),
     cpu: {
       loadPct: Math.round(s.cpu.load),
       threads: s.cpu.cores.length,
@@ -374,11 +387,18 @@ export interface AnthropicDeps {
 export class AnthropicProvider implements AIProvider {
   readonly id = 'anthropic';
   private transcript: Msg[] = [];
+  /** The top-level system prompt, fixed for the life of a conversation: Claude's earlier
+   *  thinking is only valid while it stays byte-identical. Later changes are appended. */
+  private system: string | null = null;
+  /** The instructions most recently given (frozen ones, or the last appended update). */
+  private lastSystem: string | null = null;
 
   constructor(private readonly deps: AnthropicDeps) {}
 
   reset(): void {
     this.transcript = [];
+    this.system = null;
+    this.lastSystem = null;
   }
 
   private client(key: string): Pick<Anthropic, 'beta' | 'models'> {
@@ -410,7 +430,7 @@ export class AnthropicProvider implements AIProvider {
     return out;
   }
 
-  private systemBlocks(): Anthropic.Beta.BetaTextBlockParam[] {
+  private systemText(): string {
     const info = this.deps.info();
     const machine = info
       ? `The computer is "${info.hostname}" running ${info.osName} on ${info.cpuModel} (${info.cpuThreads} threads), ${Math.round(info.memTotal / 1024 ** 3)} GB RAM.`
@@ -419,17 +439,11 @@ export class AnthropicProvider implements AIProvider {
       "You live inside ARC, a desktop assistant HUD on the user's own computer. Replies appear in a small console (and may be read aloud), so write plain sentences: no markdown headings, tables or code fences unless asked.",
       'Use the tools to act rather than describing what you would do. Actions may need the user to approve them; if one is cancelled or fails, say so briefly and suggest an alternative.',
       'Answer questions about the computer from get_system_status, never from guesses.',
+      "Each user message is followed by a system note with the user's current local date and time, read from this computer's clock. It is accurate: answer questions about the time, date or day directly from it.",
       "You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, check the weather, run the user's saved routines, and lock the PC.",
       machine,
     ];
-    // Stable text first and cached: personality changes are rare, so this prefix is reused.
-    return [
-      {
-        type: 'text',
-        text: `${this.deps.systemPrompt()}\n\n${rules.filter(Boolean).join('\n')}`,
-        cache_control: { type: 'ephemeral' },
-      },
-    ];
+    return `${this.deps.systemPrompt()}\n\n${rules.filter(Boolean).join('\n')}`;
   }
 
   async *send(
@@ -443,7 +457,7 @@ export class AnthropicProvider implements AIProvider {
     const userText = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
 
     if (this.transcript.length > MAX_TRANSCRIPT) {
-      this.transcript = [];
+      this.reset();
       yield {
         type: 'notice',
         message: 'This conversation got long, so I started a fresh context for the AI.',
@@ -456,38 +470,65 @@ export class AnthropicProvider implements AIProvider {
     /** Set once the turn left the transcript complete; otherwise it's rolled back below. */
     let finished = false;
     const now = new Date();
+    // Instructions (personality, name, machine details) can change mid-conversation.
+    // Rewriting the top-level system prompt would invalidate Claude's earlier thinking,
+    // so the change is appended at this point instead, where it becomes true.
+    const current = this.systemText();
+    if (this.transcript.length === 0 || this.system === null) {
+      this.system = current;
+      this.lastSystem = current;
+    }
+    const changed = current !== this.lastSystem;
+    this.lastSystem = current;
     // Per-turn context as a mid-conversation system message keeps the cached prefix intact.
     this.transcript.push(
       { role: 'user', content: userText },
       {
         role: 'system',
-        content: `Local time: ${now.toLocaleString()} (${Intl.DateTimeFormat().resolvedOptions().timeZone}).`,
+        content: [
+          `Current local date and time (from this computer's clock): ${localTimeText(now)}.`,
+          changed
+            ? `Your instructions have been updated. From now on, follow these instead of the earlier ones:\n\n${current}`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
       },
     );
+    const system = this.system;
+    let strippedThinking = false;
 
     try {
       let jsonRetries = 0;
       for (let step = 0; step < MAX_STEPS; step++) {
         const usesFallback = model !== 'claude-haiku-5-5'; // Haiku has no server-side fallback
-        const stream = client.beta.messages.stream(
-          {
-            model,
-            max_tokens: 64000,
-            system: this.systemBlocks(),
-            tools: TOOLS,
-            // A snapshot: retries must not see messages appended later in this turn.
-            messages: [...this.transcript],
-            // Conversational route: low effort keeps replies quick and cheap.
-            output_config: { effort: 'low' },
-            ...(usesFallback
-              ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const }
-              : {}),
-          },
-          { signal: opts.signal },
-        );
-
         let message: Anthropic.Beta.BetaMessage;
         try {
+          const stream = client.beta.messages.stream(
+            {
+              model,
+              max_tokens: 64000,
+              // Stable text, cached: the same for every request in this conversation.
+              system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+              tools: TOOLS,
+              // A snapshot: retries must not see messages appended later in this turn.
+              messages: [...this.transcript],
+              // Conversational route: low effort keeps replies quick and cheap.
+              output_config: { effort: 'low' },
+              // If earlier thinking no longer matches the history, drop it rather than fail.
+              thinking: {
+                type: 'adaptive',
+                block_binding: { prefix_mismatch_behavior: 'drop_block' },
+              },
+              betas: [
+                'thinking-binding-controls-2026-08-01',
+                ...(usesFallback ? ['server-side-fallback-2026-07-01'] : []),
+              ],
+              ...(usesFallback ? { fallbacks: 'default' as const } : {}),
+            },
+            { signal: opts.signal },
+          );
+
           for await (const ev of stream) {
             if (ev.type === 'content_block_delta' && ev.delta.type === 'text_delta')
               yield { type: 'text', delta: ev.delta.text };
@@ -496,6 +537,16 @@ export class AnthropicProvider implements AIProvider {
           jsonRetries = 0;
         } catch (err) {
           if (opts.signal?.aborted) throw err;
+          // Last resort for stale thinking: remove it all and retry this request once.
+          if (
+            err instanceof Anthropic.BadRequestError &&
+            !strippedThinking &&
+            isStaleThinking(err)
+          ) {
+            strippedThinking = true;
+            this.transcript = stripThinking(this.transcript);
+            continue;
+          }
           // Unparseable streamed tool input: re-issue the turn (API errors are rethrown).
           if (
             !(err instanceof Anthropic.APIError) &&
@@ -655,6 +706,24 @@ export function repairTranscript(msgs: Msg[]): Msg[] {
       return msgs.slice(0, Math.max(0, firstTurnStart(msgs, i)));
   }
   return msgs;
+}
+
+/** A 400 saying a replayed thinking block no longer matches this conversation. */
+function isStaleThinking(err: InstanceType<typeof Anthropic.BadRequestError>): boolean {
+  const detail = `${err.message} ${(err.error as { error?: { message?: string } } | undefined)?.error?.message ?? ''}`;
+  return /`?thinking`? block/i.test(detail) && /signature|different conversation/i.test(detail);
+}
+
+/** The history without any thinking blocks (text and tool calls stay). Removing all of
+ *  them is always accepted by the API; the model just loses that earlier reasoning. */
+export function stripThinking(msgs: Msg[]): Msg[] {
+  return msgs.map((m) => {
+    if (m.role !== 'assistant' || typeof m.content === 'string') return m;
+    const content = m.content.filter(
+      (b) => b.type !== 'thinking' && b.type !== 'redacted_thinking',
+    );
+    return { ...m, content: content.length ? content : [{ type: 'text', text: '…' }] };
+  });
 }
 
 /** Index of the user message that began the turn containing index i. */

@@ -89,6 +89,7 @@ export function sanitizeSettings(raw: unknown): Settings {
         ? r['alarmVolume']
         : d.alarmVolume,
     globalHotkey: str('globalHotkey', 60).trim() || d.globalHotkey,
+    voiceHotkey: str('voiceHotkey', 60).trim(),
     provider: r['provider'] === 'anthropic' ? 'anthropic' : 'mock',
     model: (AI_MODELS as readonly string[]).includes(r['model'] as string)
       ? (r['model'] as AiModel)

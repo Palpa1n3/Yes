@@ -36,6 +36,7 @@ const api: ArcAPI = {
     close: () => send(IPC.window.close),
     setAlwaysOnTop: (v) => send(IPC.window.setAlwaysOnTop, v),
     setCompact: (v) => send(IPC.window.setCompact, v),
+    peek: () => send(IPC.window.peek),
     getState: () => invoke(IPC.window.getState),
     onState: (cb) => subscribe(IPC.window.onState, cb),
   },

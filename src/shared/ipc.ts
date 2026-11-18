@@ -38,6 +38,7 @@ export const IPC = {
     close: 'window:close',
     setAlwaysOnTop: 'window:set-always-on-top',
     setCompact: 'window:set-compact',
+    peek: 'window:peek',
     getState: 'window:get-state',
     onState: 'window:state',
   },
@@ -179,6 +180,7 @@ export interface SendMap {
   [IPC.window.close]: [];
   [IPC.window.setAlwaysOnTop]: [value: boolean];
   [IPC.window.setCompact]: [value: boolean];
+  [IPC.window.peek]: [];
   [IPC.system.setDetail]: [detail: TelemetryDetail];
   [IPC.history.save]: [messages: StoredMessage[]];
   [IPC.timers.cancel]: [id: string];
@@ -225,6 +227,8 @@ export interface ArcAPI {
     setAlwaysOnTop(v: boolean): void;
     /** Collapse to (or expand from) the 420×120 always-on-top pill. */
     setCompact(v: boolean): void;
+    /** Show ARC if it's hidden, without stealing focus (wake word). */
+    peek(): void;
     getState(): Promise<WindowStatePayload>;
     onState(cb: (s: WindowStatePayload) => void): Unsubscribe;
   };

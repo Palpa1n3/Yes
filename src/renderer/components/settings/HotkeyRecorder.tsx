@@ -97,7 +97,7 @@ export function HotkeyRecorder({
       }}
       className={`min-w-[11rem] border px-3 py-1.5 text-left font-mono text-[12px] transition-colors ${recording ? 'border-amber text-amber' : 'border-line text-text-primary hover:border-accent'}`}
     >
-      {recording ? hint || 'Press keys… (Esc cancels)' : prettyAccel(value)}
+      {recording ? hint || 'Press keys… (Esc cancels)' : value ? prettyAccel(value) : 'Off'}
     </button>
   );
 }

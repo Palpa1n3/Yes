@@ -27,6 +27,7 @@ export function registerAppIpc(ctx: MainContext): void {
     platform: process.platform,
     userDataPath: userData,
     activeHotkey: ctx.hotkey.active,
+    activeVoiceHotkey: ctx.voiceHotkey.active,
   }));
 
   // Only ARC's own locations: the renderer can't ask main to open arbitrary paths.

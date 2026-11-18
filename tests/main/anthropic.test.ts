@@ -10,6 +10,8 @@ import {
   OfflineError,
   describeError,
   repairTranscript,
+  statsForModel,
+  stripThinking,
   toIntent,
 } from '../../src/main/services/anthropic-provider';
 import type { WeatherData } from '@shared/weather';
@@ -302,8 +304,136 @@ describe('AnthropicProvider', () => {
     );
     await collect(p, 'hi');
     expect(calls[0]).toMatchObject({
-      betas: ['server-side-fallback-2026-07-01'],
+      betas: ['thinking-binding-controls-2026-08-01', 'server-side-fallback-2026-07-01'],
       fallbacks: 'default',
+    });
+  });
+
+  it('gives Claude the local date and time every turn and in system status', async () => {
+    const { p, calls } = provider([{ content: [text('ok')], stop_reason: 'end_turn' }]);
+    await collect(p, 'what time is it?');
+    const msgs = calls[0]!['messages'] as Array<{ role: string; content: unknown }>;
+    const year = String(new Date().getFullYear());
+    expect(String(msgs.at(-1)?.content)).toMatch(/Current local date and time .*\d{2}:\d{2}/);
+    expect(String(msgs.at(-1)?.content)).toContain(year);
+    expect((calls[0]!['system'] as Array<{ text: string }>)[0]!.text).toMatch(
+      /answer questions about the time, date or day directly/,
+    );
+    expect(String(statsForModel(snapshot())['localTime'])).toContain(year);
+  });
+
+  it('asks the API to drop stale thinking instead of failing', async () => {
+    const { p, calls } = provider([{ content: [text('ok')], stop_reason: 'end_turn' }]);
+    await collect(p, 'hi');
+    expect(calls[0]).toMatchObject({
+      thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },
+      betas: ['thinking-binding-controls-2026-08-01'],
+    });
+    expect(calls[0]).not.toHaveProperty('fallbacks'); // Haiku has none
+  });
+
+  it('keeps the system prompt fixed in a conversation and appends changes instead', async () => {
+    let persona = 'You are ARC.';
+    const f = fakeClient([
+      {
+        content: [{ type: 'thinking', thinking: '', signature: 'sig1' }, text('One.')],
+        stop_reason: 'end_turn',
+      },
+      { content: [text('Two.')], stop_reason: 'end_turn' },
+      { content: [text('Three.')], stop_reason: 'end_turn' },
+      { content: [text('Fresh.')], stop_reason: 'end_turn' },
+    ]);
+    const p = new AnthropicProvider({
+      getKey: async () => 'sk-ant-test',
+      model: () => 'claude-haiku-5-5',
+      systemPrompt: () => persona,
+      info: () => null,
+      stats: snapshot,
+      apps: () => [],
+      createClient: () => f.client,
+    });
+    const sys = (i: number): string => (f.calls[i]!['system'] as Array<{ text: string }>)[0]!.text;
+    const lastSystemMsg = (i: number): string => {
+      const msgs = f.calls[i]!['messages'] as Array<{ role: string; content: unknown }>;
+      return String(msgs.filter((m) => m.role === 'system').at(-1)?.content);
+    };
+    await collect(p, 'one');
+    persona = 'You are JARVIS, very formal.';
+    await collect(p, 'two');
+    await collect(p, 'three');
+    expect(sys(1)).toBe(sys(0)); // byte-identical: earlier thinking stays valid
+    expect(sys(0)).toMatch(/^You are ARC\./);
+    expect(lastSystemMsg(1)).toMatch(/instructions have been updated[\s\S]*You are JARVIS/);
+    expect(lastSystemMsg(2)).not.toMatch(/updated/); // said once
+    // History before the change is untouched (append-only).
+    const before = JSON.stringify((f.calls[0]!['messages'] as unknown[]).slice(0, 2));
+    expect(JSON.stringify((f.calls[1]!['messages'] as unknown[]).slice(0, 2))).toBe(before);
+    p.reset();
+    await collect(p, 'four');
+    expect(sys(3)).toMatch(/^You are JARVIS/); // a new conversation takes the new prompt
+  });
+
+  it('strips thinking and retries once if the API still rejects it', async () => {
+    const f = fakeClient([
+      {
+        content: [{ type: 'thinking', thinking: '', signature: 's' }, text('A.')],
+        stop_reason: 'end_turn',
+      },
+      { content: [text('B.')], stop_reason: 'end_turn' },
+    ]);
+    const p = new AnthropicProvider({
+      getKey: async () => 'sk-ant-test',
+      model: () => 'claude-haiku-5-5',
+      systemPrompt: () => 'x',
+      info: () => null,
+      stats: snapshot,
+      apps: () => [],
+      createClient: () => f.client,
+    });
+    await collect(p, 'a');
+    const real = f.stream.getMockImplementation();
+    f.stream.mockImplementationOnce(() => {
+      throw new Anthropic.BadRequestError(
+        400,
+        {
+          type: 'error',
+          error: {
+            type: 'invalid_request_error',
+            message:
+              'messages.2.content.0: Invalid `signature` in `thinking` block. The block is bound to a different conversation.',
+          },
+        },
+        undefined,
+        new Headers(),
+      );
+    });
+    const chunks = await collect(p, 'b');
+    expect(chunks.at(-1)).toEqual({ type: 'done' });
+    expect(real).toBeDefined();
+    const retried = f.calls.at(-1)!['messages'] as Array<{ role: string; content: unknown }>;
+    expect(JSON.stringify(retried)).not.toContain('"thinking"');
+    expect(JSON.stringify(retried)).toContain('A.');
+  });
+
+  it('removes only thinking blocks', () => {
+    const out = stripThinking([
+      { role: 'user', content: 'hi' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: '', signature: 's' },
+          { type: 'redacted_thinking', data: 'x' },
+          { type: 'text', text: 'Hello' },
+          { type: 'tool_use', id: 't', name: 'list_apps', input: {} },
+        ],
+      },
+    ] as never);
+    expect(out[1]).toEqual({
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'Hello' },
+        { type: 'tool_use', id: 't', name: 'list_apps', input: {} },
+      ],
     });
   });
 

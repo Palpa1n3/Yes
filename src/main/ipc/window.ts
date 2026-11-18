@@ -21,6 +21,7 @@ export function registerWindowIpc(ctx: MainContext): void {
     getWindow,
   );
   on(IPC.window.setCompact, (_w, value) => ctx.setCompact(Boolean(value)), getWindow);
+  on(IPC.window.peek, () => ctx.peekWindow(), getWindow);
 
   handle(IPC.window.getState, () => ({
     maximized: getWindow()?.isMaximized() ?? false,

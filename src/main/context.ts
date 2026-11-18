@@ -14,9 +14,12 @@ export interface MainContext {
   timers: TimerService;
   compact: CompactController;
   hotkey: Hotkey;
+  voiceHotkey: Hotkey;
   updateSettings(patch: Partial<Settings>): void;
   setCompact(on: boolean): void;
   showWindow(focusInput?: boolean): void;
+  /** Show the window if hidden, without taking focus from the app in use. */
+  peekWindow(): void;
   toggleWindow(): void;
   openSettings(): void;
   /** Send a request to the renderer (queued until it has loaded). */

@@ -48,6 +48,10 @@ const ctx: MainContext = {
     },
   ),
   hotkey: new Hotkey(() => ctx.toggleWindow()),
+  voiceHotkey: new Hotkey(() => {
+    ctx.peekWindow();
+    ctx.command({ type: 'voice-toggle' });
+  }, ['CommandOrControl+Alt+V']),
   timers: new TimerService({
     file: join(app.getPath('userData'), 'timers.json'),
     onChange: (list) => emit(getWindow(), IPC.timers.onChange, list),
@@ -65,6 +69,12 @@ const ctx: MainContext = {
     w.show();
     w.focus();
     if (focusInput) ctx.command({ type: 'focus-input' });
+  },
+  peekWindow: () => {
+    const w = getWindow();
+    if (!w || isShown(w)) return;
+    if (w.isMinimized()) w.restore();
+    w.showInactive();
   },
   toggleWindow: () => {
     const w = getWindow();
@@ -127,6 +137,22 @@ function applyHotkey(accel: string): void {
   tray.refresh();
 }
 
+function applyVoiceHotkey(accel: string): void {
+  const { active, fellBack } = ctx.voiceHotkey.register(accel);
+  if (fellBack)
+    ctx.command({
+      type: 'notice',
+      text: active
+        ? `${prettyAccelerator(accel)} is in use by another app, so ${prettyAccelerator(active)} starts voice input.`
+        : `I couldn't register ${prettyAccelerator(accel)} for voice input; another app may be using it.`,
+    });
+}
+
+/** The wake word needs the hidden window to keep processing the mic. */
+function applyBackgroundThrottling(): void {
+  getWindow()?.webContents.setBackgroundThrottling(!settings.get().wakeWord);
+}
+
 function applyLoginItem(on: boolean): void {
   // Only meaningful for an installed app; in dev it would register the Electron binary.
   if (!app.isPackaged || process.platform === 'linux') return;
@@ -143,6 +169,8 @@ function firstNameFromAccount(): string {
 function onSettingsChanged(next: Settings, prev: Settings): void {
   emit(getWindow(), IPC.settings.onChange, next);
   if (next.globalHotkey !== prev.globalHotkey) applyHotkey(next.globalHotkey);
+  if (next.voiceHotkey !== prev.voiceHotkey) applyVoiceHotkey(next.voiceHotkey);
+  if (next.wakeWord !== prev.wakeWord) applyBackgroundThrottling();
   if (next.alwaysOnTop !== prev.alwaysOnTop && !ctx.compact.isCompact)
     getWindow()?.setAlwaysOnTop(next.alwaysOnTop);
   if (next.launchAtLogin !== prev.launchAtLogin) applyLoginItem(next.launchAtLogin);
@@ -265,6 +293,8 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow = createWindow();
     tray.create();
     applyHotkey(settings.get().globalHotkey);
+    applyVoiceHotkey(settings.get().voiceHotkey);
+    applyBackgroundThrottling();
 
     app.on('activate', () => {
       if (!getWindow()) mainWindow = createWindow();
@@ -278,6 +308,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('will-quit', () => {
     settings.saveNow();
     ctx.hotkey.unregister();
+    ctx.voiceHotkey.unregister();
     ctx.telemetry.stop();
     ctx.timers.dispose();
     tray.destroy();

@@ -1,6 +1,7 @@
 import { CornerDownLeft, LoaderCircle, Mic, Square } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useConversationStore } from '@renderer/stores/conversationStore';
+import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { useVoiceStore } from '@renderer/stores/voiceStore';
 import { cancelListening, useSpeechInput } from '@renderer/voice/useSpeechInput';
 import { FOCUS_INPUT_EVENT } from '@renderer/hooks/useAppCommands';
@@ -130,6 +131,7 @@ export function CommandInput({ assistantName, compact = false, autoFocus = false
   // Voice: click to talk (stops when you pause), or hold and release.
   const { press: talkStart, release: talkEnd } = useSpeechInput();
   const mic = useVoiceStore((s) => s.mic);
+  const wake = useSettingsStore((s) => s.settings.wakeWord && s.settings.voiceInput);
   const stt = useVoiceStore((s) => s.status.stt);
   const micTitle =
     mic === 'listening'
@@ -138,7 +140,7 @@ export function CommandInput({ assistantName, compact = false, autoFocus = false
         ? 'Working out what you said…'
         : stt.state === 'downloading'
           ? `Downloading the speech model ${stt.progress ?? 0}%`
-          : 'Click to talk (sends when you pause), or hold';
+          : `Click to talk (sends when you pause), or hold${wake ? ` · or say “Hey ${assistantName}”` : ''}`;
 
   return (
     <form
@@ -200,7 +202,7 @@ export function CommandInput({ assistantName, compact = false, autoFocus = false
         onPointerLeave={talkEnd}
         onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && !e.repeat && talkStart()}
         onKeyUp={(e) => (e.key === ' ' || e.key === 'Enter') && talkEnd()}
-        className={`transition-colors hover:text-accent ${
+        className={`relative transition-colors hover:text-accent ${
           mic === 'listening'
             ? 'animate-pulse text-accent drop-shadow-[0_0_6px_currentColor]'
             : mic === 'transcribing'
@@ -208,6 +210,12 @@ export function CommandInput({ assistantName, compact = false, autoFocus = false
               : 'text-text-muted'
         }`}
       >
+        {wake && mic === 'idle' && (
+          <span
+            className="pointer-events-none absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-ok shadow-[0_0_4px_currentColor]"
+            aria-hidden
+          />
+        )}
         {mic === 'transcribing' ? (
           <LoaderCircle size={16} strokeWidth={1.5} className="animate-spin" />
         ) : (
