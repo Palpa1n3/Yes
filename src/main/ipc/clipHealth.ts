@@ -1,4 +1,5 @@
-import { app, clipboard, Notification } from 'electron';
+import { notifyUser } from '../holo';
+import { app, clipboard } from 'electron';
 import os from 'node:os';
 import si from 'systeminformation';
 import { HealthMonitor, type HealthSample } from '@shared/health';
@@ -71,11 +72,7 @@ export function registerHealthIpc(ctx: MainContext): void {
       uptimeSec: os.uptime(),
     };
     for (const a of monitor.check(s)) {
-      if (Notification.isSupported())
-        new Notification({
-          title: `${ctx.settings.get().assistantName}: PC health`,
-          body: a.text,
-        }).show();
+      notifyUser(`${ctx.settings.get().assistantName} · PC health`, a.text, 'warn');
       emit(ctx.getWindow(), IPC.clipboard.onHealth, a);
     }
   };

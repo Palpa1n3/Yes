@@ -16,6 +16,10 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import { hoursSvg, mondayOf, weekSvg, weeksSummary } from '@shared/shiftChart';
+import { runAvatar } from '../../src/renderer/components/core/engines';
+import { hexToChannels } from '../../src/renderer/components/core/avatarKit';
+import type { PhoneAvatar } from '@shared/looks';
 import {
   alarmFor,
   describeShift,
@@ -89,6 +93,9 @@ interface State {
   queue: string[];
   /** Saver mode: Haiku, a shorter history and fewer web searches. */
   saver: boolean;
+  /** Accent colour from the PC (#rrggbb, '' = default) and the avatar to draw. */
+  accent: string;
+  avatar: PhoneAvatar;
   /** The PC's HTTPS address over Tailscale (tailscale serve), for automatic switching. */
   pcHttps: string;
   /** Open the full PC version automatically when the PC is on. */
@@ -142,6 +149,8 @@ const DEFAULTS: State = {
   prompts: DEFAULT_PROMPTS,
   queue: [],
   saver: false,
+  accent: '',
+  avatar: 'orb',
   pcHttps: '',
   autoSwitch: true,
   pinHash: '',
@@ -237,6 +246,12 @@ function takeHash(): void {
     goals: d.goals ?? S.goals,
     notes: [...S.newNotes, ...(d.notes ?? S.notes)],
     prompts: d.prompts ? sanitizePrompts(d.prompts) : S.prompts,
+    accent: /^#[0-9a-f]{6}$/i.test(d.look?.accent ?? '') ? (d.look?.accent ?? '') : S.accent,
+    avatar: (['orb', 'swarm', 'wave', 'head', 'none'] as const).includes(
+      d.look?.avatar as PhoneAvatar,
+    )
+      ? (d.look?.avatar as PhoneAvatar)
+      : S.avatar,
     lastPcSync: Date.now(),
     // Opened from the PC's Tailscale HTTPS address: that's the one to check.
     pcHttps: /^https:\/\//.test(d.pcUrl) ? d.pcUrl.replace(/\/+$/, '') : S.pcHttps,
@@ -990,6 +1005,39 @@ async function setPin(): Promise<void> {
   toast('PIN lock on: asked when you open Alton or come back after 5 minutes.');
 }
 
+/* ── Look: the PC's accent colour and an animated avatar (header and welcome screen) ── */
+const phoneState = (): string =>
+  busy
+    ? 'thinking'
+    : recog
+      ? 'listening'
+      : 'speechSynthesis' in window && speechSynthesis.speaking
+        ? 'speaking'
+        : 'idle';
+function mountAvatar(canvas: HTMLCanvasElement): () => void {
+  const ch = hexToChannels(S.accent || '#3fd0ff');
+  canvas.style.setProperty('--accent', ch);
+  canvas.style.setProperty('--amber', '255 181 71');
+  canvas.style.setProperty('--alert', '255 77 94');
+  if (S.avatar === 'none') return () => undefined;
+  return runAvatar(canvas, S.avatar, {
+    state: phoneState,
+    level: () => ('speechSynthesis' in window && speechSynthesis.speaking ? 0.35 : 0),
+    center: () => ({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }),
+    radius: () => Math.max(4, Math.min(canvas.clientWidth, canvas.clientHeight) / 2 - 2),
+    reduced: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
+  });
+}
+let stopHeader: () => void = () => undefined;
+let stopWelcome: () => void = () => undefined;
+function applyLook(): void {
+  if (S.accent) document.documentElement.style.setProperty('--accent', S.accent);
+  stopHeader();
+  const c = $<HTMLCanvasElement>('hdrAvatar');
+  c.hidden = S.avatar === 'none';
+  stopHeader = mountAvatar(c);
+}
+
 /* ── Offline queue ── */
 const queuedImages = new Map<string, string[]>();
 let flushing = false;
@@ -1171,6 +1219,8 @@ function assistantNode(m: PhoneMessage, liveActivity?: string): HTMLElement {
 }
 
 function renderMsgs(activity?: string): void {
+  stopWelcome();
+  stopWelcome = () => undefined;
   renderShiftCard();
   renderBackupNudge();
   const box = $('msgs');
@@ -1180,6 +1230,11 @@ function renderMsgs(activity?: string): void {
   $('researchBtn').classList.toggle('on', research);
   if (!c || !c.messages.length) {
     const w = el('div', 'welcome');
+    if (S.avatar !== 'none') {
+      const av = el('canvas', 'welcome-avatar') as HTMLCanvasElement;
+      w.appendChild(av);
+      requestAnimationFrame(() => (stopWelcome = mountAvatar(av)));
+    }
     w.appendChild(
       el(
         'h2',
@@ -1514,6 +1569,18 @@ async function pickContact(forName?: string): Promise<void> {
   }
 }
 function renderShifts(): void {
+  // Week timeline and hours (and pay) per week.
+  const colors = {
+    bar: 'var(--accent)',
+    text: '#dff3ff',
+    muted: 'var(--muted)',
+    grid: 'var(--line)',
+    today: 'rgba(120,200,255,.08)',
+  };
+  $('shiftWeek').innerHTML = S.shifts.length
+    ? weekSvg(S.shifts, mondayOf(new Date()), colors) +
+      hoursSvg(weeksSummary(S.shifts, new Date(), S.payRate, S.unpaidBreak), colors, money)
+    : '';
   const box = $('shiftList');
   box.textContent = '';
   const up = upcomingShifts(S.shifts);
@@ -1739,6 +1806,7 @@ function renderSettings(): void {
   tick('speakToggle', S.speak);
   tick('autoToggle', S.autoSend);
   tick('saverToggle', S.saver);
+  $<HTMLSelectElement>('avatarPick').value = S.avatar;
   tick('autoSwitchToggle', S.autoSwitch);
   $('pinBtn').textContent = S.pinHash ? 'Remove PIN lock' : 'Set a PIN lock';
   $<HTMLInputElement>('pcHttps').value = S.pcHttps;
@@ -1793,6 +1861,7 @@ function start(): void {
   $('app').style.display = ready ? 'contents' : 'none';
   if (ready) {
     setView(view);
+    applyLook();
     renderSpend();
     lockNow();
     void checkPc();
@@ -1863,6 +1932,11 @@ async function takeLaunchParams(): Promise<void> {
 function wire(): void {
   $('shareBtn').onclick = shareChat;
   $('mode').onclick = () => setView('set');
+  $<HTMLSelectElement>('avatarPick').onchange = (e) => {
+    S.avatar = (e.target as HTMLSelectElement).value as PhoneAvatar;
+    save();
+    applyLook();
+  };
   // PC on/off checks while the app is open, and the lock after 5 minutes away.
   setInterval(() => {
     if (!document.hidden) void checkPc();

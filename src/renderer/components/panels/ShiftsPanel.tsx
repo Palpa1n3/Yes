@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { WeekView } from './WeekView';
 import { describeShift, shiftHours, weekHours, type Shift } from '@shared/shifts';
 import { useClock } from '@renderer/hooks/useClock';
 import { untilText } from './AgendaPanel';
@@ -12,6 +13,7 @@ const at = (s: string): number => new Date(s).getTime();
 export function ShiftsPanel({ className = '' }: { className?: string }) {
   const [shifts, setShifts] = useState<Shift[] | null>(null);
   const now = useClock(60_000).getTime();
+  const [week, setWeek] = useState(false);
 
   useEffect(() => {
     const load = (): void => void window.arc.notes.shifts().then(setShifts);
@@ -49,6 +51,7 @@ export function ShiftsPanel({ className = '' }: { className?: string }) {
           )}
         </p>
       )}
+      {week && <WeekView shifts={shifts} onClose={() => setWeek(false)} />}
       <ul className="space-y-0.5">
         {upcoming.slice(0, 5).map((s, i) => (
           <li
@@ -66,6 +69,13 @@ export function ShiftsPanel({ className = '' }: { className?: string }) {
           </li>
         ))}
       </ul>
+      <button
+        type="button"
+        className="hud-button mt-2 w-full justify-center"
+        onClick={() => setWeek(true)}
+      >
+        Week view
+      </button>
     </Panel>
   );
 }

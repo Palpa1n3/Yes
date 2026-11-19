@@ -1,3 +1,4 @@
+import type { AvatarStyle } from '@shared/types';
 import { PromptsSection } from './PromptsSection';
 import { useUiStore } from '@renderer/stores/uiStore';
 import { SETUP_EVENT } from '@renderer/components/hud/SetupGuide';
@@ -18,6 +19,7 @@ const HOURS = Array.from({ length: 24 }, (_, h) => ({
 }));
 import { AiSection } from './AiSection';
 import { VoiceSection } from './VoiceSection';
+import { VoiceTraining } from './VoiceTraining';
 import { CalendarSection } from './CalendarSection';
 import { EmailSection } from './EmailSection';
 import { DiscordSection } from './DiscordSection';
@@ -231,9 +233,9 @@ export function AppearanceTab() {
       <Section title="Avatar">
         <Field
           label="Centre display"
-          hint="An animated face that looks around, reacts and talks; a code ring of turning, self-rewriting code; a gold data sphere, a turning globe of light that spins up and sparks while thinking and pulses as it speaks; a blue data cloud, a shape-shifting mass of light that reacts the same way; or the classic rings."
+          hint="Face: looks around, reacts and talks. Code ring: turning, self-rewriting code. Data sphere (gold) and Data cloud (blue): globes of light. Sound wave: a glowing line that moves with the voice. Swarm: a cloud of particles. Liquid orb: a glossy blob that ripples. Wireframe head: a turning 3D head. Rings: the classic HUD."
         >
-          <Segmented<'face' | 'code' | 'sphere' | 'cloud' | 'rings'>
+          <Select<AvatarStyle>
             label="Centre display"
             value={s.avatar}
             onChange={(v) => void update({ avatar: v })}
@@ -242,12 +244,142 @@ export function AppearanceTab() {
               { value: 'code', label: 'Code ring' },
               { value: 'sphere', label: 'Data sphere' },
               { value: 'cloud', label: 'Data cloud' },
+              { value: 'wave', label: 'Sound wave' },
+              { value: 'swarm', label: 'Particle swarm' },
+              { value: 'orb', label: 'Liquid orb' },
+              { value: 'head', label: 'Wireframe head' },
               { value: 'rings', label: 'Rings' },
             ]}
           />
         </Field>
+        <Field label="Colour" hint="Its own colour, or follow the theme.">
+          <span className="flex items-center gap-2">
+            <input
+              type="color"
+              aria-label="Avatar colour"
+              value={s.avatarColor || '#3fd0ff'}
+              onChange={(e) => void update({ avatarColor: e.target.value })}
+              className="h-8 w-12 cursor-pointer rounded border border-line bg-transparent"
+            />
+            {s.avatarColor && (
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => void update({ avatarColor: '' })}
+              >
+                Use theme
+              </button>
+            )}
+          </span>
+        </Field>
+        <Field label="Size, glow and movement" stacked>
+          <div className="grid grid-cols-3 gap-4">
+            <Slider
+              label="Size"
+              min={1}
+              max={5}
+              value={s.avatarSize}
+              onChange={(v) => void update({ avatarSize: v })}
+              labels={['Small', 'Smaller', 'Normal', 'Bigger', 'Big']}
+            />
+            <Slider
+              label="Glow"
+              min={1}
+              max={5}
+              value={s.avatarGlow}
+              onChange={(v) => void update({ avatarGlow: v })}
+              labels={['Faint', 'Soft', 'Normal', 'Bright', 'Vivid']}
+            />
+            <Slider
+              label="Movement"
+              min={1}
+              max={5}
+              value={s.avatarMotion}
+              onChange={(v) => void update({ avatarMotion: v })}
+              labels={['Calm', 'Gentle', 'Normal', 'Lively', 'Hyper']}
+            />
+          </div>
+        </Field>
+        <Field
+          label="Pulse to music"
+          hint="While music is playing on the PC (Spotify, YouTube…), the avatar moves with it. The sound is only measured for loudness, on this PC; nothing is recorded."
+        >
+          <Toggle
+            label="Pulse to music"
+            checked={s.musicReactive}
+            onChange={(v) => void update({ musicReactive: v })}
+          />
+        </Field>
       </Section>
       <Section title="Effects">
+        <Field
+          label="Weather and seasons"
+          hint="Rain or snow falling behind the HUD when it's raining or snowing, frost on the edges when it's cold, a warm glow around sunset, and snow all through December."
+        >
+          <Toggle
+            label="Weather and seasons"
+            checked={s.ambient}
+            onChange={(v) => void update({ ambient: v })}
+          />
+        </Field>
+        <Field
+          label="Colours follow the time of day"
+          hint="Cooler in the morning, warm amber in the evening, dimmer at night."
+        >
+          <Toggle
+            label="Colours follow the time of day"
+            checked={s.timeTint}
+            onChange={(v) => void update({ timeTint: v })}
+          />
+        </Field>
+        <Field
+          label="Screensaver"
+          hint="When the PC has been idle this long, Alton goes full-screen with a big clock, the weather, your next shift and the avatar. Not while a video, music or a full-screen game is on."
+        >
+          <Select
+            label="Screensaver"
+            value={String(s.screensaverMinutes)}
+            onChange={(v) => void update({ screensaverMinutes: Number(v) })}
+            options={[
+              { value: '0', label: 'Off' },
+              { value: '5', label: 'After 5 minutes' },
+              { value: '10', label: 'After 10 minutes' },
+              { value: '20', label: 'After 20 minutes' },
+              { value: '30', label: 'After 30 minutes' },
+              { value: '60', label: 'After 1 hour' },
+            ]}
+          />
+        </Field>
+        <Field
+          label="Desktop widget"
+          hint="A small see-through panel in the top-right of your desktop: time, CPU, next shift and weather. Stays when Alton is closed to the tray; clicks go straight through it."
+        >
+          <Toggle
+            label="Desktop widget"
+            checked={s.desktopWidget}
+            onChange={(v) => void update({ desktopWidget: v })}
+          />
+        </Field>
+        <Field
+          label="Holographic notifications"
+          hint="Timers, reminders, leave-by and health alerts as glowing Alton cards in the corner instead of plain Windows notifications. Click one to open Alton."
+        >
+          <Toggle
+            label="Holographic notifications"
+            checked={s.holoNotifications}
+            onChange={(v) => void update({ holoNotifications: v })}
+          />
+        </Field>
+        <Field
+          label="Agent Mode view"
+          hint="While Agent Mode works, a small window in the corner shows what it sees and each step. It's left out of Alton's own screenshots."
+        >
+          <Toggle
+            label="Agent Mode view"
+            checked={s.agentPip}
+            onChange={(v) => void update({ agentPip: v })}
+          />
+        </Field>
         <Field label="Background particles">
           <Toggle
             label="Background particles"
@@ -291,6 +423,7 @@ export function VoiceTab() {
   return (
     <>
       <VoiceSection />
+      <VoiceTraining />
       <Section title="Timer alarm">
         <Field
           label="Alarm sound"

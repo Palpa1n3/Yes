@@ -1,4 +1,5 @@
-import { app, net, Notification, safeStorage } from 'electron';
+import { notifyUser } from '../holo';
+import { app, net, safeStorage } from 'electron';
 import { join } from 'node:path';
 import { fmtTime, validCalendarUrl } from '@shared/calendar';
 import { IPC } from '@shared/ipc';
@@ -18,12 +19,10 @@ export function registerCalendarIpc(ctx: MainContext): CalendarService {
     onChange: (s) => emit(ctx.getWindow(), IPC.calendar.onChange, s),
     remindMinutes: () => ctx.settings.get().calendarReminder || null,
     onReminder: (event, minutes) => {
-      if (Notification.isSupported())
-        new Notification({
-          title: event.title,
-          body: `${minutes <= 0 ? 'Starting now' : `In ${minutes} min`} · ${fmtTime(event.start)}${event.location ? ` · ${event.location}` : ''}`,
-          silent: false,
-        }).show();
+      notifyUser(
+        event.title,
+        `${minutes <= 0 ? 'Starting now' : `In ${minutes} min`} · ${fmtTime(event.start)}${event.location ? ` · ${event.location}` : ''}`,
+      );
       emit(ctx.getWindow(), IPC.calendar.onReminder, { event, minutes });
     },
   });

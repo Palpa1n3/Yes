@@ -1,3 +1,4 @@
+import { phoneAvatarFor, THEME_ACCENT } from '@shared/looks';
 /** The phone app's API (everything after pairing): chats with live replies, notes, PC controls,
  *  routines, timers, Agent Mode and a look at the screen. Messages are answered by the same
  *  Alton as on the PC (same chats, memory and approvals). */
@@ -268,6 +269,10 @@ export function makePhoneRoutes(
           .notes.slice(0, 30)
           .map((n) => n.text.slice(0, 2000)),
         prompts: st.prompts,
+        look: {
+          accent: st.avatarColor || THEME_ACCENT[st.theme],
+          avatar: phoneAvatarFor(st.avatar),
+        },
         at: Date.now(),
       };
       return ok({ payload, appUrl: st.phoneAppUrl });

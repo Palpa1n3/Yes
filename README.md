@@ -175,6 +175,15 @@ then `/function alton:castle` (cheats needed). Only block-placing commands are a
 builds relative to where you stand. It replaces blocks in the way and can't be undone, so try
 big builds in a copy of the world first.
 
+### Train Alton on your voice
+
+Settings › Voice › **Train Alton on your voice**: press the mic next to a phrase and say it.
+Whatever the speech model gets wrong is learnt ("necklion" → "Lunar Client") and fixed in
+everything you say from then on; remove any wrong ones in "What it has learnt". Add your own
+phrases, and list names you use in **Words Alton should know**. Your installed apps and Steam/
+Epic games are given to the speech model as a vocabulary hint automatically, and "open X" snaps
+to the closest installed app's name.
+
 ### Accents (speech recognition)
 
 Settings › Voice: set **Your accent** (e.g. "Welsh") and pick **Best (accents)** under
@@ -183,6 +192,41 @@ accents, at the cost of a second or two per sentence. Alton is also told that sp
 may be misheard, so it works out what you meant (or asks) instead of answering the misheard
 words. The wake word also accepts common accent versions of "Alton" (Olton, Allton…).
 The phone app uses UK English recognition.
+
+### Avatars
+
+Settings › Appearance › Avatar: Face, Code ring, Data sphere, Data cloud, **Sound wave**,
+**Particle swarm**, **Liquid orb**, **Wireframe head**, or the Rings. Pick its **colour**
+(or follow the theme), **size**, **glow** and **movement**. With **Pulse to music** on, it moves
+with whatever's playing on the PC (Spotify included; only loudness is measured, nothing is
+recorded). It looks **pleased** (brighter, a smile on the face) when an action or Agent Mode
+task works, and **confused** (a wobble, raised brow) when it didn't follow what you said.
+
+### At a glance
+
+- **Shift week view**: Overview › Shifts › **Week view** shows the week as a timeline with each
+  shift as a bar (hover for details) and hours per week; the phone's People › Shifts shows the
+  same, with pay.
+- **Journey map**: "how long to drive to…?" adds a small glowing route map to the chat.
+- **Desktop widget** (Settings › Appearance): a see-through panel in the top-right of the desktop
+  with the time, CPU, next shift and weather, even when Alton is in the tray.
+- **Holographic notifications**: timers, reminders, leave-by and health alerts as glowing Alton
+  cards in the corner (click to open Alton); switch back to Windows ones in Appearance.
+- **Agent Mode view**: while Agent Mode works, a small window shows what it sees and each step.
+- **Phone**: the phone app takes the PC's colour and avatar when you sync (orb, swarm, wave or
+  head; change it in the phone's Settings).
+
+### Ambient look and screensaver
+
+Settings › Appearance › Effects:
+
+- **Weather and seasons**: rain or snow falls behind the HUD when it's raining or snowing,
+  frost gathers on the edges when it's cold, a warm glow builds around sunset, and in December
+  it snows with a frosty tint.
+- **Colours follow the time of day**: cooler mornings, warm amber evenings, dimmer nights.
+- **Screensaver** (default after 10 idle minutes): Alton goes full-screen with a big clock,
+  the weather, your next shift and the avatar. Move the mouse or press a key to close it. It
+  won't start while a video or music is playing, a full-screen app is in front, or you're gaming.
 
 ### Saver mode
 

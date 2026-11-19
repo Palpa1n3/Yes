@@ -7,6 +7,11 @@ import { CoreCanvas } from './CoreCanvas';
 import { CoreFace } from './CoreFace';
 import { CoreCode } from './CoreCode';
 import { CoreSphere } from './CoreSphere';
+import { CoreEngine } from './CoreEngine';
+import { hexToChannels } from './avatarKit';
+import { readMusicLevel } from '@renderer/voice/musicLevel';
+import { AVATAR_STEPS } from '@shared/types';
+import { useCallback, useRef } from 'react';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { polar } from './geometry';
 
@@ -64,15 +69,26 @@ export function CoreDisplay({
   const reduced = useReducedMotion();
   const v = useTween(value);
   const avatar = useSettingsStore((x) => x.settings.avatar);
+  const look = useSettingsStore((x) => x.settings);
+  const sizeK = AVATAR_STEPS.size[look.avatarSize - 1] ?? 1;
+  const glowK = AVATAR_STEPS.glow[look.avatarGlow - 1] ?? 1;
+  const tint = hexToChannels(look.avatarColor);
+  // Voice while speaking; music (if it's playing and allowed) the rest of the time.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const level = useCallback(
+    () => (stateRef.current === 'speaking' ? getLevel() : readMusicLevel() || getLevel()),
+    [getLevel],
+  );
   /** Face and code ring show a small state label instead of the rings' readout. */
   const face = avatar !== 'rings';
 
   const cx = w / 2;
   const cy = h / 2;
   // Leave room for leader lines on both sides.
-  const R = compact
-    ? Math.max(0, Math.min(w, h) / 2 - 2)
-    : Math.max(0, Math.min(h / 2 - 8, w / 2 - 70));
+  const R =
+    (compact ? Math.max(0, Math.min(w, h) / 2 - 2) : Math.max(0, Math.min(h / 2 - 8, w / 2 - 70))) *
+    (compact ? 1 : sizeK);
   const detail = R >= 120;
   const stateLabel = STATE_LABEL[state];
   const tone = STATE_TEXT[state] ?? 'text-ice';
@@ -81,6 +97,15 @@ export function CoreDisplay({
   return (
     <div
       ref={ref}
+      style={
+        {
+          ...(tint ? { '--accent': tint, '--avatar-color': tint } : {}),
+          filter:
+            glowK === 1
+              ? undefined
+              : `brightness(${0.7 + glowK * 0.3}) saturate(${0.8 + glowK * 0.2})`,
+        } as React.CSSProperties
+      }
       className="relative h-full w-full"
       role="img"
       aria-label={`Assistant ${stateLabel ?? 'idle'}`}
@@ -119,7 +144,18 @@ export function CoreDisplay({
             })}
           </svg>
 
-          {avatar === 'sphere' || avatar === 'cloud' ? (
+          {avatar === 'wave' || avatar === 'swarm' || avatar === 'orb' || avatar === 'head' ? (
+            <CoreEngine
+              engine={avatar}
+              size={{ w, h }}
+              center={{ x: cx, y: cy }}
+              radius={R}
+              state={state}
+              reducedMotion={reduced}
+              getLevel={level}
+              themeKey={themeKey}
+            />
+          ) : avatar === 'sphere' || avatar === 'cloud' ? (
             <CoreSphere
               variant={avatar}
               size={{ w, h }}
@@ -127,7 +163,7 @@ export function CoreDisplay({
               radius={R}
               state={state}
               reducedMotion={reduced}
-              getLevel={getLevel}
+              getLevel={level}
               themeKey={themeKey}
             />
           ) : avatar === 'code' ? (
@@ -137,7 +173,7 @@ export function CoreDisplay({
               radius={R}
               state={state}
               reducedMotion={reduced}
-              getLevel={getLevel}
+              getLevel={level}
               themeKey={themeKey}
             />
           ) : face ? (
@@ -147,7 +183,7 @@ export function CoreDisplay({
               radius={R}
               state={state}
               reducedMotion={reduced}
-              getLevel={getLevel}
+              getLevel={level}
               themeKey={themeKey}
             />
           ) : (
@@ -158,7 +194,7 @@ export function CoreDisplay({
               state={state}
               ringText={ringText}
               reducedMotion={reduced}
-              getLevel={getLevel}
+              getLevel={level}
               themeKey={themeKey}
             />
           )}

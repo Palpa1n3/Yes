@@ -1,6 +1,7 @@
+import { notifyUser } from '../holo';
 /** Power: shut down, restart or sleep the PC (always with a delay that can be cancelled),
  *  and "do this when Steam finishes updating". Windows only. */
-import { app, Notification, powerSaveBlocker } from 'electron';
+import { app, powerSaveBlocker } from 'electron';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
@@ -74,8 +75,7 @@ export function registerPower(ctx: MainContext): {
   const tell = (text: string): void => {
     ctx.notify(text);
     ctx.command({ type: 'notice', text });
-    if (Notification.isSupported())
-      new Notification({ title: ctx.settings.get().assistantName, body: text }).show();
+    notifyUser(ctx.settings.get().assistantName, text);
   };
 
   const schedule = async (action: PowerAction, seconds: number, why: string): Promise<string> => {
@@ -299,6 +299,22 @@ export function registerPower(ctx: MainContext): {
                 minute: '2-digit',
               })
             : null;
+        // Show the route as a little glowing map in the chat.
+        ctx.command({
+          type: 'journey-map',
+          map: {
+            from: from.name,
+            to: dest.name,
+            minutes: j.minutes,
+            allow: j.allow,
+            km: j.km,
+            mode,
+            path: j.path ?? [
+              [from.lon, from.lat],
+              [dest.lon, dest.lat],
+            ],
+          },
+        });
         return {
           from: from.name,
           to: dest.name,

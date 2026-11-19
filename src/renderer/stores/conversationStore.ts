@@ -55,6 +55,8 @@ interface ConversationState {
   cancel(): void;
   clear(): void;
   pushSystem(text: string, tone?: 'info' | 'error'): void;
+  /** A route map card (journey times). */
+  pushMap(map: import('@shared/types').JourneyMap): void;
   pushAssistant(text: string, id?: string): void;
   markRevealed(id: string): void;
   handleChunk(chunk: StreamChunk): void;
@@ -497,6 +499,20 @@ export const useConversationStore = create<ConversationState>((set, get) => {
 
     pushSystem(text, tone = 'info') {
       update((ms) => [...ms, { id: uid(), role: 'system', text, timestamp: now(), tone }]);
+    },
+
+    pushMap(map) {
+      update((ms) => [
+        ...ms,
+        {
+          id: uid(),
+          role: 'system',
+          text: `${map.from} → ${map.to}`,
+          timestamp: now(),
+          tone: 'info',
+          map,
+        },
+      ]);
     },
 
     pushAssistant(text, id = uid()) {

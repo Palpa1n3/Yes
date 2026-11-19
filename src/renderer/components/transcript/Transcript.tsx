@@ -1,3 +1,4 @@
+import { JourneyMapCard } from './JourneyMapCard';
 import {
   ArrowDown,
   Check,
@@ -235,6 +236,12 @@ function Row({
         </li>
       );
     case 'system':
+      if (m.map)
+        return (
+          <li>
+            <JourneyMapCard map={m.map} />
+          </li>
+        );
       return (
         <li
           className={`font-mono text-[12px] ${m.tone === 'error' ? 'text-alert' : 'text-text-muted'}`}

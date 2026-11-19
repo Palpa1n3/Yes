@@ -80,6 +80,10 @@ export function sanitizeSettings(raw: unknown): Settings {
     }
     return out;
   };
+  const step = (k: string): number => {
+    const n = Number(r[k]);
+    return Number.isInteger(n) && n >= 1 && n <= 5 ? n : 3;
+  };
   const perms = (v: unknown, def: Settings['permissions']): Settings['permissions'] => {
     const o = v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
     const out = { ...def };
@@ -169,7 +173,9 @@ export function sanitizeSettings(raw: unknown): Settings {
     initiative: bool('initiative'),
     quietStart: hour('quietStart'),
     quietEnd: hour('quietEnd'),
-    avatar: (['face', 'rings', 'code', 'sphere', 'cloud'] as const).includes(r['avatar'] as 'face')
+    avatar: (
+      ['face', 'rings', 'code', 'sphere', 'cloud', 'wave', 'swarm', 'orb', 'head'] as const
+    ).includes(r['avatar'] as 'face')
       ? (r['avatar'] as Settings['avatar'])
       : d.avatar,
     sourceDir: str('sourceDir', 400).trim(),
@@ -196,8 +202,34 @@ export function sanitizeSettings(raw: unknown): Settings {
       : '',
     followUp: bool('followUp'),
     saver: bool('saver'),
+    musicReactive: bool('musicReactive'),
+    agentPip: bool('agentPip'),
+    desktopWidget: bool('desktopWidget'),
+    holoNotifications: bool('holoNotifications'),
+    avatarColor: /^#[0-9a-f]{6}$/i.test(String(r['avatarColor'] ?? ''))
+      ? String(r['avatarColor'])
+      : '',
+    avatarSize: step('avatarSize'),
+    avatarGlow: step('avatarGlow'),
+    avatarMotion: step('avatarMotion'),
     accent: str('accent', 40).trim(),
+    voiceWords: names(r['voiceWords']).slice(0, 60),
+    voiceFixes: (Array.isArray(r['voiceFixes']) ? r['voiceFixes'] : [])
+      .filter(
+        (f): f is { heard: string; meant: string } =>
+          !!f &&
+          typeof (f as { heard?: unknown }).heard === 'string' &&
+          typeof (f as { meant?: unknown }).meant === 'string',
+      )
+      .map((f) => ({ heard: f.heard.slice(0, 80), meant: f.meant.slice(0, 80) }))
+      .filter((f) => f.heard.trim() && f.meant.trim())
+      .slice(0, 100),
     leaveReminders: bool('leaveReminders'),
+    ambient: bool('ambient'),
+    timeTint: bool('timeTint'),
+    screensaverMinutes: [0, 5, 10, 20, 30, 60].includes(r['screensaverMinutes'] as number)
+      ? (r['screensaverMinutes'] as number)
+      : d.screensaverMinutes,
     homeAddress: str('homeAddress', 200).trim(),
   };
 }

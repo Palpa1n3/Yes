@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from 'react';
 import type { AssistantState } from '@shared/types';
+import { avatarMotion, moodNow } from './avatarKit';
 import { useConversationStore } from '@renderer/stores/conversationStore';
 import { voiceMood } from '@renderer/voice/providers';
 
@@ -21,8 +22,10 @@ interface Props {
 type RGB = [number, number, number];
 type Pt = [number, number];
 
-function readColors(): Record<'accent' | 'amber' | 'alert', RGB> {
-  const css = getComputedStyle(document.documentElement);
+function readColors(
+  el: Element = document.documentElement,
+): Record<'accent' | 'amber' | 'alert', RGB> {
+  const css = getComputedStyle(el);
   const parse = (name: string, fallback: RGB): RGB => {
     const parts = css.getPropertyValue(name).trim().split(/\s+/).map(Number);
     return parts.length === 3 && parts.every((n) => Number.isFinite(n)) ? (parts as RGB) : fallback;
@@ -111,7 +114,7 @@ export const CoreFace = memo(function CoreFace({
     const px = window.devicePixelRatio || 1;
     canvas.width = Math.max(1, Math.round(size.w * px));
     canvas.height = Math.max(1, Math.round(size.h * px));
-    const colors = readColors();
+    const colors = readColors(canvas);
 
     // Animated values.
     const v = {
@@ -152,7 +155,7 @@ export const CoreFace = memo(function CoreFace({
     let raf = 0;
     let last = performance.now();
     const frame = (now: number): void => {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.min(0.1, (now - last) / 1000) * avatarMotion();
       last = now;
       const {
         state: st,
@@ -179,8 +182,9 @@ export const CoreFace = memo(function CoreFace({
           .find((m) => m.role === 'assistant');
         const fresh = last && Date.now() - last.timestamp < 10_000;
         const mood = fresh && last ? voiceMood(last.text) : 'neutral';
+        const md = moodNow();
         moodTarget = {
-          smile: mood === 'excited' ? 1 : 0,
+          smile: mood === 'excited' || md.pleased > 0.2 ? 1 : 0,
           sad: mood === 'sorry' || st === 'error' ? 1 : 0,
         };
       }
@@ -283,10 +287,12 @@ export const CoreFace = memo(function CoreFace({
       ctx.lineWidth = 3;
       ctx.strokeStyle = rgba(col, 0.85);
       ctx.beginPath();
-      ctx.moveTo(-112, -74 + v.brow * 0.3 + v.sad * 6);
-      ctx.lineTo(-22, -54 + v.brow - v.sad * 14);
-      ctx.moveTo(112, -74 + v.brow * 0.3 + v.sad * 6);
-      ctx.lineTo(22, -54 + v.brow - v.sad * 14);
+      // Confused: one brow up, one down.
+      const puzzled = moodNow().confused * 14;
+      ctx.moveTo(-112, -74 + v.brow * 0.3 + v.sad * 6 - puzzled);
+      ctx.lineTo(-22, -54 + v.brow - v.sad * 14 - puzzled);
+      ctx.moveTo(112, -74 + v.brow * 0.3 + v.sad * 6 + puzzled * 0.4);
+      ctx.lineTo(22, -54 + v.brow - v.sad * 14 + puzzled * 0.6);
       ctx.stroke();
 
       // Eyes.

@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from 'react';
 import type { AssistantState } from '@shared/types';
+import { avatarMotion, moodNow } from './avatarKit';
 
 /** The data sphere: an original avatar of a slowly turning 3D globe of glowing light —
  *  arcs of "circuitry" on nested shells, drifting sparks, tilted orbit rings and a swirling
@@ -119,7 +120,12 @@ export const CoreSphere = memo(function CoreSphere({
     canvas.width = Math.max(1, Math.round(size.w * px));
     canvas.height = Math.max(1, Math.round(size.h * px));
     const cloud = variant === 'cloud';
-    const pal = PALETTES[variant];
+    const custom = getComputedStyle(canvas).getPropertyValue('--avatar-color').trim();
+    const cc = custom.split(/\s+/).map(Number);
+    const pal =
+      cc.length === 3 && cc.every((n) => Number.isFinite(n))
+        ? { base: cc as RGB, hot: mix(cc as RGB, [255, 255, 255], 0.6) }
+        : PALETTES[variant];
 
     // Circuit arcs on nested shells: most near the surface, some deeper inside.
     const arcs: Arc[] = Array.from({ length: cloud ? 300 : 210 }, (_, i) => {
@@ -170,7 +176,7 @@ export const CoreSphere = memo(function CoreSphere({
     let raf = 0;
     let last = performance.now();
     const frame = (now: number): void => {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.min(0.1, (now - last) / 1000) * avatarMotion();
       last = now;
       const {
         state: st,
@@ -185,7 +191,8 @@ export const CoreSphere = memo(function CoreSphere({
       v.glow = ease(v.glow, tg.glow, k);
       v.sparks = ease(v.sparks, tg.sparks, k);
       v.tone = mix(v.tone, tg.tone === 1 ? ORANGE : tg.tone === 2 ? RED : pal.base, k);
-      const lvl = st === 'speaking' ? Math.min(1, Math.max(0, level()) * 1.6) : 0;
+      const lvl = st === 'speaking' || st === 'idle' ? Math.min(1, Math.max(0, level()) * 1.6) : 0;
+      const md = moodNow();
       v.level = ease(v.level, lvl, still ? 1 : 1 - Math.exp(-dt * 16));
       if (!still) {
         v.yaw += v.spin * dt;
@@ -231,11 +238,11 @@ export const CoreSphere = memo(function CoreSphere({
       };
 
       ctx.save();
-      ctx.translate(c.x, c.y);
+      ctx.translate(c.x + Math.sin(v.t * 14) * 5 * md.confused, c.y);
       ctx.scale(s, s);
       ctx.globalCompositeOperation = 'lighter';
       const col = v.tone;
-      const g = v.glow * flicker;
+      const g = v.glow * flicker * (1 + md.pleased * 0.5);
 
       // Soft halo and the bright core.
       const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, S * 1.25);

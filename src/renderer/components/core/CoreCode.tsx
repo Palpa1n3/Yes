@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from 'react';
 import type { AssistantState } from '@shared/types';
+import { avatarMotion, moodNow } from './avatarKit';
 
 /** The code ring: an original avatar of concentric rings made of scrolling code characters,
  *  turning in alternate directions around a glowing core. The characters keep rewriting
@@ -19,8 +20,10 @@ interface Props {
 
 type RGB = [number, number, number];
 
-function readColors(): Record<'accent' | 'amber' | 'alert' | 'ice', RGB> {
-  const css = getComputedStyle(document.documentElement);
+function readColors(
+  el: Element = document.documentElement,
+): Record<'accent' | 'amber' | 'alert' | 'ice', RGB> {
+  const css = getComputedStyle(el);
   const parse = (name: string, fallback: RGB): RGB => {
     const parts = css.getPropertyValue(name).trim().split(/\s+/).map(Number);
     return parts.length === 3 && parts.every((n) => Number.isFinite(n)) ? (parts as RGB) : fallback;
@@ -108,7 +111,7 @@ export const CoreCode = memo(function CoreCode({
     const px = window.devicePixelRatio || 1;
     canvas.width = Math.max(1, Math.round(size.w * px));
     canvas.height = Math.max(1, Math.round(size.h * px));
-    const colors = readColors();
+    const colors = readColors(canvas);
 
     const rings: Ring[] = [
       makeRing(198, 15, 1, 0.55, 22, 3),
@@ -135,7 +138,7 @@ export const CoreCode = memo(function CoreCode({
     let raf = 0;
     let last = performance.now();
     const frame = (now: number): void => {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.min(0.1, (now - last) / 1000) * avatarMotion();
       last = now;
       const {
         state: st,
@@ -155,7 +158,8 @@ export const CoreCode = memo(function CoreCode({
         t.tone === 1 ? colors.amber : t.tone === 2 ? colors.alert : colors.accent,
         k,
       );
-      const lvl = st === 'speaking' ? Math.min(1, Math.max(0, level()) * 1.6) : 0;
+      const lvl = st === 'speaking' || st === 'idle' ? Math.min(1, Math.max(0, level()) * 1.6) : 0;
+      const md = moodNow();
       v.level = ease(v.level, lvl, still ? 1 : 1 - Math.exp(-dt * 18));
       v.pulse += dt;
       v.sweepAt += dt * 2.2;
@@ -193,11 +197,17 @@ export const CoreCode = memo(function CoreCode({
       ctx.setTransform(px, 0, 0, px, 0, 0);
       ctx.clearRect(0, 0, size.w, size.h);
       const s = R / 210;
-      const jitter = st === 'error' && !still ? (Math.random() - 0.5) * 3 : 0;
+      const jitter =
+        (st === 'error' && !still ? (Math.random() - 0.5) * 3 : 0) +
+        Math.sin(v.pulse * 14) * 5 * md.confused;
       ctx.save();
       ctx.translate(c.x + jitter, c.y);
       ctx.scale(s, s);
-      const col = v.tone;
+      const col: RGB = md.pleased
+        ? mix(v.tone, [90, 235, 160], md.pleased * 0.6)
+        : md.confused
+          ? mix(v.tone, colors.amber, md.confused * 0.5)
+          : v.tone;
       const breathe = 1 + v.level * 0.06 + Math.sin(v.pulse * 1.4) * 0.008;
 
       // Core: soft glow, a turning hexagon and a bright centre that swells with the voice.

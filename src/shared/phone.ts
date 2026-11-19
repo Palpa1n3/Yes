@@ -62,6 +62,8 @@ export interface SyncFromPc {
   notes?: string[];
   /** Saved prompts (/fix, /summarize...). */
   prompts?: Array<{ name: string; text: string }>;
+  /** The PC's look: accent colour (#rrggbb) and avatar. */
+  look?: { accent: string; avatar: string };
   at: number;
 }
 

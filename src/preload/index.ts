@@ -170,7 +170,7 @@ const api: ArcAPI = {
     setFishKey: (k) => invoke(IPC.voice.setFishKey, k),
     clearFishKey: () => invoke(IPC.voice.clearFishKey),
     speak: (t) => invoke(IPC.voice.speak, t),
-    transcribe: (s) => invoke(IPC.voice.transcribe, s),
+    transcribe: (s, raw) => invoke(IPC.voice.transcribe, s, raw),
     prepare: () => send(IPC.voice.prepare),
     onStatus: (cb) => subscribe(IPC.voice.onStatus, cb),
   },

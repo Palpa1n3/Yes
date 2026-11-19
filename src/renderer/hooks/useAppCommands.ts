@@ -45,6 +45,12 @@ export function useAppCommands(compact: boolean): void {
           case 'notice':
             useConversationStore.getState().pushSystem(c.text);
             break;
+          case 'journey-map':
+            useConversationStore.getState().pushMap(c.map);
+            break;
+          case 'screensaver':
+            window.dispatchEvent(new CustomEvent('arc:screensaver', { detail: c.on }));
+            break;
           case 'clipboard-actions': {
             // Only the Overview and Chat tabs have a command line.
             const ui = useUiStore.getState();

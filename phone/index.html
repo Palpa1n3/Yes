@@ -426,6 +426,20 @@
       .lock[hidden] {
         display: none;
       }
+      .hdr-avatar {
+        width: 34px;
+        height: 34px;
+        flex: none;
+      }
+      .hdr-avatar[hidden] {
+        display: none;
+      }
+      .welcome-avatar {
+        display: block;
+        width: 150px;
+        height: 150px;
+        margin: 0 auto 6px;
+      }
       .nudge {
         margin: 8px 12px 0;
         padding: 8px 10px;
@@ -842,6 +856,7 @@
         <button class="icon" id="menuBtn" aria-label="Chats">
           <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10" /></svg>
         </button>
+        <canvas id="hdrAvatar" class="hdr-avatar" aria-hidden="true"></canvas>
         <h1 id="title">Alton</h1>
         <button class="chip" id="researchBtn">Research</button>
         <button
@@ -934,6 +949,7 @@
           <div class="card">
             <div class="lbl"><span class="dot"></span>Shifts</div>
             <p class="muted" style="margin-top: 0" id="shiftHours"></p>
+            <div id="shiftWeek" style="margin: 4px 0 8px"></div>
             <div id="shiftList"></div>
             <label class="muted" style="display: block; margin-top: 10px">
               Wake-up alarm, minutes before a shift
@@ -1083,6 +1099,14 @@
               <option value="claude-haiku-5-5">Haiku 5.5 · fastest, cheapest</option>
               <option value="claude-sonnet-5-5">Sonnet 5.5 · smarter</option>
               <option value="claude-opus-5-5">Opus 5.5 · smartest</option>
+            </select>
+            <label class="muted">Avatar</label>
+            <select id="avatarPick" class="input" style="margin: 4px 0 10px">
+              <option value="orb">Liquid orb</option>
+              <option value="swarm">Particle swarm</option>
+              <option value="wave">Sound wave</option>
+              <option value="head">Wireframe head</option>
+              <option value="none">None</option>
             </select>
             <button class="btn full" id="keyChange">Change API key</button>
           </div>

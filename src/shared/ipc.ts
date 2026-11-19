@@ -323,7 +323,7 @@ export interface InvokeMap {
   [IPC.voice.setFishKey]: { args: [key: string]; result: FishKeyResult };
   [IPC.voice.clearFishKey]: { args: []; result: VoiceStatus };
   [IPC.voice.speak]: { args: [text: string]; result: Uint8Array };
-  [IPC.voice.transcribe]: { args: [samples: Float32Array]; result: string };
+  [IPC.voice.transcribe]: { args: [samples: Float32Array, raw?: boolean]; result: string };
   [IPC.routines.save]: { args: [routine: Routine]; result: Routine[] };
   [IPC.routines.remove]: { args: [id: string]; result: Routine[] };
   [IPC.routines.startup]: { args: []; result: Routine[] };
@@ -613,7 +613,8 @@ export interface ArcAPI {
     /** MP3 audio of the text in the chosen Fish Audio voice. */
     speak(text: string): Promise<Uint8Array>;
     /** 16 kHz mono samples → text (local Whisper). */
-    transcribe(samples: Float32Array): Promise<string>;
+    /** raw: exactly what the speech model heard (no learnt fixes), for voice training. */
+    transcribe(samples: Float32Array, raw?: boolean): Promise<string>;
     /** Download/load the speech model ahead of first use. */
     prepare(): void;
     onStatus(cb: (s: VoiceStatus) => void): Unsubscribe;

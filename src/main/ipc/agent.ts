@@ -29,6 +29,21 @@ b{letter-spacing:.14em;color:#ff7070;font-size:12px}
 </style></head><body><div class="bar"><span class="dot"></span><b>AGENT MODE</b><span id="t">Starting…</span><span class="k">Esc</span><span style="font-size:11px;opacity:.75">to stop</span></div>
 <script>window.setText=function(s){document.getElementById('t').textContent=s}</script></body></html>`;
 
+/** Agent Mode picture-in-picture: what Alton sees and each step, bottom-right. */
+const PIP_HTML = `<!doctype html><html><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<style>
+html,body{margin:0;background:transparent;overflow:hidden;font-family:Segoe UI,system-ui,sans-serif;color:#d8f2ff}
+.box{margin:6px;border:1px solid rgba(80,200,255,.75);background:rgba(6,12,20,.93);box-shadow:0 0 22px rgba(60,190,255,.35);border-radius:6px;overflow:hidden}
+.hd{display:flex;align-items:center;gap:8px;padding:5px 9px;font-size:11px;letter-spacing:.14em;color:#7fd6ff;border-bottom:1px solid rgba(80,200,255,.25)}
+.dot{width:7px;height:7px;border-radius:50%;background:#ff4646;box-shadow:0 0 6px #ff4646;animation:p 1s infinite}@keyframes p{50%{opacity:.3}}
+img{display:block;width:100%;height:auto;min-height:60px;background:#03070c}
+ol{margin:0;padding:6px 10px 8px 26px;font-size:12px;max-height:96px;overflow:hidden}
+li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.55}li:last-child{opacity:1;color:#fff}
+</style></head><body><div class="box"><div class="hd"><span class="dot"></span>WHAT ALTON SEES</div><img id="i" alt=""><ol id="s"></ol></div>
+<script>window.setShot=function(u){document.getElementById('i').src=u};
+window.addStep=function(t){var o=document.getElementById('s');var l=o.lastElementChild;if(l&&l.textContent===t)return;var e=document.createElement('li');e.textContent=t;o.appendChild(e);while(o.children.length>5)o.removeChild(o.firstChild)}</script></body></html>`;
+
 export function registerAgentIpc(
   ctx: MainContext,
   extra: { lessons(): string[]; learn(lesson: string): void },
@@ -37,6 +52,7 @@ export function registerAgentIpc(
   const secrets = new SecretStore(join(app.getPath('userData'), 'anthropic-key.bin'), safeStorage);
   const input = new WinInput();
   let overlay: BrowserWindow | null = null;
+  let pip: BrowserWindow | null = null;
   let hidMain = false;
   let lastState: AgentStatus['state'] = 'idle';
   let lastLogged = 0;
@@ -80,7 +96,11 @@ export function registerAgentIpc(
       return { x: Math.round(p.x), y: Math.round(p.y) };
     },
     size: physical,
-    shot: async () => shotOf(await capture(shotSize(physical()))),
+    shot: async () => {
+      const img = await capture(shotSize(physical()));
+      pipShot(img);
+      return shotOf(img);
+    },
     zoom: async ([x0, y0, x1, y1]) => {
       const full = physical();
       const small = shotSize(full);
@@ -105,7 +125,47 @@ export function registerAgentIpc(
     },
   };
 
+  const pipShot = (img: Electron.NativeImage): void => {
+    if (!pip || pip.isDestroyed()) return;
+    const url = `data:image/jpeg;base64,${img.resize({ width: 340 }).toJPEG(60).toString('base64')}`;
+    void pip.webContents
+      .executeJavaScript(`window.setShot(${JSON.stringify(url)})`)
+      .catch(() => undefined);
+  };
+  const pipStep = (text: string): void => {
+    if (!pip || pip.isDestroyed()) return;
+    void pip.webContents
+      .executeJavaScript(`window.addStep(${JSON.stringify(text.slice(0, 120))})`)
+      .catch(() => undefined);
+  };
+  const showPip = (): void => {
+    if (!ctx.settings.get().agentPip || (pip && !pip.isDestroyed())) return;
+    const d = primary();
+    pip = new BrowserWindow({
+      width: 352,
+      height: 330,
+      x: Math.round(d.workArea.x + d.workArea.width - 360),
+      y: Math.round(d.workArea.y + d.workArea.height - 338),
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      focusable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      show: false,
+      webPreferences: { sandbox: true, contextIsolation: true, javascript: true },
+    });
+    pip.setAlwaysOnTop(true, 'screen-saver');
+    pip.setIgnoreMouseEvents(true);
+    // Never part of Alton's own screenshots.
+    pip.setContentProtection(true);
+    void pip.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(PIP_HTML)}`);
+    pip.once('ready-to-show', () => pip?.showInactive());
+  };
+
   const showOverlay = (): void => {
+    showPip();
     if (overlay && !overlay.isDestroyed()) return;
     const d = primary();
     overlay = new BrowserWindow({
@@ -139,6 +199,8 @@ export function registerAgentIpc(
   };
 
   const closeOverlay = (): void => {
+    if (pip && !pip.isDestroyed()) pip.close();
+    pip = null;
     if (overlay && !overlay.isDestroyed()) overlay.destroy();
     overlay = null;
   };
@@ -225,7 +287,10 @@ export function registerAgentIpc(
         ctx.audit.add('agent', l.text, !/^(Problem|Stopped|Denied)/.test(l.text));
       if (fresh.length) lastLogged = Math.max(...fresh.map((l) => l.at));
       emit(ctx.getWindow(), IPC.agent.onChange, s);
-      if (s.state === 'running') overlayText(`Step ${s.step}/${s.maxSteps} · ${s.last}`);
+      if (s.state === 'running') {
+        overlayText(`Step ${s.step}/${s.maxSteps} · ${s.last}`);
+        pipStep(s.last);
+      }
       // Paused: hand the PC back (Esc free, Alton visible with a Resume button).
       if (s.state === 'paused' && prev !== 'paused') {
         escOff();

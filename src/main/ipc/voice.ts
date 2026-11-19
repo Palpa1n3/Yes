@@ -1,3 +1,7 @@
+import { execFile } from 'node:child_process';
+import { applyFixes, cleanAppNames, fixAppCommand, voicePrompt } from '@shared/vocab';
+import { epicGames, steamGames } from '../services/installed-games';
+import { steamPath } from './games';
 import { app, net, safeStorage } from 'electron';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
@@ -22,10 +26,52 @@ export function registerVoiceIpc(ctx: MainContext): void {
   const status = (): VoiceStatus => ({ fishKey: key.has(), stt: whisper.getStatus() });
   const push = (): void => emit(ctx.getWindow(), IPC.voice.onStatus, status());
   const modelsDir = join(app.getPath('userData'), 'models');
+  // Installed apps and games, so "open Lunar Client" is heard as written.
+  let appNames: string[] = [];
+  const loadNames = async (): Promise<void> => {
+    if (process.platform !== 'win32') return;
+    const list = await new Promise<string>((resolve) =>
+      execFile(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          'Get-StartApps | Select-Object -ExpandProperty Name',
+        ],
+        { windowsHide: true, timeout: 30_000, maxBuffer: 4_000_000 },
+        (_e, out) => resolve(String(out ?? '')),
+      ),
+    );
+    const sp = await steamPath();
+    const games = [
+      ...(sp ? steamGames(sp) : []),
+      ...epicGames(
+        join(
+          process.env['ProgramData'] ?? 'C:\\ProgramData',
+          'Epic',
+          'EpicGamesLauncher',
+          'Data',
+          'Manifests',
+        ),
+      ),
+    ].map((g) => g.name);
+    appNames = cleanAppNames([...games, ...list.split(/\r?\n/)]);
+  };
+  setTimeout(() => void loadNames().catch(() => undefined), 20_000).unref?.();
+  setInterval(() => void loadNames().catch(() => undefined), 60 * 60_000).unref?.();
   const whisper = new WhisperService({
     load: transformersLoader(modelsDir),
     model: () => ctx.settings.get().whisperModel,
     onStatus: push,
+    prompt: () => {
+      const s = ctx.settings.get();
+      return voicePrompt(s.assistantName, s.voiceWords, s.voiceFixes, appNames.slice(0, 80));
+    },
+    correct: (text) => {
+      const s = ctx.settings.get();
+      return fixAppCommand(applyFixes(text, s.voiceFixes), [...s.voiceWords, ...appNames]);
+    },
   });
   ctx.settings.subscribe((next, prev) => {
     if (next.whisperModel !== prev.whisperModel) push();
@@ -68,9 +114,9 @@ export function registerVoiceIpc(ctx: MainContext): void {
 
   handle(IPC.voice.speak, (text) => fish.speak(String(text).slice(0, 1000)));
 
-  handle(IPC.voice.transcribe, (samples) => {
+  handle(IPC.voice.transcribe, (samples, raw) => {
     if (!(samples instanceof Float32Array)) throw new Error('Expected audio samples.');
-    return whisper.transcribe(samples);
+    return whisper.transcribe(samples, raw === true);
   });
 
   on(IPC.voice.prepare, () => void whisper.prepare().catch(() => undefined), ctx.getWindow);

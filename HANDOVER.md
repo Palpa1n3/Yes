@@ -25,7 +25,10 @@ Read this first in a new chat, then README.md for the feature list.
   `toolbox.ts`.
 - Agent Mode: `agent-runner.ts` (safety rules in its system prompt; per-task `AgentOptions`
   for shopping), `ipc/agent.ts` (queue, overlay, Esc to stop).
-- Renderer: `src/renderer/` (HUD, settings pages, avatars in `components/core/`).
+- Renderer: `src/renderer/` (HUD, settings pages, avatars in `components/core/`: React ones plus
+  framework-free `engines.ts` shared with the phone; moods/motion in `avatarKit.ts`). The same
+  bundle renders the desktop widget (`#widget`). Holographic notifications: `src/main/holo.ts`
+  (`notifyUser`). Ambient look: `shared/ambient.ts` + `hud/Ambient.tsx`.
 
 ## How to check work (all must pass before handing over)
 

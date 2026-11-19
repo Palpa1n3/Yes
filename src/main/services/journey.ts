@@ -15,6 +15,8 @@ export interface Journey {
   mode: TravelMode;
   /** Minutes to allow, with the margin (no live traffic data). */
   allow: number;
+  /** [lon, lat] points along the route, when the service returned them. */
+  path?: Array<[number, number]>;
 }
 
 /** Driving without live traffic: allow 20% more, plus 5 minutes to get going/park. */
@@ -71,10 +73,16 @@ export class JourneyService {
   }
 
   async route(from: Place, to: Place, mode: TravelMode = 'driving'): Promise<Journey | null> {
-    const url = `${ROUTERS[mode]}/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
+    const url = `${ROUTERS[mode]}/${from.lon},${from.lat};${to.lon},${to.lat}?overview=simplified&geometries=geojson`;
     const r = await this.fetch(url, { headers: HEADERS });
     if (!r.ok) return null;
-    const j = (await r.json()) as { routes?: Array<{ duration?: number; distance?: number }> };
+    const j = (await r.json()) as {
+      routes?: Array<{
+        duration?: number;
+        distance?: number;
+        geometry?: { coordinates?: Array<[number, number]> };
+      }>;
+    };
     const best = j.routes?.[0];
     if (!best || !Number.isFinite(best.duration)) return null;
     const minutes = Math.max(1, Math.round((best.duration ?? 0) / 60));
@@ -83,6 +91,9 @@ export class JourneyService {
       km: Math.round(((best.distance ?? 0) / 1000) * 10) / 10,
       mode,
       allow: allowFor(minutes, mode),
+      ...(best.geometry?.coordinates?.length
+        ? { path: best.geometry.coordinates.slice(0, 400) }
+        : {}),
     };
   }
 }

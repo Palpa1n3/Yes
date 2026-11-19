@@ -1,5 +1,8 @@
+import { useAvatarLife } from '@renderer/hooks/useAvatarLife';
+import { AmbientBack, AmbientTint } from '@renderer/components/hud/Ambient';
+import { Screensaver, SCREENSAVER_EVENT } from '@renderer/components/hud/Screensaver';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useState, type ComponentType, useCallback } from 'react';
 import { Background } from '@renderer/components/hud/Background';
 import { StatusBar } from '@renderer/components/hud/StatusBar';
 import { TopBar } from '@renderer/components/hud/TopBar';
@@ -72,6 +75,14 @@ export function App() {
   const reduced = useReducedMotion();
   const [booting, setBooting] = useState<boolean | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  useAvatarLife();
+  const [screensaver, setScreensaver] = useState(false);
+  const closeScreensaver = useCallback(() => setScreensaver(false), []);
+  useEffect(() => {
+    const on = (e: Event): void => setScreensaver((e as CustomEvent<boolean>).detail === true);
+    window.addEventListener(SCREENSAVER_EVENT, on);
+    return () => window.removeEventListener(SCREENSAVER_EVENT, on);
+  }, []);
   useEffect(() => {
     const open = (): void => setSetupOpen(true);
     window.addEventListener(SETUP_EVENT, open);
@@ -193,6 +204,9 @@ export function App() {
     <MotionConfig reducedMotion={reduced ? 'always' : 'never'}>
       <div className="app-shell" data-maximized={maximized}>
         <Background scanlines={settings.scanlines} particles={settings.particles} />
+        <AmbientBack />
+        <AmbientTint />
+        {screensaver && <Screensaver onClose={closeScreensaver} />}
         <TopBar assistantName={settings.assistantName} maximized={maximized} />
         <main className="relative z-10 min-h-0 flex-1 px-5 pb-2 pt-4">
           <h1 className="sr-only">

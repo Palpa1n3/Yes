@@ -11,6 +11,8 @@ import {
 
 export type Transcriber = (
   audio: Float32Array,
+  /** Vocabulary hint (names to spell like this); '' for none. */
+  prompt?: string,
 ) => Promise<{ text: string } | Array<{ text: string }>>;
 
 export interface WhisperDeps {
@@ -18,6 +20,10 @@ export interface WhisperDeps {
   load(modelId: string, onProgress: (pct: number) => void): Promise<Transcriber>;
   model(): WhisperModel;
   onStatus(s: SttStatus): void;
+  /** Words and names to prime the model with. */
+  prompt?(): string;
+  /** Fix the text afterwards (learnt mishearings, app names). */
+  correct?(text: string): string;
 }
 
 export class WhisperService {
@@ -81,7 +87,7 @@ export class WhisperService {
   }
 
   /** Text for 16 kHz mono audio. One transcription at a time. */
-  transcribe(samples: Float32Array): Promise<string> {
+  transcribe(samples: Float32Array, raw = false): Promise<string> {
     const audio =
       samples.length > SAMPLE_RATE * MAX_RECORD_S
         ? samples.slice(0, SAMPLE_RATE * MAX_RECORD_S)
@@ -89,9 +95,11 @@ export class WhisperService {
     const job = this.queue.then(async () => {
       if (audio.length < SAMPLE_RATE * 0.3) return '';
       const run = await this.prepare();
-      const out = await run(audio);
-      const text = Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text;
-      return cleanTranscript(text ?? '');
+      const out = await run(audio, raw ? '' : (this.d.prompt?.() ?? ''));
+      const text = cleanTranscript(
+        (Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text) ?? '',
+      );
+      return raw || !text ? text : (this.d.correct?.(text) ?? text);
     });
     this.queue = job.catch(() => undefined);
     return job;
@@ -126,7 +134,47 @@ export function transformersLoader(cacheDir: string): WhisperDeps['load'] {
         if (total > 1_000_000) onProgress((loaded / total) * 100);
       },
     });
-    return async (audio) =>
-      (await asr(audio, { chunk_length_s: 30 })) as { text: string } | Array<{ text: string }>;
+    return async (audio, prompt) => {
+      if (prompt) {
+        try {
+          return { text: await promptedRun(asr, audio, prompt) };
+        } catch {
+          /* fall through to the plain way */
+        }
+      }
+      return (await asr(audio, { chunk_length_s: 30 })) as
+        { text: string } | Array<{ text: string }>;
+    };
   };
+}
+
+/** Whisper with a "previous text" prompt: the vocabulary goes in before the audio is decoded,
+ *  which makes the model spell those names and words the way they're written there. */
+async function promptedRun(asr: unknown, audio: Float32Array, prompt: string): Promise<string> {
+  type Tok = {
+    encode(t: string, o?: { add_special_tokens?: boolean }): number[];
+    decode(ids: number[], o?: { skip_special_tokens?: boolean }): string;
+  };
+  const p = asr as {
+    processor(a: Float32Array): Promise<{ input_features: unknown }>;
+    tokenizer: Tok;
+    model: {
+      generation_config: unknown;
+      _retrieve_init_tokens(c: unknown): number[];
+      generate(o: Record<string, unknown>): Promise<{ tolist(): Array<Array<number | bigint>> }>;
+    };
+  };
+  const prev = p.tokenizer.encode('<|startofprev|>', { add_special_tokens: false });
+  if (prev.length !== 1) throw new Error('No prompt token');
+  const promptIds = p.tokenizer.encode(` ${prompt}`, { add_special_tokens: false }).slice(-180);
+  const init = p.model._retrieve_init_tokens(p.model.generation_config);
+  const start = [...prev, ...promptIds, ...init].map(Number);
+  const { input_features } = await p.processor(audio);
+  const out = await p.model.generate({
+    inputs: input_features,
+    decoder_input_ids: start,
+    max_new_tokens: 160,
+  });
+  const seq = (out.tolist()[0] ?? []).map(Number).slice(start.length);
+  return p.tokenizer.decode(seq, { skip_special_tokens: true }).trim();
 }

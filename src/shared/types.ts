@@ -169,6 +169,10 @@ export interface Settings {
   whisperModel: WhisperModel;
   /** How you speak (e.g. "Welsh"), so Alton allows for speech-recognition slips. */
   accent: string;
+  /** Names and words the speech model should know (people, places, games…). */
+  voiceWords: string[];
+  /** Learnt from voice training: what it hears → what you meant. */
+  voiceFixes: import('./vocab').VoiceFix[];
   sfx: boolean;
   sfxVolume: number; // 0–1
   wakeWord: boolean; // placeholder, not implemented yet
@@ -240,6 +244,12 @@ export interface Settings {
   homeAddress: string;
   /** "Leave by" heads-ups for calendar events with a location. */
   leaveReminders: boolean;
+  /** Weather and seasonal effects in the background (rain, frost, sunset, December snow). */
+  ambient: boolean;
+  /** Colours that follow the time of day. */
+  timeTint: boolean;
+  /** Full-screen clock after this many idle minutes (0 = off). */
+  screensaverMinutes: number;
   /** Saver mode: cheapest model for chat and research, fewer web searches, no background
    *  memory learning. Agent Mode keeps its own model. */
   saver: boolean;
@@ -255,11 +265,32 @@ export interface Settings {
   followUp: boolean;
   /** The centre of the HUD: an animated face, or the rings. */
   avatar: AvatarStyle;
+  /** Avatar colour (#rrggbb, '' = the theme's), size, glow and movement (steps 1–5). */
+  avatarColor: string;
+  avatarSize: number;
+  avatarGlow: number;
+  avatarMotion: number;
+  /** Agent Mode shows a small picture-in-picture of what it sees and does. */
+  agentPip: boolean;
+  /** Small see-through widget on the desktop (time, CPU, next shift, weather). */
+  desktopWidget: boolean;
+  /** Notifications in Alton's own style instead of plain Windows ones. */
+  holoNotifications: boolean;
+  /** Rings and avatars pulse to music playing on the PC. */
+  musicReactive: boolean;
   /** ARC's project folder, read-only, so Claude can read its own code ('' = not set). */
   sourceDir: string;
 }
 
-export type AvatarStyle = 'face' | 'rings' | 'code' | 'sphere' | 'cloud';
+export type AvatarStyle =
+  'face' | 'rings' | 'code' | 'sphere' | 'cloud' | 'wave' | 'swarm' | 'orb' | 'head';
+
+/** Avatar size, glow and movement: steps 1–5 (3 = normal). */
+export const AVATAR_STEPS = {
+  size: [0.7, 0.85, 1, 1.15, 1.3],
+  glow: [0.4, 0.7, 1, 1.3, 1.6],
+  motion: [0.4, 0.7, 1, 1.4, 1.8],
+} as const;
 
 export type AiProvider = 'mock' | 'anthropic';
 
@@ -314,6 +345,8 @@ export const DEFAULT_SETTINGS: Settings = {
   voiceInput: true,
   whisperModel: 'base',
   accent: '',
+  voiceWords: [],
+  voiceFixes: [],
   sfx: true,
   sfxVolume: 0.35,
   wakeWord: false,
@@ -341,6 +374,14 @@ export const DEFAULT_SETTINGS: Settings = {
   quietStart: 22,
   quietEnd: 8,
   avatar: 'face',
+  avatarColor: '',
+  avatarSize: 3,
+  avatarGlow: 3,
+  avatarMotion: 3,
+  musicReactive: true,
+  agentPip: true,
+  desktopWidget: false,
+  holoNotifications: true,
   sourceDir: '',
   whisper: false,
   followUp: true,
@@ -350,6 +391,9 @@ export const DEFAULT_SETTINGS: Settings = {
   monthlyBudget: 0,
   homeAddress: '',
   leaveReminders: true,
+  ambient: true,
+  timeTint: true,
+  screensaverMinutes: 10,
   saver: false,
   onboarded: false,
   prompts: DEFAULT_PROMPTS.map((p) => ({ ...p })),
@@ -395,7 +439,9 @@ export type AppCommand =
       images?: Array<{ name: string; data: string; thumb: string }>;
     }
   | { type: 'remote-cancel' }
-  | { type: 'clipboard-actions'; text: string };
+  | { type: 'clipboard-actions'; text: string }
+  | { type: 'screensaver'; on: boolean }
+  | { type: 'journey-map'; map: JourneyMap };
 
 /** What extra (expensive) telemetry the renderer currently needs. */
 export interface TelemetryDetail {
@@ -434,7 +480,27 @@ export type StoredMessage =
       previews?: import('./preview').LinkPreview[];
     }
   | { id: string; role: 'command'; timestamp: number; command: CommandInfoShared }
-  | { id: string; role: 'system'; text: string; timestamp: number; tone: 'info' | 'error' };
+  | {
+      id: string;
+      role: 'system';
+      text: string;
+      timestamp: number;
+      tone: 'info' | 'error';
+      /** A route to draw (journey times). */
+      map?: JourneyMap;
+    };
+
+/** A route for the little glowing journey map. */
+export interface JourneyMap {
+  from: string;
+  to: string;
+  minutes: number;
+  allow: number;
+  km: number;
+  mode: string;
+  /** [lon, lat] points along the route (simplified). */
+  path: Array<[number, number]>;
+}
 
 /** Facts about the running app for the Settings panel. */
 export interface AppInfo {

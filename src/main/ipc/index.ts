@@ -1,5 +1,6 @@
+import { notifyUser } from '../holo';
 import { JourneyService, LeaveReminders } from '../services/journey';
-import { shell, Notification } from 'electron';
+import { shell, powerMonitor } from 'electron';
 import type { MainContext } from '../context';
 import { SkillRegistry, systemReportSkill } from '../services/skills';
 import { toWebUrl } from '../services/command-executor';
@@ -80,8 +81,7 @@ export function registerIpc(ctx: MainContext): void {
       notify: (text) => {
         ctx.notify(text);
         ctx.command({ type: 'notice', text });
-        if (Notification.isSupported())
-          new Notification({ title: ctx.settings.get().assistantName, body: text }).show();
+        notifyUser(`${ctx.settings.get().assistantName} · Time to leave`, text, 'warn');
       },
     });
     const tick = async (): Promise<void> => {
@@ -118,6 +118,38 @@ export function registerIpc(ctx: MainContext): void {
   registerHealthIpc(ctx);
   const chats = registerChatsIpc(ctx);
   const awareness = registerAwareness(ctx);
+  // Screensaver: after the chosen idle time, Alton goes full-screen with a clock (not while
+  // something full-screen is in front, music/video is playing, or in gaming mode).
+  {
+    let active = false;
+    let wasVisible = true;
+    const tick = (): void => {
+      const s = ctx.settings.get();
+      const w = ctx.getWindow();
+      if (!w || w.isDestroyed()) return;
+      const idle = powerMonitor.getSystemIdleTime();
+      if (active) {
+        if (idle < 3) {
+          active = false;
+          w.setFullScreen(false);
+          if (!wasVisible) w.hide();
+          ctx.command({ type: 'screensaver', on: false });
+        }
+        return;
+      }
+      if (!s.screensaverMinutes || idle < s.screensaverMinutes * 60) return;
+      if (awareness.foreground()?.fullscreen) return;
+      if (media.get()?.playing) return;
+      if (s.gamingMode && gaming.get().active) return;
+      active = true;
+      wasVisible = w.isVisible();
+      w.showInactive();
+      w.setFullScreen(true);
+      ctx.command({ type: 'screensaver', on: true });
+    };
+    const t = setInterval(tick, 3000);
+    t.unref?.();
+  }
   registerAssistantIpc(ctx, {
     chats,
     notes,

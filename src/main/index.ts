@@ -1,12 +1,14 @@
+import { notifyUser, setupHolo } from './holo';
 import { ShiftStore } from './services/shift-store';
 import {
   app,
   BrowserWindow,
   globalShortcut,
   nativeImage,
-  Notification,
   shell,
   clipboard,
+  desktopCapturer,
+  screen,
 } from 'electron';
 import os from 'node:os';
 import { join } from 'node:path';
@@ -172,8 +174,7 @@ function ringTimer(t: TimerInfo): void {
     const text = `Starting the scheduled task: “${t.task.slice(0, 120)}”. Press Esc or say “stop” to take over.`;
     ctx.notify(text);
     ctx.command({ type: 'notice', text });
-    if (Notification.isSupported())
-      new Notification({ title: `🤖 ${name} · Scheduled task`, body: t.task.slice(0, 200) }).show();
+    notifyUser(`${name} · Scheduled task`, t.task.slice(0, 200));
     ctx.startAgent?.(t.task);
     return;
   }
@@ -182,19 +183,50 @@ function ringTimer(t: TimerInfo): void {
     ? `Focus session done (${Math.round(t.durationMs / 60_000)} min). Time for a short break.`
     : t.label || `${describeDuration(t.durationMs / 60_000)} timer finished`;
   if (focus) ctx.audit.add('routine', body);
-  if (Notification.isSupported()) {
-    const n = new Notification({
-      title: focus ? `🎯 ${name} · Focus done` : `⏰ ${name} · Time's up`,
-      body,
-      silent: false,
-      urgency: 'critical',
-    });
-    n.on('click', () => ctx.showWindow());
-    n.show();
-  }
+  notifyUser(focus ? `${name} · Focus done` : `${name} · Time's up`, body, focus ? 'info' : 'warn');
   const w = getWindow();
   if (w && !w.isFocused()) w.flashFrame(true);
   emit(w, IPC.timers.onRing, t);
+}
+
+/** The desktop widget: a small see-through window in the top-right corner of the main screen
+ *  (time, CPU, next shift, weather). Clicks pass through; stays when Alton is in the tray. */
+let widget: BrowserWindow | null = null;
+function applyWidget(on: boolean): void {
+  if (!on) {
+    if (widget && !widget.isDestroyed()) widget.destroy();
+    widget = null;
+    return;
+  }
+  if (widget && !widget.isDestroyed()) return;
+  const wa = screen.getPrimaryDisplay().workArea;
+  widget = new BrowserWindow({
+    width: 300,
+    height: 130,
+    x: wa.x + wa.width - 312,
+    y: wa.y + 12,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    skipTaskbar: true,
+    alwaysOnTop: false,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  widget.setIgnoreMouseEvents(true);
+  const devUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (!app.isPackaged && devUrl) void widget.loadURL(`${devUrl}#widget`);
+  else void widget.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'widget' });
+  widget.once('ready-to-show', () => widget?.showInactive());
+  widget.on('closed', () => (widget = null));
 }
 
 function applyHotkey(accel: string): void {
@@ -265,6 +297,7 @@ function firstNameFromAccount(): string {
 function onSettingsChanged(next: Settings, prev: Settings): void {
   emit(getWindow(), IPC.settings.onChange, next);
   if (next.globalHotkey !== prev.globalHotkey) applyHotkey(next.globalHotkey);
+  if (next.desktopWidget !== prev.desktopWidget) applyWidget(next.desktopWidget);
   if (next.voiceHotkey !== prev.voiceHotkey) applyVoiceHotkey(next.voiceHotkey);
   if (next.openMicHotkey !== prev.openMicHotkey) applyOpenMicHotkey(next.openMicHotkey);
   if (next.clipboardHotkey !== prev.clipboardHotkey) applyClipboardHotkey(next.clipboardHotkey);
@@ -369,6 +402,19 @@ function createWindow(): BrowserWindow {
   });
 
   trackWindowState(win, () => !ctx.compact.isCompact);
+  // Pulse-to-music: the page asks for the screen with sound; give it the system sound
+  // ("loopback", Windows) so the avatar can follow the music. Only loudness is measured.
+  win.webContents.session.setDisplayMediaRequestHandler(
+    (_req, callback) => {
+      void desktopCapturer
+        .getSources({ types: ['screen'] })
+        .then((sources) =>
+          sources[0] ? callback({ video: sources[0], audio: 'loopback' }) : callback({}),
+        )
+        .catch(() => callback({}));
+    },
+    { useSystemPicker: false },
+  );
 
   const devUrl = process.env['ELECTRON_RENDERER_URL'];
   if (!app.isPackaged && devUrl) void win.loadURL(devUrl);
@@ -404,6 +450,11 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc(ctx);
     mainWindow = createWindow();
     tray.create();
+    applyWidget(settings.get().desktopWidget);
+    setupHolo({
+      enabled: () => settings.get().holoNotifications,
+      onClick: () => ctx.showWindow(),
+    });
     applyHotkey(settings.get().globalHotkey);
     applyVoiceHotkey(settings.get().voiceHotkey);
     applyOpenMicHotkey(settings.get().openMicHotkey);

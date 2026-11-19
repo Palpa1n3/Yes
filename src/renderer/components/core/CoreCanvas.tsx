@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef } from 'react';
 import type { AssistantState } from '@shared/types';
+import { avatarMotion } from './avatarKit';
 import {
   STATE_TARGETS,
   mixColor,
@@ -33,8 +34,8 @@ interface Props {
   themeKey: string;
 }
 
-function readColors(): Record<CoreColor, RGB> {
-  const css = getComputedStyle(document.documentElement);
+function readColors(el: Element = document.documentElement): Record<CoreColor, RGB> {
+  const css = getComputedStyle(el);
   const parse = (name: string, fallback: RGB): RGB => {
     const parts = css.getPropertyValue(name).trim().split(/\s+/).map(Number);
     return parts.length === 3 && parts.every((n) => Number.isFinite(n)) ? (parts as RGB) : fallback;
@@ -108,7 +109,7 @@ export const CoreCanvas = memo(function CoreCanvas({
     canvas.height = Math.round(size.h * dpr);
     const scale = radius / 210;
 
-    let colors = readColors();
+    let colors = readColors(canvas);
     let params: CoreParams = { ...STATE_TARGETS[stateRef.current] };
     let textCache: { key: string; img: HTMLCanvasElement } | null = null;
     // Rotation accumulators (radians) for each ring.
@@ -330,11 +331,11 @@ export const CoreCanvas = memo(function CoreCanvas({
     const loop = (now: number): void => {
       raf = requestAnimationFrame(loop);
       frame++;
-      if (frame % 60 === 0) colors = readColors(); // picks up runtime theme swaps
+      if (frame % 60 === 0) colors = readColors(canvas); // picks up runtime theme swaps
       const st = stateRef.current;
       const calm = st === 'idle' && settled(params, STATE_TARGETS.idle);
       if (calm && now - lastPaint < IDLE_FRAME_MS) return;
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.min(0.1, (now - last) / 1000) * avatarMotion();
       last = now;
       lastPaint = now;
       paint(now, dt);
@@ -349,7 +350,7 @@ export const CoreCanvas = memo(function CoreCanvas({
 
     if (reducedMotion) {
       draw.current = () => {
-        colors = readColors();
+        colors = readColors(canvas);
         paint(performance.now(), 0);
       };
       draw.current();

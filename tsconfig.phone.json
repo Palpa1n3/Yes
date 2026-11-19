@@ -11,7 +11,16 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "noEmit": true,
-    "paths": { "@shared/*": ["./src/shared/*"] }
+    "paths": {
+      "@shared/*": ["./src/shared/*"]
+    }
   },
-  "include": ["phone/src/**/*", "src/shared/phone.ts", "vite.phone.config.ts"]
+  "include": [
+    "phone/src/**/*",
+    "src/shared/phone.ts",
+    "vite.phone.config.ts",
+    "src/renderer/components/core/engines.ts",
+    "src/renderer/components/core/avatarKit.ts",
+    "src/shared/looks.ts"
+  ]
 }
