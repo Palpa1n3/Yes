@@ -6,6 +6,8 @@ import { useUiStore } from '@renderer/stores/uiStore';
 import { Palette } from './Palette';
 import { WeatherChip } from '@renderer/components/weather/WeatherChip';
 import { GamingChip } from './GamingChip';
+import { DownloadChip } from './DownloadChip';
+import { SpendChip } from './SpendChip';
 import { OpenMicChip } from './OpenMicChip';
 import { UpdateChip } from './UpdateChip';
 import { TimerChip } from './TimerChip';
@@ -60,8 +62,10 @@ export function TopBar({ assistantName, maximized }: Props) {
         <UpdateChip />
         <OpenMicChip />
         <GamingChip />
+        <DownloadChip />
         <WeatherChip />
         <TimerChip />
+        <SpendChip />
         <Palette />
         <button
           type="button"

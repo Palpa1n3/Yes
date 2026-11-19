@@ -134,6 +134,9 @@ const api: ArcAPI = {
     start: () => invoke(IPC.gaming.start),
     stop: () => invoke(IPC.gaming.stop),
     onChange: (cb) => subscribe(IPC.gaming.onChange, cb),
+    download: (on, then) => invoke(IPC.gaming.download, on, then),
+    downloadStatus: () => invoke(IPC.gaming.downloadStatus),
+    onDownload: (cb) => subscribe(IPC.gaming.onDownload, cb),
   },
   cleanup: {
     scan: () => invoke(IPC.cleanup.scan),

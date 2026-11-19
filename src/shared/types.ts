@@ -234,6 +234,9 @@ export interface Settings {
   prompts: import('./prompts').SavedPrompt[];
   /** Show the saved prompts for what you just copied, from any app; '' = off. */
   clipboardHotkey: string;
+  /** Saver mode: cheapest model for chat and research, fewer web searches, no background
+   *  memory learning. Agent Mode keeps its own model. */
+  saver: boolean;
   /** Monthly Claude spending limit in US dollars for warnings (0 = no limit). */
   monthlyBudget: number;
   /** Where the phone-only app lives (GitHub Pages). */
@@ -250,7 +253,7 @@ export interface Settings {
   sourceDir: string;
 }
 
-export type AvatarStyle = 'face' | 'rings' | 'code';
+export type AvatarStyle = 'face' | 'rings' | 'code' | 'sphere' | 'cloud';
 
 export type AiProvider = 'mock' | 'anthropic';
 
@@ -263,6 +266,7 @@ export const PERMISSION_KEYS = [
   'set_volume',
   'media_control',
   'files',
+  'message_sellers',
 ] as const;
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 export type Permission = 'allow' | 'ask' | 'block';
@@ -337,6 +341,7 @@ export const DEFAULT_SETTINGS: Settings = {
   phoneAccess: false,
   phoneAppUrl: 'https://palpa1n3.github.io/Yes/',
   monthlyBudget: 0,
+  saver: false,
   onboarded: false,
   prompts: DEFAULT_PROMPTS.map((p) => ({ ...p })),
   clipboardHotkey: 'CommandOrControl+Alt+C',
@@ -353,6 +358,8 @@ export const DEFAULT_SETTINGS: Settings = {
     set_volume: 'allow',
     media_control: 'allow',
     files: 'allow',
+    // You asked for Alton to talk to sellers; offers and payments always need your OK.
+    message_sellers: 'allow',
   },
   hiddenPanels: [],
 };
@@ -558,6 +565,9 @@ export interface TimerInfo {
   dueAt: number;
   /** 'ringing' until dismissed or snoozed. */
   status: 'running' | 'ringing';
-  /** A focus session: suggestions and alerts stay quiet until it ends. */
-  kind?: 'focus';
+  /** A focus session (suggestions and alerts stay quiet until it ends), or a scheduled
+   *  Agent Mode task that starts by itself when the time comes. */
+  kind?: 'focus' | 'agent';
+  /** For kind 'agent': what Agent Mode should do. */
+  task?: string;
 }

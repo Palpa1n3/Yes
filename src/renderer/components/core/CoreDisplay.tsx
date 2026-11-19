@@ -6,6 +6,7 @@ import { useTween } from '@renderer/hooks/useTween';
 import { CoreCanvas } from './CoreCanvas';
 import { CoreFace } from './CoreFace';
 import { CoreCode } from './CoreCode';
+import { CoreSphere } from './CoreSphere';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { polar } from './geometry';
 
@@ -118,7 +119,18 @@ export function CoreDisplay({
             })}
           </svg>
 
-          {avatar === 'code' ? (
+          {avatar === 'sphere' || avatar === 'cloud' ? (
+            <CoreSphere
+              variant={avatar}
+              size={{ w, h }}
+              center={{ x: cx, y: cy }}
+              radius={R}
+              state={state}
+              reducedMotion={reduced}
+              getLevel={getLevel}
+              themeKey={themeKey}
+            />
+          ) : avatar === 'code' ? (
             <CoreCode
               size={{ w, h }}
               center={{ x: cx, y: cy }}
@@ -154,7 +166,16 @@ export function CoreDisplay({
           {!compact && face && stateLabel && detail && (
             <div
               className="pointer-events-none absolute left-0 right-0 text-center"
-              style={{ top: cy + R * (avatar === 'code' ? 0.27 : 0.76) }}
+              style={{
+                top:
+                  cy +
+                  R *
+                    (avatar === 'code'
+                      ? 0.27
+                      : avatar === 'sphere' || avatar === 'cloud'
+                        ? 0.9
+                        : 0.76),
+              }}
             >
               <span
                 className={`font-display uppercase text-glow-md ${tone}`}

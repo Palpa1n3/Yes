@@ -112,6 +112,67 @@ If the build fails with "Cannot create symbolic link", open Command Prompt **as 
 
 **Settings › AI › Spending** shows what Claude has cost today and this month (estimated from each reply's size at Anthropic's published prices), a 31-day chart and a breakdown by feature (chat, research, Agent Mode, memory learning). Set a **monthly limit** to be warned at 80% and 100%. The phone-only app tracks its own spending in its Settings. Your Anthropic console shows the exact bill.
 
+### Spending bar
+
+The top bar shows this month's Claude spending, e.g. **$1.23 / $10.00**, with a bar that turns
+amber at 80% of your monthly limit and red when it's reached. Hover it for today's spend and
+where the month is heading; click it for the details. Set the limit in Settings › AI ›
+Spending. The phone app shows the same bar under its header for spending on the phone.
+
+### Shopping (eBay, Amazon, Vinted…)
+
+Ask "find me a PS5 controller on eBay under £35", "make an offer on a North Face puffer in
+medium on Vinted, up to £40", or "buy AA batteries on Amazon". Agent Mode opens the site
+(signed in as you), searches, scrolls and compares total price, condition and seller rating,
+and watches for scams (sellers wanting payment or chat off the site).
+
+- **Offers and purchases always ask you first**, and payment asks a second time right before
+  the final Pay button, with the total. It never types card details; it uses what's saved.
+- **It talks to sellers**: questions about the item (condition, size, postage, more photos)
+  are sent without asking you; anything that commits you to a price still asks. Change this
+  in Settings › Privacy › Permissions › Message sellers (Just do it / Ask me / Never).
+- It never puts your address, phone or email in a message.
+- "Check my Vinted messages" reports seller replies; it can also schedule that check for later.
+  Also works with Depop, Facebook Marketplace, Gumtree and CeX.
+
+### Phone app: automatic switching and PIN lock
+
+**Automatic switching:** the phone app can open the full PC version by itself whenever the PC
+is on. It needs the PC's private HTTPS address from Tailscale:
+
+1. In the Tailscale admin console › DNS, make sure MagicDNS is on and turn on **HTTPS
+   Certificates**.
+2. On the PC, in PowerShell: `tailscale serve --bg 47615`. It prints an address like
+   `https://palpatine.tail1234.ts.net`.
+3. Open that address on the phone once, pair, then More › **Update phone app** (it saves the
+   address), or paste it in the phone app › PC tab.
+   The phone app checks once a minute while it's open; a **Full** button shows when the PC is
+   on. "Back to phone mode" on the PC page returns without bouncing back.
+
+**PIN lock:** phone app › Settings › App lock asks for a PIN when Alton opens and after 5
+minutes away. "Forgot PIN" removes the lock and the Claude key from the phone (chats stay).
+
+### Ideas go on the roadmap by themselves
+
+When you say "I wish Alton could…", a request fails for lack of a feature, or Alton spots an
+improvement, it adds a one-line idea to Notes › **Alton roadmap** (from the phone too; it
+syncs). Tell it "tick off X on the roadmap" when something's done.
+
+### Saver mode
+
+Click the leaf next to the spending chip (or type `/saver`, or Settings › AI › Spending) to
+spend less: Claude Haiku for chat and research, fewer web searches per answer, and no
+background memory learning. Agent Mode keeps its own model. The phone app has its own Saver
+mode in Settings, which also sends less of a long chat each time.
+
+### Your phone's text messages (Phone Link)
+
+Link your Android phone to the PC with Windows **Phone Link** (Samsung phones have "Link to
+Windows" built in; allow Messages). Then ask "read my messages", "what did Mum say?" or
+"reply to Sam saying I'll be there at 6". Agent Mode opens Phone Link, reads the screen and
+tells you, or types the reply and **always asks before pressing Send**. Needs Agent Mode on.
+Works from the phone companion when you're out too (PC on and unlocked).
+
 ### Chat tools
 
 Hover over an answer for **Copy**, **Read aloud** and (on the last one) **Try again**; hover over your last message for **Edit** (it goes back in the box to change and resend). Code blocks have their own **Copy** button. The phone-only app has **Try again**, **Edit**, pinned chats (☆) and **hands-free** mode (the headphones button: Alton answers out loud, then listens again; say "that's all" to stop).
@@ -182,6 +243,19 @@ in opposite directions around a glowing core. The characters rewrite themselves 
 while thinking), a bright sweep runs round while listening, the rings pulse with the voice
 while speaking, amber while acting and red on a fault.
 
+### Data sphere avatar
+
+Settings › Appearance › Centre display › **Data sphere**: a slowly turning gold globe of
+light (glowing circuit arcs on nested shells, drifting sparks, orbit rings and a swirling
+core). It spins up and throws sparks while thinking, brightens while listening, pulses with
+the voice while speaking, turns orange while acting and red on a fault.
+
+### Data cloud avatar
+
+**Data cloud** is the blue partner of the data sphere: a wide, lumpy mass of glowing cyan
+light that slowly changes shape, with the same reactions (sparks while thinking, pulsing
+while speaking, orange while acting, red on a fault).
+
 ### Shifts on the PC, rota changes, backup reminder
 
 Once you've synced the phone, the Overview tab shows a **Shifts** panel (next shift, the
@@ -201,6 +275,26 @@ Restart and Cancel shutdown buttons too.
 Turning the PC **on** has to come from outside it: use Wake-on-LAN from your phone (phone
 app › PC › Wake from phone). Wake-on-LAN must be switched on in the PC's BIOS and network
 adapter settings.
+
+### Scheduled tasks (Agent Mode on a timer)
+
+Say "at 4:50, handle this for me: continue Claude Code" (or "in an hour, …"). Alton asks you
+to approve once, then a **TASK** countdown shows at the top. When it's due, Agent Mode starts
+by itself and does it, even if you're out, and tells your phone. It still asks before anything
+risky (you can answer from the phone). The PC must be on and **unlocked**: a locked screen
+blocks the mouse and keyboard. A task that came due while Alton was closed isn't run late; you
+get a "missed" notice instead. Cancel it like a timer.
+
+### Steam download mode
+
+Say "download mode" (or type `/download`) to give Steam the connection: Alton pauses
+bandwidth-hungry background apps (OneDrive, Dropbox, Google Drive, iCloud, MEGA, other game
+launchers, torrent clients), sets Steam to high priority, keeps the PC awake and warns you if
+Steam's own download limit is on. A **Download 45% · 32 MB/s** chip shows at the top; click
+it to end early. It ends by itself when Steam finishes and reopens the paused apps.
+`/download shutdown` (or "download mode then shut down") turns the PC off afterwards, with a
+2-minute warning. Browsers are left alone, so close any videos or streams yourself. The phone
+companion has Steam download mode buttons too.
 
 ### Reading its own code
 

@@ -127,6 +127,83 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     input_schema: none,
   },
   {
+    name: 'download_mode',
+    description:
+      'Download mode: give Steam as much of the connection as possible. Pauses bandwidth-hungry background apps (OneDrive, Dropbox, Google Drive, other game launchers, torrent clients; reopened afterwards), sets Steam to high priority, keeps the PC awake and warns if Steam has a download limit set. It ends by itself when Steam finishes; "then" can shut down or sleep the PC afterwards (the user approves). on false ends it now. Browsers are left alone: suggest closing streams/videos.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        on: { type: 'boolean' },
+        then: { type: 'string', enum: ['none', 'shutdown', 'sleep'] },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'shop',
+    description:
+      'Shop online for the user with Agent Mode (eBay, Amazon, Vinted, or another shop they name): search, scroll and compare listings, and depending on "goal": "find" (report the best options with prices incl. postage), "offer" (make an offer up to max_price) or "buy" (buy the best match within max_price). Offers, Buy It Now, checkout and paying ALWAYS need the user\'s approval (twice for the final payment); card details are never typed. With "seller_questions", it messages sellers to ask those things (allowed without asking per the user\'s permission setting; anything that commits to a price still asks). Seller replies take time: offer to check back later with schedule_agent_task ("check my eBay/Vinted messages and tell me the replies"). Before calling, make sure you know what they want (item, size, condition, budget); ask if unclear.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        request: {
+          type: 'string',
+          description: 'What they want, with details: size, colour, condition, model, must-haves.',
+        },
+        site: {
+          type: 'string',
+          description: 'ebay, amazon, vinted, or another shop; default eBay.',
+        },
+        goal: { type: 'string', enum: ['find', 'offer', 'buy'] },
+        max_price: { type: 'number', description: 'Top price in pounds including postage.' },
+        seller_questions: {
+          type: 'string',
+          description: 'Questions to ask sellers of the best listings (optional).',
+        },
+        check_messages: {
+          type: 'boolean',
+          description:
+            "Instead of searching: open the site's messages, report new replies from sellers, and answer simple questions about the item.",
+        },
+      },
+      required: ['request'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'phone_messages',
+    description:
+      'Read the user\'s phone text messages, or reply to one, through Windows Phone Link (their Android phone linked to this PC). Uses Agent Mode: it opens Phone Link › Messages and reads the screen, or types a reply. "read": reports the newest conversations (optionally only from "who"); the result arrives as Agent Mode\'s report, so tell the user it is checking. "reply": types "message" in the conversation with "who" and ALWAYS asks the user before pressing Send. Never invent messages. If Phone Link isn\'t set up, explain: open Phone Link on the PC and "Link to Windows" on the phone (Samsung has it built in), sign in with the same Microsoft account, and allow Messages.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['read', 'reply'] },
+        who: {
+          type: 'string',
+          description: 'Contact name as shown in Phone Link (optional for read).',
+        },
+        message: { type: 'string', description: 'For reply: the exact text to send.' },
+      },
+      required: ['action'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'schedule_agent_task',
+    description:
+      'Schedule an Agent Mode task to run by itself later, even if the user is away (e.g. "at 4:50 continue Claude Code", "in an hour, check my downloads and restart the one that failed"). When the time comes, Agent Mode starts and uses the mouse and keyboard to do it; it still asks (on the PC and the phone) before anything risky. Use this instead of a reminder whenever the user wants something DONE at a time, not just reminded. Give "at" (24-hour HH:MM, today or the next time it comes round) or "minutes" (up to 24 hours). Write the task as clear step-by-step instructions for yourself, with the app and what to type or click. Cancel with cancel_timer.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        task: { type: 'string' },
+        at: { type: 'string', description: '24-hour local time, e.g. 16:50' },
+        minutes: { type: 'number' },
+      },
+      required: ['task'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'power_pc',
     description:
       'Shut down, restart or sleep this PC, or cancel a planned shutdown/sleep (including one waiting for Steam). The user is asked to approve, and there is always a countdown (default 1 minute) they can cancel. Use minutes for "shut down in 30 minutes".',

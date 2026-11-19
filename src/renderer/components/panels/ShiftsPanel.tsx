@@ -37,10 +37,16 @@ export function ShiftsPanel({ className = '' }: { className?: string }) {
     >
       {next && (
         <p className="mb-1.5 text-[12px] text-ice">
-          {live ? 'At work now · ends ' : 'Next shift '}
+          {live ? 'At work now · finishes ' : 'Next shift '}
           <span className="text-accent">
             {live ? next.end.slice(11, 16) : untilText(at(next.start) - now)}
           </span>
+          {!live && (
+            <span className="text-text-muted">
+              {' '}
+              · {next.start.slice(11, 16)}–{next.end.slice(11, 16)}
+            </span>
+          )}
         </p>
       )}
       <ul className="space-y-0.5">

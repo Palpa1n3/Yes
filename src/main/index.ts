@@ -158,6 +158,25 @@ const tray = new ArcTray(ctx);
  *  (which plays the alarm and shows Dismiss / Snooze). */
 function ringTimer(t: TimerInfo): void {
   const name = settings.get().assistantName;
+  // A scheduled Agent Mode task: start it (nobody needs to be there), no alarm.
+  if (t.kind === 'agent' && t.task) {
+    ctx.timers.cancel(t.id);
+    // Came due while Alton was closed or the PC was off: don't run it late by surprise.
+    if (Date.now() - t.dueAt > 30 * 60_000) {
+      const text = `Missed the scheduled task (it was due at ${new Date(t.dueAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}): “${t.task.slice(0, 120)}”. Say “handle this for me” to run it now.`;
+      ctx.notify(text);
+      ctx.command({ type: 'notice', text });
+      return;
+    }
+    ctx.audit.add('agent', `Scheduled task started: ${t.task}`);
+    const text = `Starting the scheduled task: “${t.task.slice(0, 120)}”. Press Esc or say “stop” to take over.`;
+    ctx.notify(text);
+    ctx.command({ type: 'notice', text });
+    if (Notification.isSupported())
+      new Notification({ title: `🤖 ${name} · Scheduled task`, body: t.task.slice(0, 200) }).show();
+    ctx.startAgent?.(t.task);
+    return;
+  }
   const focus = t.kind === 'focus';
   const body = focus
     ? `Focus session done (${Math.round(t.durationMs / 60_000)} min). Time for a short break.`

@@ -4,6 +4,15 @@ import { DEFAULT_SETTINGS } from '@shared/types';
 import { IDLE_AGENT } from '@shared/agent';
 
 /** A fake window.arc for renderer tests. */
+const IDLE_DOWNLOAD_MOCK = {
+  active: false,
+  since: 0,
+  games: [],
+  closed: [],
+  notes: [],
+  then: 'none' as const,
+};
+
 export function installArcMock(): ArcAPI {
   const api: ArcAPI = {
     window: {
@@ -156,6 +165,9 @@ export function installArcMock(): ArcAPI {
       onChange: vi.fn(() => () => undefined),
     },
     gaming: {
+      download: vi.fn(async () => ({ ...IDLE_DOWNLOAD_MOCK })),
+      downloadStatus: vi.fn(async () => ({ ...IDLE_DOWNLOAD_MOCK })),
+      onDownload: vi.fn(() => () => undefined),
       status: vi.fn(async () => ({
         active: false,
         game: null,

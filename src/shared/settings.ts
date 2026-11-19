@@ -168,7 +168,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     initiative: bool('initiative'),
     quietStart: hour('quietStart'),
     quietEnd: hour('quietEnd'),
-    avatar: (['face', 'rings', 'code'] as const).includes(r['avatar'] as 'face')
+    avatar: (['face', 'rings', 'code', 'sphere', 'cloud'] as const).includes(r['avatar'] as 'face')
       ? (r['avatar'] as Settings['avatar'])
       : d.avatar,
     sourceDir: str('sourceDir', 400).trim(),
@@ -194,5 +194,6 @@ export function sanitizeSettings(raw: unknown): Settings {
       ? String(r['localModel'] ?? '')
       : '',
     followUp: bool('followUp'),
+    saver: bool('saver'),
   };
 }

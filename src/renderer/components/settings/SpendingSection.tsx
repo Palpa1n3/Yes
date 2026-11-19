@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fmtUsd, type UsageSummary } from '@shared/usage';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
-import { Field, Section } from './controls';
+import { Field, Section, Toggle } from './controls';
 
 const FEATURE: Record<string, string> = {
   chat: 'Chat',
@@ -24,6 +24,12 @@ export function SpendingSection() {
   const pct = u && s.monthlyBudget ? Math.min(100, (u.month / s.monthlyBudget) * 100) : 0;
   return (
     <Section title="Spending">
+      <Field
+        label="Saver mode"
+        hint="Spend less: Claude Haiku for chat and research (about a fortieth of Opus), fewer web searches per answer, and no background memory learning. Agent Mode keeps its model. Also in the top bar (the leaf) and /saver."
+      >
+        <Toggle label="Saver mode" checked={s.saver} onChange={(v) => void update({ saver: v })} />
+      </Field>
       <div className="grid grid-cols-2 gap-3 py-2">
         <div className="rounded-[8px] border border-line/60 bg-panel/60 p-3">
           <div className="micro-label">Today</div>

@@ -65,7 +65,7 @@ export class TimerService {
     this.changed();
   }
 
-  add(minutes: number, label = '', kind?: 'focus'): TimerInfo {
+  add(minutes: number, label = '', kind?: 'focus' | 'agent', task?: string): TimerInfo {
     if (!(minutes > 0 && minutes <= MAX_MINUTES))
       throw new Error('Timers can be from a few seconds up to 24 hours.');
     if (this.timers.length >= MAX_TIMERS)
@@ -82,6 +82,7 @@ export class TimerService {
       dueAt: now + durationMs,
       status: 'running',
       ...(kind ? { kind } : {}),
+      ...(kind === 'agent' && task ? { task: task.trim().slice(0, 2000) } : {}),
     };
     this.timers.push(t);
     this.schedule(t);

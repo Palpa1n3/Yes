@@ -34,7 +34,7 @@ import type { ChatMeta, ChatsState } from './chats';
 import type { NotesOp, NotesState } from './notes';
 import type { NowPlaying } from './media';
 import type { CleanupId, CleanupResult, CleanupScan } from './cleanup';
-import type { GamingStatus } from './gaming';
+import type { GamingStatus, DownloadStatus } from './gaming';
 import type { LinkPreview } from './preview';
 import type { ClipItem } from './clipboard';
 import type { HealthAlert } from './health';
@@ -152,6 +152,9 @@ export const IPC = {
     start: 'gaming:start',
     stop: 'gaming:stop',
     onChange: 'gaming:changed',
+    download: 'gaming:download',
+    downloadStatus: 'gaming:download-status',
+    onDownload: 'gaming:download-changed',
   },
   cleanup: {
     scan: 'cleanup:scan',
@@ -306,6 +309,11 @@ export interface InvokeMap {
   [IPC.clipboard.clear]: { args: []; result: ClipItem[] };
   [IPC.gaming.start]: { args: []; result: GamingStatus };
   [IPC.gaming.stop]: { args: []; result: GamingStatus };
+  [IPC.gaming.download]: {
+    args: [on: boolean, then?: DownloadStatus['then']];
+    result: DownloadStatus | { error: string };
+  };
+  [IPC.gaming.downloadStatus]: { args: []; result: DownloadStatus };
   [IPC.cleanup.run]: { args: [ids: CleanupId[], downloads: string[]]; result: CleanupResult };
   [IPC.notes.apply]: { args: [op: NotesOp]; result: NotesState };
   [IPC.calendar.refresh]: { args: []; result: CalendarState };
@@ -402,6 +410,7 @@ export interface EventMap {
   [IPC.notes.onChange]: NotesState;
   [IPC.media.onChange]: NowPlaying | null;
   [IPC.gaming.onChange]: GamingStatus;
+  [IPC.gaming.onDownload]: DownloadStatus;
   [IPC.clipboard.onChange]: ClipItem[];
   [IPC.email.onChange]: EmailState;
   [IPC.updates.onChange]: UpdateState;
@@ -553,6 +562,13 @@ export interface ArcAPI {
     start(): Promise<GamingStatus>;
     stop(): Promise<GamingStatus>;
     onChange(cb: (s: GamingStatus) => void): Unsubscribe;
+    /** Download mode: give Steam the connection (then = what to do when it finishes). */
+    download(
+      on: boolean,
+      then?: DownloadStatus['then'],
+    ): Promise<DownloadStatus | { error: string }>;
+    downloadStatus(): Promise<DownloadStatus>;
+    onDownload(cb: (s: DownloadStatus) => void): Unsubscribe;
   };
   cleanup: {
     /** Size the known-safe places to clear, plus big/old Downloads files. */

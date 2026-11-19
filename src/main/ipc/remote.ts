@@ -85,6 +85,13 @@ export function registerRemoteIpc(
   );
   const server = new RemoteServer({
     route: phone.route,
+    pingOrigin: () => {
+      try {
+        return new URL(ctx.settings.get().phoneAppUrl).origin;
+      } catch {
+        return '';
+      }
+    },
     file: join(app.getPath('userData'), 'paired-phones.json'),
     status: () => {
       const s = ctx.telemetry.snapshot();

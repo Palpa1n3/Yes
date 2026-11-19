@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   alarmFor,
   buildIcs,
+  currentShift,
+  homeBy,
+  timeLeft,
   leaveBy,
   paidHours,
   weekPay,
@@ -199,5 +202,18 @@ describe('spotting rota changes', () => {
     );
     expect(r.result).toContain('REMOVED');
     expect(r.shifts).toHaveLength(3);
+  });
+});
+
+describe('shift end times', () => {
+  const s = { title: 'Early', start: '2026-11-20T07:00', end: '2026-11-20T15:00' };
+  it('knows the shift under way, time left and home-by', () => {
+    const at = new Date(2026, 10, 20, 12, 50);
+    expect(currentShift([s], at)).toEqual(s);
+    expect(currentShift([s], new Date(2026, 10, 20, 15, 0))).toBeNull();
+    expect(timeLeft(s, at)).toBe('2h 10m');
+    expect(timeLeft(s, new Date(2026, 10, 20, 14, 35))).toBe('25m');
+    expect(homeBy(s, 25)).toBe('15:25');
+    expect(homeBy(s, 0)).toBe('');
   });
 });

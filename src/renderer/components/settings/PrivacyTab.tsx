@@ -310,6 +310,8 @@ const PERM_LABEL: Record<PermissionKey, string> = {
   set_volume: 'Change the volume',
   media_control: 'Play / pause / skip music',
   files: 'Open folders and show files',
+  message_sellers:
+    'Message sellers (eBay, Vinted…) while shopping: questions only; offers and payments always ask',
 };
 
 function PermissionsSection() {

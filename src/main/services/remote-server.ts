@@ -42,6 +42,8 @@ export interface RemoteStatus {
 }
 
 export interface RemoteDeps {
+  /** The phone-only app's site (e.g. https://name.github.io), allowed to ping. */
+  pingOrigin?(): string;
   status(): RemoteStatus;
   /** Send a message to Alton as if typed; resolves with the reply text. */
   message(text: string): Promise<string>;
@@ -237,6 +239,17 @@ export class RemoteServer {
                 ? 'Too many wrong codes. Make a new code on the PC.'
                 : 'That code is not right.',
             });
+      }
+      // The phone-only app asks "is the PC on?" (it runs on GitHub Pages, so it needs CORS).
+      if (url.pathname === '/api/ping') {
+        const origin = this.d.pingOrigin?.() ?? '';
+        res.writeHead(200, {
+          'content-type': 'application/json',
+          'cache-control': 'no-store',
+          ...(origin ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {}),
+        });
+        res.end(JSON.stringify({ ok: true, name: this.d.status().name }));
+        return;
       }
       if (!url.pathname.startsWith('/api/')) return send(404, { error: 'Not found' });
       if (!this.authed(req)) return send(401, { error: 'Not paired' });

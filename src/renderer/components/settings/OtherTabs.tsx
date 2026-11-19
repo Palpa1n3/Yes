@@ -231,15 +231,17 @@ export function AppearanceTab() {
       <Section title="Avatar">
         <Field
           label="Centre display"
-          hint="An animated face that looks around, reacts and talks; a code ring of turning, self-rewriting code that storms while thinking and pulses as it speaks; or the classic rings."
+          hint="An animated face that looks around, reacts and talks; a code ring of turning, self-rewriting code; a gold data sphere, a turning globe of light that spins up and sparks while thinking and pulses as it speaks; a blue data cloud, a shape-shifting mass of light that reacts the same way; or the classic rings."
         >
-          <Segmented<'face' | 'code' | 'rings'>
+          <Segmented<'face' | 'code' | 'sphere' | 'cloud' | 'rings'>
             label="Centre display"
             value={s.avatar}
             onChange={(v) => void update({ avatar: v })}
             options={[
               { value: 'face', label: 'Face' },
               { value: 'code', label: 'Code ring' },
+              { value: 'sphere', label: 'Data sphere' },
+              { value: 'cloud', label: 'Data cloud' },
               { value: 'rings', label: 'Rings' },
             ]}
           />

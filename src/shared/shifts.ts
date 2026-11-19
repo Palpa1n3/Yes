@@ -306,3 +306,30 @@ export function replaceRota(saved: Shift[], incoming: Shift[], now = new Date())
     now,
   );
 }
+
+/** The shift under way right now, if any. */
+export function currentShift(shifts: Shift[], now = new Date()): Shift | null {
+  return (
+    shifts.find((s) => {
+      const a = parts(s.start);
+      const b = parts(s.end);
+      return !!a && !!b && a <= now && now < b;
+    }) ?? null
+  );
+}
+
+/** "Home by" time: the shift end plus travel minutes ('' without travel). */
+export function homeBy(s: Shift, travelMin: number): string {
+  const d = parts(s.end);
+  if (!d || !(travelMin > 0)) return '';
+  d.setMinutes(d.getMinutes() + travelMin);
+  return `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+
+/** Time left until a shift ends: "2h 10m" or "25m". */
+export function timeLeft(s: Shift, now = new Date()): string {
+  const b = parts(s.end);
+  if (!b) return '';
+  const m = Math.max(0, Math.round((b.getTime() - now.getTime()) / 60_000));
+  return m >= 60 ? `${Math.floor(m / 60)}h ${p2(m % 60)}m` : `${m}m`;
+}

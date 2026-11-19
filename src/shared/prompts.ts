@@ -18,6 +18,8 @@ export const RESERVED_PROMPT_NAMES = [
   'personality',
   'focus',
   'prompts',
+  'download',
+  'saver',
 ];
 
 export const DEFAULT_PROMPTS: SavedPrompt[] = [

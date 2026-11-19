@@ -885,6 +885,10 @@
             <button class="btn full" id="cancelOffBtn">Cancel shutdown</button>
           </div>
           <div class="row" style="margin-top: 8px">
+            <button class="btn full" id="dlBtn">Steam download mode</button
+            ><button class="btn full" id="dlOffBtn">Shut down when done</button>
+          </div>
+          <div class="row" style="margin-top: 8px">
             <button class="btn red full" id="stopBtn">Stop everything</button>
           </div>
         </section>
@@ -898,6 +902,9 @@
               address there). Chats you have on the phone come back here from its PC tab.
             </p>
             <button class="btn acc full" id="syncPhoneApp">Update phone app</button>
+            <button class="btn full" id="phoneMode" style="margin-top: 8px">
+              Back to phone mode
+            </button>
           </div>
           <div class="card">
             <div class="lbl"><span class="dot"></span>Notifications</div>
@@ -1792,6 +1799,25 @@
         $('cancelOffBtn').onclick = function () {
           power('cancel');
         };
+        $('dlBtn').onclick = function () {
+          power('download');
+        };
+        $('dlOffBtn').onclick = function () {
+          if (
+            !confirm(
+              'Download mode, then shut the PC down when Steam finishes? Only do this at home: you can’t turn it back on remotely.',
+            )
+          )
+            return;
+          api('POST', '/api/power', { action: 'download', then: 'shutdown' }).then(
+            function (r) {
+              toast(r.message || 'Done');
+            },
+            function (e) {
+              toast(e.message);
+            },
+          );
+        };
         $('sleepBtn').onclick = function () {
           if (confirm('Put the PC to sleep? Wake it with a Wake-on-LAN app or its power button.'))
             api('POST', '/api/sleep', {}).then(
@@ -1820,6 +1846,16 @@
           for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
           return JSON.parse(new TextDecoder().decode(bytes));
         }
+        $('phoneMode').onclick = function () {
+          api('GET', '/api/sync?pc=' + encodeURIComponent(location.origin)).then(
+            function (r) {
+              location.href = r.appUrl.replace(/#.*$/, '').replace(/\?.*$/, '') + '?stay=1';
+            },
+            function (e) {
+              toast(e.message);
+            },
+          );
+        };
         $('syncPhoneApp').onclick = function () {
           var pc = location.origin;
           api('GET', '/api/sync?pc=' + encodeURIComponent(pc)).then(

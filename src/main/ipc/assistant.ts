@@ -81,7 +81,8 @@ export function registerAssistantIpc(
       const key = await secrets.get();
       return key ? new Anthropic({ apiKey: key, maxRetries: 1 }) : null;
     },
-    enabled: () => getSettings().autoMemory && getSettings().provider === 'anthropic',
+    enabled: () =>
+      getSettings().autoMemory && getSettings().provider === 'anthropic' && !getSettings().saver,
     memories: () => extra.notes.memoryTexts(),
     remember: (f, category) => {
       extra.notes.remember(f, true, category);
@@ -150,8 +151,10 @@ export function registerAssistantIpc(
   const makeClaude = (): AnthropicProvider =>
     new AnthropicProvider({
       getKey: () => secrets.get(),
-      model: () => getSettings().model,
-      researchModel: () => getSettings().researchModel,
+      // Saver mode: the cheapest model for everything but Agent Mode.
+      model: () => (getSettings().saver ? 'claude-haiku-5-5' : getSettings().model),
+      researchModel: () => (getSettings().saver ? 'claude-haiku-5-5' : getSettings().researchModel),
+      saver: () => getSettings().saver,
       systemPrompt,
       info,
       stats: getStats,

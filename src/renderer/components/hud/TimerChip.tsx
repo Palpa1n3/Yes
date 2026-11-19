@@ -1,4 +1,4 @@
-import { AlarmClock, Target } from 'lucide-react';
+import { AlarmClock, Bot, Target } from 'lucide-react';
 import { useClock } from '@renderer/hooks/useClock';
 import { fmtRemaining, timerTitle, useTimersStore } from '@renderer/stores/timersStore';
 import { useUiStore } from '@renderer/stores/uiStore';
@@ -27,7 +27,9 @@ export function TimerChip() {
           : `Next timer: ${timerTitle(t)}, ${fmtRemaining(t.dueAt - now)} left`
       }
     >
-      {t.kind === 'focus' ? (
+      {t.kind === 'agent' ? (
+        <Bot size={13} strokeWidth={1.5} className="text-accent" />
+      ) : t.kind === 'focus' ? (
         <Target size={13} strokeWidth={1.5} className="text-accent" />
       ) : (
         <AlarmClock size={13} strokeWidth={1.5} />
@@ -36,7 +38,7 @@ export function TimerChip() {
         ? t.kind === 'focus'
           ? 'FOCUS DONE'
           : "TIME'S UP"
-        : `${t.kind === 'focus' ? 'FOCUS ' : ''}${fmtRemaining(t.dueAt - now)}`}
+        : `${t.kind === 'focus' ? 'FOCUS ' : t.kind === 'agent' ? 'TASK ' : ''}${fmtRemaining(t.dueAt - now)}`}
     </button>
   );
 }

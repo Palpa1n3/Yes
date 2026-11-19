@@ -1,3 +1,4 @@
+import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { PREFILL_EVENT } from '@renderer/components/transcript/Transcript';
 import { expandPrompt, needsText, type SavedPrompt } from '@shared/prompts';
 import { useConversationStore } from '@renderer/stores/conversationStore';
@@ -90,6 +91,43 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     run: startFocus,
   },
   { name: '/prompts', hint: 'Edit your saved prompts', run: () => openSettings('smart') },
+  {
+    name: '/saver',
+    hint: 'Saver mode on/off: cheapest model, fewer web searches',
+    run: () => {
+      const st = useSettingsStore.getState();
+      const on = !st.settings.saver;
+      void st.update({ saver: on });
+      say(
+        on
+          ? 'Saver mode on: Claude Haiku for chat and research, fewer web searches, no background memory learning. Agent Mode is unchanged.'
+          : 'Saver mode off: back to your chosen models.',
+      );
+    },
+  },
+  {
+    name: '/download',
+    hint: 'Steam download mode (/download off to end, /download shutdown to turn off after)',
+    run: (rest = '') => {
+      const r = rest.trim().toLowerCase();
+      if (r === 'off' || r === 'stop') {
+        void window.arc.gaming
+          .download(false)
+          .then(() => say('Download mode off. Paused apps reopened.'));
+        return;
+      }
+      const then = r.startsWith('shut') ? 'shutdown' : r.startsWith('sleep') ? 'sleep' : 'none';
+      void window.arc.gaming
+        .download(true, then)
+        .then((s) =>
+          'error' in s
+            ? say(s.error)
+            : say(
+                `Download mode on${s.games.length ? ` for ${s.games.map((g) => g.name).join(', ')}` : ' (waiting for Steam to start)'}. ${s.notes.join('. ')}.${then !== 'none' ? ` The PC will ${then === 'sleep' ? 'sleep' : 'shut down'} when it's done (2-minute warning first).` : ' It ends by itself when Steam finishes.'}`,
+              ),
+        );
+    },
+  },
 ];
 
 /** Built-ins plus the user's saved prompts. */

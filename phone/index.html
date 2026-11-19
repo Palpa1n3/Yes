@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; worker-src 'self'"
+      content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://*.ts.net; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; worker-src 'self'"
     />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon-192.png" />
@@ -153,6 +153,42 @@
         text-align: center;
         padding: 4px;
         border-bottom: 1px solid var(--line);
+      }
+      .mode {
+        position: relative;
+        cursor: pointer;
+      }
+      #spendText {
+        margin-left: 6px;
+        color: var(--text, #cfe9f5);
+      }
+      #spendText.warn {
+        color: #ffb547;
+      }
+      #spendText.over {
+        color: #ff4d5e;
+      }
+      .spendbar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -1px;
+        height: 2px;
+        background: var(--line);
+      }
+      .spendbar[hidden] {
+        display: none;
+      }
+      .spendbar i {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+      }
+      .spendbar.warn i {
+        background: #ffb547;
+      }
+      .spendbar.over i {
+        background: #ff4d5e;
       }
       main {
         flex: 1;
@@ -375,6 +411,21 @@
         font-size: 21px;
         color: var(--ice);
       }
+      .lock {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: var(--bg, #050a10);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        padding: 24px;
+      }
+      .lock[hidden] {
+        display: none;
+      }
       .nudge {
         margin: 8px 12px 0;
         padding: 8px 10px;
@@ -426,6 +477,15 @@
         flex: 1;
         text-align: center;
         text-decoration: none;
+      }
+      .sc-end {
+        margin-top: 6px;
+        font-size: 15px;
+      }
+      .sc-end b {
+        color: var(--accent);
+        font-size: 20px;
+        font-weight: 600;
       }
       .sc-tip {
         font-size: 12px;
@@ -726,6 +786,24 @@
     </style>
   </head>
   <body>
+    <div id="lock" hidden class="lock">
+      <img src="./icon-192.png" width="64" height="64" alt="" style="border-radius: 16px" />
+      <h2 style="margin: 10px 0 4px; font-weight: 500">Alton is locked</h2>
+      <input
+        id="pinInput"
+        class="input"
+        type="password"
+        inputmode="numeric"
+        autocomplete="off"
+        placeholder="PIN"
+        style="max-width: 200px; text-align: center; font-size: 20px; letter-spacing: 0.3em"
+      />
+      <button class="btn acc" id="pinGo" style="margin-top: 10px; min-width: 200px">Unlock</button>
+      <p class="muted" id="pinMsg"></p>
+      <button class="btn" id="pinForgot" style="margin-top: 18px; font-size: 13px">
+        Forgot PIN
+      </button>
+    </div>
     <div id="setup" hidden>
       <div style="text-align: center">
         <img src="./icon-192.png" width="72" height="72" alt="" style="border-radius: 18px" />
@@ -791,7 +869,13 @@
           </svg>
         </button>
       </header>
-      <div class="mode" id="mode">Phone mode · PC not needed</div>
+      <div class="mode" id="mode">
+        <span>Phone mode · PC not needed</span><span id="spendText"></span
+        ><button class="chip" id="fullBtn" hidden style="margin-left: 8px; padding: 1px 8px">
+          Full
+        </button>
+        <div class="spendbar" id="spendBar" hidden><i id="spendFill"></i></div>
+      </div>
       <main id="main">
         <section id="chatView" class="view on">
           <div class="nudge" id="backupNudge" hidden></div>
@@ -915,6 +999,17 @@
             </p>
             <a class="btn acc full" id="openPc" href="#">Open full Alton</a>
             <p class="muted" id="pcUrlText"></p>
+            <label class="muted" style="display: block; margin-top: 10px"
+              >PC address over Tailscale (https), for automatic switching
+              <input class="input" id="pcHttps" placeholder="https://palpatine.tail1234.ts.net"
+            /></label>
+            <div class="li" style="margin-top: 6px">
+              <span style="flex: 1"
+                >Open the full version when the PC is on<br /><small class="muted"
+                  >Checks once a minute while Alton is open</small
+                ></span
+              ><button class="check" id="autoSwitchToggle"></button>
+            </div>
           </div>
           <div class="card">
             <div class="lbl"><span class="dot"></span>Sync with the PC</div>
@@ -1011,6 +1106,20 @@
             <div class="li">
               <span style="flex: 1">Send as soon as I stop talking</span
               ><button class="check" id="autoToggle"></button>
+            </div>
+            <div class="li">
+              <span style="flex: 1"
+                >App lock<br /><small class="muted"
+                  >Ask for a PIN when Alton opens (and after 5 minutes away)</small
+                ></span
+              ><button class="btn" id="pinBtn" style="padding: 6px 10px">Set a PIN lock</button>
+            </div>
+            <div class="li">
+              <span style="flex: 1"
+                >Saver mode<br /><small class="muted"
+                  >Cheapest model, shorter memory of the chat, fewer web searches</small
+                ></span
+              ><button class="check" id="saverToggle"></button>
             </div>
           </div>
           <div class="card">

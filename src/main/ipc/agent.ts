@@ -4,7 +4,12 @@ import Anthropic from '@anthropic-ai/sdk';
 import { IPC } from '@shared/ipc';
 import { agentBusy, shotSize, type AgentQuestion, type AgentStatus } from '@shared/agent';
 import type { MainContext } from '../context';
-import { AgentRunner, type AgentScreen, type Shot } from '../services/agent-runner';
+import {
+  AgentRunner,
+  type AgentScreen,
+  type Shot,
+  type AgentOptions,
+} from '../services/agent-runner';
 import { WinInput } from '../services/agent-input-win';
 import { SecretStore } from '../services/secret-store';
 import { emit, handle, on } from './handle';
@@ -44,7 +49,7 @@ export function registerAgentIpc(
   const pickScreen = (): void => {
     target = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   };
-  const queue: string[] = [];
+  const queue: Array<{ t: string; opts: AgentOptions }> = [];
   const physical = (): { width: number; height: number } => {
     const d = primary();
     return {
@@ -236,13 +241,13 @@ export function registerAgentIpc(
     escape: (pressing) => (pressing ? escOff() : agentBusy(runner.get()) && escOn()),
   });
 
-  const start = (task: string): AgentStatus => {
+  const start = (task: string, opts: AgentOptions = {}): AgentStatus => {
     const t = task.trim().slice(0, 2000);
     if (!t) return runner.get();
     // Busy: queue it (up to 3) and run it next.
     if (agentBusy(runner.get())) {
       if (queue.length < 3) {
-        queue.push(t);
+        queue.push({ t, opts });
         ctx.command({
           type: 'notice',
           text: `Agent Mode is busy; “${t.slice(0, 60)}” is queued (${queue.length} waiting).`,
@@ -275,7 +280,7 @@ export function registerAgentIpc(
     void (async () => {
       // Give the window a moment to get out of the way before the first screenshot.
       await new Promise((r) => setTimeout(r, 500));
-      await runner.run(t);
+      await runner.run(t, opts);
       escOff();
       closeOverlay();
       for (const resolve of pending.values()) resolve(null);
@@ -283,7 +288,7 @@ export function registerAgentIpc(
       // Next queued task, unless the user stopped this one.
       const next = runner.get().state === 'stopped' ? undefined : queue.shift();
       if (runner.get().state === 'stopped') queue.length = 0;
-      if (next) setTimeout(() => start(next), 1500);
+      if (next) setTimeout(() => start(next.t, next.opts), 1500);
     })();
     return runner.get();
   };

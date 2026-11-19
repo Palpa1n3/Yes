@@ -80,3 +80,48 @@ export function gameLabel(name: string): string {
   if (/^javaw$/i.test(n)) return 'Minecraft';
   return n.replace(/-Win64-Shipping$/i, '').replace(/[-_]/g, ' ');
 }
+
+/** Download mode: everything set aside so Steam gets the connection. */
+export interface DownloadStatus {
+  active: boolean;
+  since: number;
+  /** What Steam is downloading or updating, with progress text. */
+  games: Array<{ name: string; progress: string }>;
+  /** Apps closed for it (reopened afterwards). */
+  closed: string[];
+  /** What was done, and any tips (e.g. a Steam download limit is set). */
+  notes: string[];
+  /** What happens when the downloads finish. */
+  then: 'none' | 'shutdown' | 'sleep';
+}
+
+export const IDLE_DOWNLOAD: DownloadStatus = {
+  active: false,
+  since: 0,
+  games: [],
+  closed: [],
+  notes: [],
+  then: 'none',
+};
+
+/** Apps that use a lot of bandwidth in the background: cloud sync, other game launchers,
+ *  torrent clients. Process names without .exe (browsers are left alone: open tabs). */
+export const BANDWIDTH_HOGS = [
+  'OneDrive',
+  'Dropbox',
+  'GoogleDriveFS',
+  'iCloudDrive',
+  'MEGAsync',
+  'EpicGamesLauncher',
+  'Battle.net',
+  'EADesktop',
+  'Origin',
+  'upc',
+  'GalaxyClient',
+  'RiotClientServices',
+  'qbittorrent',
+  'uTorrent',
+  'BitTorrent',
+  'deluge',
+  'transmission-qt',
+];

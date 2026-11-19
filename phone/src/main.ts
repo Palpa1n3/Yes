@@ -18,7 +18,10 @@ import { md, plain } from './md';
 import {
   alarmFor,
   describeShift,
+  currentShift,
   formatAlarmRules,
+  homeBy,
+  timeLeft,
   leaveBy,
   replaceRota,
   nextShift,
@@ -31,7 +34,15 @@ import {
   type Shift,
   type ShiftAlarmRule,
 } from '@shared/shifts';
-import { addUsage, budgetCrossed, costOf, fmtUsd, summarise, type DayUsage } from '@shared/usage';
+import {
+  addUsage,
+  budgetCrossed,
+  costOf,
+  fmtUsd,
+  spendLevel,
+  summarise,
+  type DayUsage,
+} from '@shared/usage';
 import { PHONE_TOOLS, nearbyLink, runPhoneTool, weatherSummary } from './tools';
 import {
   DEFAULT_PROMPTS,
@@ -75,6 +86,15 @@ interface State {
   prompts: SavedPrompt[];
   /** Chats with a message waiting for signal. */
   queue: string[];
+  /** Saver mode: Haiku, a shorter history and fewer web searches. */
+  saver: boolean;
+  /** The PC's HTTPS address over Tailscale (tailscale serve), for automatic switching. */
+  pcHttps: string;
+  /** Open the full PC version automatically when the PC is on. */
+  autoSwitch: boolean;
+  /** App lock: salted SHA-256 of the PIN ('' = no lock). */
+  pinHash: string;
+  pinSalt: string;
   /** Shifts already put in the calendar (start/end keys), so they aren't added twice. */
   addedShifts: string[];
   /** Shifts read from rotas (upcoming and the last week). */
@@ -120,6 +140,11 @@ const DEFAULTS: State = {
   budget: 0,
   prompts: DEFAULT_PROMPTS,
   queue: [],
+  saver: false,
+  pcHttps: '',
+  autoSwitch: true,
+  pinHash: '',
+  pinSalt: '',
   addedShifts: [],
   shifts: [],
   shiftLead: 90,
@@ -211,7 +236,11 @@ function takeHash(): void {
     notes: [...S.newNotes, ...(d.notes ?? S.notes)],
     prompts: d.prompts ? sanitizePrompts(d.prompts) : S.prompts,
     lastPcSync: Date.now(),
+    // Opened from the PC's Tailscale HTTPS address: that's the one to check.
+    pcHttps: /^https:\/\//.test(d.pcUrl) ? d.pcUrl.replace(/\/+$/, '') : S.pcHttps,
   };
+  // Just came from the PC on purpose: don't switch straight back to it.
+  stayPhone = true;
   save();
   toast(`Synced from your PC: ${d.memories.length} memories, ${d.chats.length} chats`);
 }
@@ -225,6 +254,7 @@ function systemText(): string {
   return [
     base,
     `You are running in ${S.name}'s phone app. The user's PC may be off, so you cannot control the PC, its files or apps here (if they need that, say they can open the full version from the PC tab when the PC is on).`,
+    'Ideas for improving Alton: when the user wishes you could do something, a request fails because you lack a feature, or they suggest an improvement, add a short specific idea to the list "Alton roadmap" with add_to_list (it syncs to the PC roadmap) and mention it briefly.',
     'Alexa: you cannot reach Alexa directly; tell_alexa makes the phone say a command out loud for a nearby Echo (e.g. turning alarms or lights on).',
     'Shifts: you cannot open or read other apps. To add work shifts to the calendar, the user shares a screenshot of their rota/shift app (screenshot it, then Share › Alton, or the camera button here); read it and use add_shifts. If they ask without a screenshot, tell them that in one or two short steps.',
     'On the phone you can get things ready with your tools: texts and WhatsApp messages, calls, emails, directions, places nearby, calendar events, timers/alarms (Android), sharing and links. Each becomes a button the user taps and then confirms; never say a message was sent or a call made. If you do not know who someone is, ask, or use the contact button. You can also check where the user is (get_location) and the local weather (get_weather).',
@@ -240,9 +270,12 @@ function systemText(): string {
     .join('\n\n');
 }
 
+/** The model to use now (Saver mode always uses Haiku). */
+const model = (): string => (S.saver ? 'claude-haiku-5-5' : S.model);
+
 function webTools(): Anthropic.Messages.ToolUnion[] {
-  const n = research ? 8 : 3;
-  return S.model === 'claude-haiku-5-5'
+  const n = S.saver ? (research ? 3 : 1) : research ? 8 : 3;
+  return model() === 'claude-haiku-5-5'
     ? [
         { type: 'web_search_20250305', name: 'web_search', max_uses: n },
         ...(research
@@ -258,7 +291,8 @@ function webTools(): Anthropic.Messages.ToolUnion[] {
 }
 
 function buildHistory(chat: PhoneChat, images: string[]): Anthropic.MessageParam[] {
-  const msgs = chat.messages.slice(-30);
+  // Saver mode sends less of the chat each time (the biggest cost in long chats).
+  const msgs = chat.messages.slice(S.saver ? -10 : -30);
   return msgs.map((m, i) => {
     if (m.role === 'assistant') return { role: 'assistant', content: m.text || '…' };
     // "Brief me" is shown as typed but asks for the full briefing.
@@ -298,7 +332,7 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
     for (let step = 0; step < 6; step++) {
       const stream = client.messages.stream(
         {
-          model: S.model,
+          model: model(),
           max_tokens: 16000,
           system: [{ type: 'text', text: systemText(), cache_control: { type: 'ephemeral' } }],
           tools: [...PHONE_TOOLS, ...webTools()],
@@ -324,8 +358,9 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
       const msg = await stream.finalMessage();
       {
         const before = summarise(S.usage, S.budget).month;
-        S.usage = addUsage(S.usage, costOf(S.model, msg.usage), research ? 'research' : 'chat');
+        S.usage = addUsage(S.usage, costOf(model(), msg.usage), research ? 'research' : 'chat');
         const crossed = budgetCrossed(before, summarise(S.usage, S.budget).month, S.budget);
+        renderSpend();
         if (crossed)
           toast(
             crossed === 100
@@ -643,6 +678,11 @@ function tellAlexa(command: string): void {
 
 /** For Claude: the next shift (so "brief me" and "am I working?" just know). */
 function shiftLine(): string {
+  const cur = currentShift(S.shifts);
+  const home = cur ? homeBy(cur, S.travel) : '';
+  const now = cur
+    ? `The user is at work now (${cur.title}), finishing at ${cur.end.slice(11, 16)} (${timeLeft(cur)} left)${home ? `, home about ${home}` : ''}. `
+    : '';
   const n = nextShift(S.shifts, new Date(), 48);
   const rate =
     S.payRate > 0
@@ -650,9 +690,9 @@ function shiftLine(): string {
       : '';
   const travel = S.travel ? ` It takes them about ${S.travel} minutes to get to work.` : '';
   return n
-    ? `Next work shift: ${n.when === 'later' ? '' : `${n.when}, `}${describeShift(n.shift)} ${n.shift.title}. Mention it in briefings.${rate}${travel}`
+    ? `${now}Next work shift: ${n.when === 'later' ? '' : `${n.when}, `}${describeShift(n.shift)} ${n.shift.title}. Mention it in briefings.${rate}${travel}`
     : S.shifts.length
-      ? `No work shift in the next two days.${rate}`
+      ? `${now}No other work shift in the next two days.${rate}`
       : '';
 }
 
@@ -727,6 +767,31 @@ function renderBackupNudge(): void {
 function renderShiftCard(): void {
   const box = $('shiftCard');
   box.textContent = '';
+  // At work now: when it ends, how long is left, and when you'll be home.
+  const cur = currentShift(S.shifts);
+  if (cur && !S.shiftCardsDone.includes(`now:${shiftKey(cur)}`)) {
+    box.hidden = false;
+    const head = el('div', 'sc-head');
+    head.appendChild(el('b', undefined, `At work · ${cur.title}`));
+    const x = el('button', 'x', '✕');
+    x.setAttribute('aria-label', 'Hide');
+    x.onclick = () => {
+      S.shiftCardsDone = [...S.shiftCardsDone, `now:${shiftKey(cur)}`].slice(-60);
+      save();
+      renderShiftCard();
+    };
+    head.appendChild(x);
+    box.appendChild(head);
+    const home = homeBy(cur, S.travel);
+    const big = el('div', 'sc-end');
+    big.appendChild(el('span', undefined, 'Finish '));
+    big.appendChild(el('b', undefined, cur.end.slice(11, 16)));
+    big.appendChild(
+      el('span', 'muted', ` · ${timeLeft(cur)} left${home ? ` · home by ${home}` : ''}`),
+    );
+    box.appendChild(big);
+    return;
+  }
   const n = nextShift(S.shifts);
   if (!n || S.shiftCardsDone.includes(shiftKey(n.shift))) {
     box.hidden = true;
@@ -751,6 +816,14 @@ function renderShiftCard(): void {
       ` ${s.start.slice(11, 16)}–${s.end.slice(11, 16)}${go ? ` · leave by ${go}` : ''}`,
     ),
   );
+  box.appendChild(head);
+  const home = homeBy(s, S.travel);
+  const fin = el('div', 'sc-end');
+  fin.appendChild(el('span', undefined, 'Finish '));
+  fin.appendChild(el('b', undefined, s.end.slice(11, 16)));
+  if (s.end.slice(0, 10) !== s.start.slice(0, 10))
+    fin.appendChild(el('span', 'muted', ' next day'));
+  if (home) fin.appendChild(el('span', 'muted', ` · home by ${home}`));
   const x = el('button', 'x', '✕');
   x.setAttribute('aria-label', 'Hide until the next shift');
   x.onclick = () => {
@@ -759,7 +832,7 @@ function renderShiftCard(): void {
     renderShiftCard();
   };
   head.appendChild(x);
-  box.appendChild(head);
+  box.appendChild(fin);
   const row = el('div', 'sc-row');
   if (android) {
     const phone = el('a', 'btn acc') as HTMLAnchorElement;
@@ -788,6 +861,95 @@ function askForShifts(pick = true): void {
   ta.value = SHIFTS_TEXT;
   toast('Pick screenshots of your rota (or share them from your shift app).');
   if (pick) $('photo').click();
+}
+
+/* ── Spending bar under the header: this month's Claude spend on this phone ── */
+function renderSpend(): void {
+  const u = summarise(S.usage, S.budget);
+  const lvl = spendLevel(u.month, S.budget);
+  const t = $('spendText');
+  t.textContent = `· ${S.saver ? '🍃 ' : ''}${fmtUsd(u.month)}${S.budget > 0 ? ` / ${fmtUsd(S.budget)}` : ''} this month`;
+  t.className = lvl.tone === 'ok' ? '' : lvl.tone;
+  const bar = $('spendBar');
+  bar.hidden = !(S.budget > 0);
+  bar.className = `spendbar${lvl.tone === 'ok' ? '' : ` ${lvl.tone}`}`;
+  $('spendFill').style.width = `${Math.max(2, lvl.pct)}%`;
+}
+
+/* ── Is the PC on? (Tailscale HTTPS address): switch to the full version automatically ── */
+let pcOnline = false;
+let stayPhone = false;
+try {
+  stayPhone = sessionStorage.getItem('alton-stay-phone') === '1';
+} catch {
+  /* private mode */
+}
+async function checkPc(): Promise<void> {
+  const base = S.pcHttps.replace(/\/+$/, '');
+  // Tailscale HTTPS names only (the app's security policy allows nothing else).
+  if (!/^https:\/\/[\w.-]+\.ts\.net(:\d+)?$/.test(base)) return setPcOnline(false);
+  try {
+    const r = await fetch(`${base}/api/ping`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3000),
+    });
+    setPcOnline(r.ok);
+  } catch {
+    setPcOnline(false);
+  }
+}
+function setPcOnline(on: boolean): void {
+  const was = pcOnline;
+  pcOnline = on;
+  const m = $('mode').firstElementChild;
+  if (m) m.textContent = on ? 'PC is on · tap “Full” for PC control' : 'Phone mode · PC not needed';
+  $('fullBtn').hidden = !on;
+  if (on && !was && S.autoSwitch && !stayPhone && !busy) {
+    toast('Your PC is on: opening the full version…');
+    setTimeout(() => (location.href = S.pcHttps), 900);
+  }
+}
+
+/* ── App lock (PIN) ── */
+async function pinHashOf(pin: string, salt: string): Promise<string> {
+  const data = new TextEncoder().encode(`${salt}:${pin}`);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+let hiddenAt = 0;
+function lockNow(): void {
+  if (!S.pinHash) return;
+  $('lock').hidden = false;
+  $<HTMLInputElement>('pinInput').value = '';
+  setTimeout(() => $('pinInput').focus(), 50);
+}
+async function tryUnlock(): Promise<void> {
+  const v = $<HTMLInputElement>('pinInput').value.trim();
+  if ((await pinHashOf(v, S.pinSalt)) === S.pinHash) {
+    $('lock').hidden = true;
+    $('pinMsg').textContent = '';
+  } else {
+    $('pinMsg').textContent = 'Wrong PIN.';
+    $<HTMLInputElement>('pinInput').value = '';
+  }
+}
+async function setPin(): Promise<void> {
+  if (S.pinHash) {
+    if (!confirm('Remove the PIN lock?')) return;
+    S.pinHash = '';
+    S.pinSalt = '';
+    save();
+    renderSettings();
+    return toast('PIN lock removed.');
+  }
+  const a = prompt('Choose a PIN (4–8 digits)')?.trim() ?? '';
+  if (!/^\d{4,8}$/.test(a)) return toast('Use 4 to 8 digits.');
+  if (prompt('Type it again')?.trim() !== a) return toast('Those didn’t match.');
+  S.pinSalt = crypto.getRandomValues(new Uint32Array(2)).join('-');
+  S.pinHash = await pinHashOf(a, S.pinSalt);
+  save();
+  renderSettings();
+  toast('PIN lock on: asked when you open Alton or come back after 5 minutes.');
 }
 
 /* ── Offline queue ── */
@@ -1534,6 +1696,10 @@ function renderSettings(): void {
   };
   tick('speakToggle', S.speak);
   tick('autoToggle', S.autoSend);
+  tick('saverToggle', S.saver);
+  tick('autoSwitchToggle', S.autoSwitch);
+  $('pinBtn').textContent = S.pinHash ? 'Remove PIN lock' : 'Set a PIN lock';
+  $<HTMLInputElement>('pcHttps').value = S.pcHttps;
   const u = summarise(S.usage, S.budget);
   $('spendToday').textContent = fmtUsd(u.today);
   $('spendMonth').textContent = fmtUsd(u.month);
@@ -1585,6 +1751,9 @@ function start(): void {
   $('app').style.display = ready ? 'contents' : 'none';
   if (ready) {
     setView(view);
+    renderSpend();
+    lockNow();
+    void checkPc();
     void takeLaunchParams();
     void flushQueue();
   }
@@ -1595,6 +1764,14 @@ async function takeLaunchParams(): Promise<void> {
   const p = new URLSearchParams(location.search);
   if (![...p.keys()].length) return;
   history.replaceState(null, '', location.pathname);
+  if (p.has('stay')) {
+    stayPhone = true;
+    try {
+      sessionStorage.setItem('alton-stay-phone', '1');
+    } catch {
+      /* private mode */
+    }
+  }
   if (p.has('new')) {
     newChat(false);
     renderMsgs();
@@ -1643,6 +1820,66 @@ async function takeLaunchParams(): Promise<void> {
 
 function wire(): void {
   $('shareBtn').onclick = shareChat;
+  $('mode').onclick = () => setView('set');
+  // PC on/off checks while the app is open, and the lock after 5 minutes away.
+  setInterval(() => {
+    if (!document.hidden) void checkPc();
+  }, 60_000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) hiddenAt = Date.now();
+    else {
+      if (S.pinHash && hiddenAt && Date.now() - hiddenAt > 5 * 60_000) lockNow();
+      void checkPc();
+    }
+  });
+  $('fullBtn').onclick = (e) => {
+    e.stopPropagation();
+    location.href = S.pcHttps;
+  };
+  $('pinGo').onclick = () => void tryUnlock();
+  $('pinInput').addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') void tryUnlock();
+  });
+  $('pinForgot').onclick = () => {
+    if (
+      !confirm(
+        'Forgot the PIN? This removes the lock AND your Claude key from this phone (your chats stay). You will need to paste the key again.',
+      )
+    )
+      return;
+    S.pinHash = '';
+    S.pinSalt = '';
+    save();
+    apiKey = '';
+    ls.del('alton-key');
+    $('lock').hidden = true;
+    start();
+  };
+  $('pinBtn').onclick = () => void setPin();
+  $('autoSwitchToggle').onclick = () => {
+    S.autoSwitch = !S.autoSwitch;
+    save();
+    renderSettings();
+  };
+  $<HTMLInputElement>('pcHttps').onchange = (e) => {
+    const v = (e.target as HTMLInputElement).value.trim().replace(/\/+$/, '');
+    if (v && !/^https:\/\/[\w.-]+\.ts\.net(:\d+)?$/.test(v))
+      return toast('That should look like https://palpatine.tail1234.ts.net');
+    S.pcHttps = v;
+    save();
+    void checkPc();
+  };
+  $('saverToggle').onclick = () => {
+    S.saver = !S.saver;
+    save();
+    renderSettings();
+    renderSpend();
+    toast(S.saver ? 'Saver mode on: cheaper replies.' : 'Saver mode off.');
+  };
+  // Keep the shift card's countdown fresh.
+  setInterval(() => {
+    if (!document.hidden && view === 'chat') renderShiftCard();
+  }, 60_000);
   $('shiftLead').onchange = () => {
     const v = Number($<HTMLInputElement>('shiftLead').value);
     S.shiftLead = v >= 0 && v <= 600 ? Math.round(v) : 90;
@@ -1789,6 +2026,7 @@ function wire(): void {
     S.budget = Math.max(0, Math.round(Number((e.target as HTMLInputElement).value) || 0));
     save();
     renderSettings();
+    renderSpend();
   };
   $<HTMLSelectElement>('model').onchange = (e) => {
     S.model = (e.target as HTMLSelectElement).value;

@@ -115,3 +115,20 @@ export function budgetCrossed(before: number, after: number, budget: number): 80
   if (before < budget * 0.8 && after >= budget * 0.8) return 80;
   return null;
 }
+
+/** For the spending bar: how full this month's limit is, and the colour to show. */
+export function spendLevel(
+  month: number,
+  budget: number,
+): { pct: number; tone: 'ok' | 'warn' | 'over' } {
+  if (!(budget > 0)) return { pct: 0, tone: 'ok' };
+  const pct = Math.min(100, (month / budget) * 100);
+  return { pct, tone: month >= budget ? 'over' : pct >= 80 ? 'warn' : 'ok' };
+}
+
+/** Where this month is heading at the current rate (spent so far ÷ days gone × days in month). */
+export function projectMonth(month: number, now = new Date()): number {
+  const day = now.getDate();
+  const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return day > 0 ? (month / day) * days : month;
+}

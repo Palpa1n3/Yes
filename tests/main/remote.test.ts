@@ -45,6 +45,28 @@ describe('phone companion helpers', () => {
 });
 
 describe('RemoteServer', () => {
+  it('answers "is the PC on?" for the phone app only, without pairing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'arc-remote-'));
+    srv = new RemoteServer({
+      status,
+      message: vi.fn(async () => ''),
+      emergencyStop: vi.fn(),
+      agentAnswer: vi.fn(),
+      approve: vi.fn(),
+      uploadDir: () => join(dir, 'up'),
+      file: join(dir, 'paired.json'),
+      pingOrigin: () => 'https://palpa1n3.github.io',
+    });
+    await srv.start(0);
+    const r = await fetch(`http://127.0.0.1:${srv.port()}/api/ping`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('access-control-allow-origin')).toBe('https://palpa1n3.github.io');
+    expect(await r.json()).toMatchObject({ ok: true });
+    // Everything else still needs pairing.
+    expect((await fetch(`http://127.0.0.1:${srv.port()}/api/status`)).status).toBe(401);
+    await srv.stop();
+  });
+
   it('pairs with the code once, locks after wrong guesses, and serves paired phones', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'arc-remote-'));
     const message = vi.fn(async (t: string) => `You said ${t}`);

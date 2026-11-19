@@ -5,13 +5,19 @@ const CACHE = 'alton-v2';
 const SHARED = 'alton-shared';
 self.addEventListener('install', (e) => {
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon-192.png'])));
+  e.waitUntil(
+    caches
+      .open(CACHE)
+      .then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon-192.png'])),
+  );
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== SHARED).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(keys.filter((k) => k !== CACHE && k !== SHARED).map((k) => caches.delete(k))),
+      )
       .then(() => self.clients.claim()),
   );
 });
@@ -23,12 +29,18 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       (async () => {
         const form = await e.request.formData();
-        const text = [form.get('title'), form.get('text'), form.get('url')].filter(Boolean).join('\n');
+        const text = [form.get('title'), form.get('text'), form.get('url')]
+          .filter(Boolean)
+          .join('\n');
         const cache = await caches.open(SHARED);
         await cache.put('./shared/text', new Response(text));
         let i = 0;
         for (const f of form.getAll('files')) {
-          if (f && typeof f === 'object' && i < 4) await cache.put(`./shared/file-${i++}`, new Response(f, { headers: { 'content-type': f.type } }));
+          if (f && typeof f === 'object' && i < 4)
+            await cache.put(
+              `./shared/file-${i++}`,
+              new Response(f, { headers: { 'content-type': f.type } }),
+            );
         }
         await cache.put('./shared/count', new Response(String(i)));
         return Response.redirect('./?shared=1', 303);

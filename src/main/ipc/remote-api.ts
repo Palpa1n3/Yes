@@ -311,6 +311,20 @@ export function makePhoneRoutes(
       const act = body.action;
       if (!ctx.power) return bad('Not ready yet');
       if (act === 'cancel') return ok({ message: await ctx.power.cancel() });
+      if (act === 'download' || act === 'download-off') {
+        const dm = ctx.power.download;
+        if (!dm) return bad('Not ready yet');
+        if (act === 'download-off') {
+          await dm.stop();
+          return ok({ message: 'Download mode off.' });
+        }
+        const then = body.then === 'shutdown' || body.then === 'sleep' ? body.then : 'none';
+        const r = await dm.start(then);
+        if ('error' in r) return bad(r.error);
+        return ok({
+          message: `Download mode on${r.games.length ? `: ${r.games.map((g) => g.name).join(', ')}` : ' (waiting for Steam)'}${then !== 'none' ? `, then ${then}` : ''}.`,
+        });
+      }
       if (act !== 'shutdown' && act !== 'restart') return bad('Unknown action');
       const m = await ctx.power.schedule(act, 60, 'from your phone');
       return ok({ message: m });

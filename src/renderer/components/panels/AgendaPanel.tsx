@@ -15,18 +15,25 @@ export function untilText(ms: number): string {
   return `in ${d} day${d === 1 ? '' : 's'}`;
 }
 
+/** "08:15–16:15", with "+1" when it ends on a later day. */
+export function timeRange(e: CalEvent): string {
+  if (!(e.end > e.start)) return fmtTime(e.start);
+  const later = new Date(e.end).toDateString() !== new Date(e.start).toDateString();
+  return `${fmtTime(e.start)}–${fmtTime(e.end)}${later ? ' +1' : ''}`;
+}
+
 function Row({ e, now, next }: { e: CalEvent; now: number; next: boolean }) {
   const past = e.end <= now;
   const live = !e.allDay && e.start <= now && e.end > now;
   return (
     <li
-      className={`hud-row grid grid-cols-[3.4rem_1fr] items-start gap-2 border-l-2 py-1 pl-2 text-[12px] ${
+      className={`hud-row grid grid-cols-[6.4rem_1fr] items-start gap-2 border-l-2 py-1 pl-2 text-[12px] ${
         live || next ? 'border-accent bg-accent/[0.07] text-ice' : 'border-transparent'
       } ${past ? 'opacity-45' : ''}`}
-      title={[e.title, e.location].filter(Boolean).join(' · ')}
+      title={[e.title, e.allDay ? '' : timeRange(e), e.location].filter(Boolean).join(' · ')}
     >
       <span className="numeric pt-px text-[11px] text-text-muted">
-        {e.allDay ? 'All day' : fmtTime(e.start)}
+        {e.allDay ? 'All day' : timeRange(e)}
       </span>
       <span className="min-w-0">
         <span className="block truncate text-text-primary">{e.title}</span>

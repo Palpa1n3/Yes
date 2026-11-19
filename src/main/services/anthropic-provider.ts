@@ -694,15 +694,15 @@ const RESEARCH_NOTE =
 
 /** Web search and fetch (server tools). Newer models get the versions that filter
  *  results before they reach the context; Haiku uses the basic versions. */
-export function webTools(model: AiModel): Anthropic.Beta.BetaToolUnion[] {
+export function webTools(model: AiModel, uses = 5): Anthropic.Beta.BetaToolUnion[] {
   return model === 'claude-haiku-5-5'
     ? [
-        { type: 'web_search_20250305', name: 'web_search', max_uses: 5 },
-        { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: 5 },
+        { type: 'web_search_20250305', name: 'web_search', max_uses: uses },
+        { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: uses },
       ]
     : [
-        { type: 'web_search_20260209', name: 'web_search', max_uses: 5 },
-        { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: 5 },
+        { type: 'web_search_20260209', name: 'web_search', max_uses: uses },
+        { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: uses },
       ];
 }
 
@@ -802,6 +802,8 @@ export interface AnthropicDeps {
   model(): AiModel;
   /** Model for research-mode chats. */
   researchModel?(): AiModel;
+  /** Saver mode: fewer web searches per answer. */
+  saver?(): boolean;
   systemPrompt(): string;
   info(): SystemInfo | null;
   stats(): SystemStats;
@@ -912,7 +914,7 @@ export class AnthropicProvider implements AIProvider {
       "Read the user's mood from their words and adapt: brief and calm when they're stressed or frustrated, playful when they joke (match their humour; light sarcasm only when they're clearly joking around), warm when something good happens.",
       'When you act, say briefly why you chose that action (one short clause), so your decisions are easy to follow.',
       'When a problem gets solved, remember the fix with remember (category "solutions") so you can reuse it; check memories for earlier fixes before troubleshooting from scratch. For ongoing projects, remember details with the project name.',
-      'There is a Notes list called "Alton roadmap" with the features the user wants. If they suggest an improvement, or you notice one that would help them, add it there (add_to_list). If asked how to improve yourself, research it and add concrete ideas.',
+      'There is a Notes list called "Alton roadmap" with the features the user wants. Whenever the user wishes you could do something ("I wish…", "it would be good if…", "can you add…", "you should be able to…"), a request fails because you lack a feature, or you notice an improvement that would clearly help them, add a short, specific idea to "Alton roadmap" with add_to_list straight away (one line: what and why; check get_lists first so you don\'t add duplicates) and mention it in one short clause. When the user says a roadmap item is done, tick it off. If asked how to improve yourself, research it and add concrete ideas.',
       'Have a point of view: when asked what you think or which option is better, give a clear recommendation and why, not a neutral list.',
       "Own your mistakes: if an action failed or you got something wrong, say so plainly, say what you'll do differently, and try another way. Be honest about what you can't do (you can't see other monitors' content unless shown, can't hear tone of voice, can't edit your own code) and suggest the closest thing you can do.",
       'Be curious about the user, lightly: now and then, when it fits naturally and the conversation is relaxed, ask one short question that helps you know them better (never during urgent tasks, never more than once in a while).',
@@ -1006,7 +1008,7 @@ export class AnthropicProvider implements AIProvider {
               max_tokens: 64000,
               // Stable text, cached: the same for every request in this conversation.
               system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-              tools: research ? [...TOOLS, ...webTools(model)] : TOOLS,
+              tools: research ? [...TOOLS, ...webTools(model, this.deps.saver?.() ? 2 : 5)] : TOOLS,
               // A snapshot: retries must not see messages appended later in this turn.
               messages: [...this.transcript],
               // Conversational route: low effort keeps replies quick and cheap.

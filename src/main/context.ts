@@ -28,6 +28,7 @@ export interface MainContext {
       why: string,
     ): Promise<string>;
     cancel(): Promise<string>;
+    download?: import('./services/download-mode').DownloadMode;
   };
   /** Work shifts synced from the phone app. */
   shifts: import('./services/shift-store').ShiftStore;
@@ -44,7 +45,7 @@ export interface MainContext {
   /** Screen awareness: grab the screen (before ARC appears over it). Set once ready. */
   captureScreen?(): Promise<void>;
   /** Agent Mode: start a task (set once ready). */
-  startAgent?(task: string): unknown;
+  startAgent?(task: string, opts?: import('./services/agent-runner').AgentOptions): unknown;
   stopAgent?(): void;
   pauseAgent?(on: boolean): void;
   agentAnswer?(id: string, answer: string | boolean): void;
