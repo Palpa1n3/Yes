@@ -897,11 +897,15 @@ async function checkPc(): Promise<void> {
     pcWhy = 'The address should look like https://palpatine.tail1234.ts.net';
     return setPcOnline(false);
   }
+  const timeout = (ms: number): AbortSignal | undefined => {
+    try {
+      return AbortSignal.timeout(ms);
+    } catch {
+      return undefined; // older browsers: no timeout
+    }
+  };
   try {
-    const r = await fetch(`${base}/api/ping`, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(5000),
-    });
+    const r = await fetch(`${base}/api/ping`, { cache: 'no-store', signal: timeout(5000) });
     pcWhy = r.ok
       ? ''
       : r.status === 404
@@ -909,12 +913,24 @@ async function checkPc(): Promise<void> {
         : `The PC answered with an error (${r.status}).`;
     setPcOnline(r.ok);
   } catch (e) {
-    const name = (e as Error).name;
-    pcWhy =
-      name === 'TimeoutError' || name === 'AbortError'
-        ? 'No answer: is Tailscale on (on both), and is the PC on with Alton running?'
-        : 'Couldn’t reach the PC. Check Tailscale is on, then if Chrome asks to allow access to devices on your network, allow it. If the PC’s Alton is older than 0.18.1, update it.';
-    setPcOnline(false);
+    // Some browsers block reading the answer from a private address; a plain "is anything
+    // there?" request still works (it can't read anything back, which is all we need).
+    try {
+      await fetch(`${base}/api/ping`, {
+        mode: 'no-cors',
+        cache: 'no-store',
+        signal: timeout(5000),
+      });
+      pcWhy = '';
+      setPcOnline(true);
+    } catch (e2) {
+      const err = e2 as Error;
+      pcWhy =
+        err.name === 'TimeoutError' || err.name === 'AbortError'
+          ? 'No answer: is Tailscale on (on both), and is the PC on with Alton running?'
+          : `Couldn’t reach the PC from the app (${(e as Error).name}: ${(e as Error).message}). Check Tailscale is on; if the browser asks to allow access to devices on your network, allow it.`;
+      setPcOnline(false);
+    }
   }
 }
 function setPcOnline(on: boolean): void {
