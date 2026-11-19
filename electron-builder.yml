@@ -28,7 +28,8 @@ publish:
   provider: github
   owner: Palpa1n3
   repo: Yes
-  releaseType: release
+  # Uploaded as a draft first; the workflow publishes it once every file is there.
+  releaseType: draft
 # Native speech-recognition runtime (Whisper) must sit outside the asar archive.
 asarUnpack:
   - node_modules/onnxruntime-node/**
