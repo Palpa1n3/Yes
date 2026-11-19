@@ -884,17 +884,36 @@ try {
 } catch {
   /* private mode */
 }
+/** Why the last PC check failed ('' when it worked). */
+let pcWhy = '';
 async function checkPc(): Promise<void> {
   const base = S.pcHttps.replace(/\/+$/, '');
   // Tailscale HTTPS names only (the app's security policy allows nothing else).
-  if (!/^https:\/\/[\w.-]+\.ts\.net(:\d+)?$/.test(base)) return setPcOnline(false);
+  if (!base) {
+    pcWhy = 'No PC address yet: paste it in the box above.';
+    return setPcOnline(false);
+  }
+  if (!/^https:\/\/[\w.-]+\.ts\.net(:\d+)?$/.test(base)) {
+    pcWhy = 'The address should look like https://palpatine.tail1234.ts.net';
+    return setPcOnline(false);
+  }
   try {
     const r = await fetch(`${base}/api/ping`, {
       cache: 'no-store',
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(5000),
     });
+    pcWhy = r.ok
+      ? ''
+      : r.status === 404
+        ? 'The PC answered but its Alton is older: install the latest version on the PC.'
+        : `The PC answered with an error (${r.status}).`;
     setPcOnline(r.ok);
-  } catch {
+  } catch (e) {
+    const name = (e as Error).name;
+    pcWhy =
+      name === 'TimeoutError' || name === 'AbortError'
+        ? 'No answer: is Tailscale on (on both), and is the PC on with Alton running?'
+        : 'Couldn’t reach the PC. Check Tailscale is on, then if Chrome asks to allow access to devices on your network, allow it. If the PC’s Alton is older than 0.18.1, update it.';
     setPcOnline(false);
   }
 }
@@ -1860,6 +1879,12 @@ function wire(): void {
     S.autoSwitch = !S.autoSwitch;
     save();
     renderSettings();
+  };
+  $('pcCheck').onclick = async () => {
+    $('pcCheckMsg').textContent = 'Checking…';
+    stayPhone = true; // just report here; don't jump away mid-check
+    await checkPc();
+    $('pcCheckMsg').textContent = pcOnline ? 'Connected: your PC is on. ✓' : pcWhy;
   };
   $<HTMLInputElement>('pcHttps').onchange = (e) => {
     const v = (e.target as HTMLInputElement).value.trim().replace(/\/+$/, '');

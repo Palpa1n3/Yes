@@ -61,6 +61,7 @@ describe('RemoteServer', () => {
     const r = await fetch(`http://127.0.0.1:${srv.port()}/api/ping`);
     expect(r.status).toBe(200);
     expect(r.headers.get('access-control-allow-origin')).toBe('https://palpa1n3.github.io');
+    expect(r.headers.get('access-control-allow-private-network')).toBe('true');
     expect(await r.json()).toMatchObject({ ok: true });
     // Everything else still needs pairing.
     expect((await fetch(`http://127.0.0.1:${srv.port()}/api/status`)).status).toBe(401);

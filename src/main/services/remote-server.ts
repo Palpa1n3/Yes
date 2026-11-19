@@ -246,7 +246,16 @@ export class RemoteServer {
         res.writeHead(200, {
           'content-type': 'application/json',
           'cache-control': 'no-store',
-          ...(origin ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {}),
+          ...(origin
+            ? {
+                'access-control-allow-origin': origin,
+                'access-control-allow-methods': 'GET',
+                // Chrome asks before a public site (GitHub Pages) may reach a private
+                // address like Tailscale's; this says yes for the phone app only.
+                'access-control-allow-private-network': 'true',
+                vary: 'Origin',
+              }
+            : {}),
         });
         res.end(JSON.stringify({ ok: true, name: this.d.status().name }));
         return;
