@@ -38,7 +38,8 @@ Read this first in a new chat, then README.md for the feature list.
   `tests/arcMock.ts`. Tests under `tests/main` use the node tsconfig, others the web one.
 - Run `npx prettier --write` on changed files; check edits really applied.
 - Releases: bump `package.json` version on `main`; GitHub Actions builds the installer, tags
-  `vX.Y.Z`, uploads a draft release and then publishes it (installed apps auto-update from it).
+  packages with `--publish never`, then uploads `ARC-Setup-X.Y.Z.exe`, its `.blockmap` and
+  `latest.yml` with `gh release` and fails if any is missing (installed apps auto-update from it).
 
 ## Working with the owner
 

@@ -37,29 +37,27 @@ jobs:
       - name: Build
         run: npm run build
 
-      # GitHub refuses to publish a release whose tag doesn't exist yet ("Published releases
-      # must have a valid tag"), so make the tag first.
-      - name: Tag this version
-        shell: bash
-        run: |
-          V=$(node -p "require('./package.json').version")
-          echo "VERSION=$V" >> "$GITHUB_ENV"
-          if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null; then
-            echo "Tag v$V already exists"
-          else
-            git tag "v$V"
-            git push origin "v$V"
-          fi
+      # Build the installer and its update files (latest.yml) without publishing...
+      - name: Package
+        run: npx electron-builder --win nsis --publish never
 
-      - name: Package and upload (as a draft release)
-        run: npx electron-builder --win nsis --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Publish only once the installer and latest.yml are uploaded, so installed copies
-      # never see a release with files missing.
+      # ...then upload them ourselves, checking every file is there (the build fails loudly
+      # instead of publishing a release that installed copies can't update from).
       - name: Publish the release
         shell: bash
-        run: gh release edit "v$VERSION" --draft=false --latest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          ls -la dist
+          files=("dist/ARC-Setup-$V.exe" "dist/ARC-Setup-$V.exe.blockmap" "dist/latest.yml")
+          for f in "${files[@]}"; do
+            test -f "$f" || { echo "Missing $f"; exit 1; }
+          done
+          if gh release view "v$V" >/dev/null 2>&1; then
+            gh release upload "v$V" "${files[@]}" --clobber
+            gh release edit "v$V" --draft=false --latest
+          else
+            gh release create "v$V" "${files[@]}" --target "$GITHUB_SHA" --title "Alton $V" --notes "Automatic build of version $V." --latest
+          fi
+          gh release view "v$V" --json assets --jq '.assets[].name'
