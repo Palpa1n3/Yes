@@ -13,6 +13,9 @@ import type { MainContext } from '../context';
 import { progressText, steamUpdates, SteamWatch, type AfterAction } from '../services/steam-watch';
 import { steamPath } from './games';
 
+import { JourneyService, type TravelMode } from '../services/journey';
+import { buildName, checkBuild, listWorlds, writeBuild } from '../services/minecraft-build';
+
 export type PowerAction = 'shutdown' | 'restart' | 'sleep';
 
 /** Shop names the user says → the site to open. */
@@ -131,6 +134,8 @@ export function registerPower(ctx: MainContext): {
     },
   });
 
+  const journeys = new JourneyService((url, init) => fetch(url, init));
+
   // ── Download mode ──
   const psOut = (script: string): Promise<string> =>
     new Promise((resolve) =>
@@ -236,6 +241,75 @@ export function registerPower(ctx: MainContext): {
     cancel,
     download,
     tools: {
+      minecraft_build: async (input) => {
+        const o = (input ?? {}) as Record<string, unknown>;
+        const saves = join(process.env['APPDATA'] ?? app.getPath('appData'), '.minecraft', 'saves');
+        const worlds = listWorlds(saves);
+        if (!worlds.length)
+          return {
+            error: 'No Minecraft Java worlds found (looked in %APPDATA%\\.minecraft\\saves).',
+          };
+        if (o['action'] === 'list') return { worlds: worlds.slice(0, 20) };
+        const want = typeof o['world'] === 'string' ? o['world'].trim().toLowerCase() : '';
+        const world = want ? worlds.find((w) => w.toLowerCase().includes(want)) : worlds[0];
+        if (!world)
+          return {
+            error: `No world called “${String(o['world'])}”. Worlds: ${worlds.slice(0, 10).join(', ')}`,
+          };
+        const c = checkBuild(o['commands']);
+        if (!c.ok) return { error: c.error };
+        const name = buildName(typeof o['name'] === 'string' ? o['name'] : 'build');
+        const cmd = writeBuild(join(saves, world), name, c.lines, String(o['description'] ?? ''));
+        ctx.audit.add(
+          'action',
+          `Minecraft build “${name}” saved to ${world} (${c.lines.length} commands)`,
+        );
+        return `Saved “${name}” (${c.lines.length} commands) into the world “${world}”. In Minecraft: type /reload, stand where you want it, then ${cmd}. Cheats/op are needed; build on open ground (it replaces blocks in the way and can't be undone, so try it in a copy of the world first if unsure).`;
+      },
+      journey_time: async (input) => {
+        const o = (input ?? {}) as Record<string, unknown>;
+        const s = ctx.settings.get();
+        const to = typeof o['to'] === 'string' ? o['to'] : '';
+        const fromText = typeof o['from'] === 'string' && o['from'].trim() ? o['from'] : '';
+        const mode: TravelMode =
+          o['mode'] === 'walking' || o['mode'] === 'cycling' ? o['mode'] : 'driving';
+        const from = fromText
+          ? await journeys.find(fromText)
+          : s.homeAddress
+            ? await journeys.find(s.homeAddress)
+            : s.weatherPlace
+              ? { lat: s.weatherPlace.lat, lon: s.weatherPlace.lon, name: s.weatherPlace.name }
+              : null;
+        if (!from)
+          return {
+            error:
+              "I don't know where home is: ask for their address or postcode, or set it in Settings › General › Home address.",
+          };
+        const dest = await journeys.find(to).catch(() => null);
+        if (!dest)
+          return { error: `Couldn't find “${to}” on the map. Try a fuller address or postcode.` };
+        const j = await journeys.route(from, dest, mode).catch(() => null);
+        if (!j) return { error: 'No route found between those places.' };
+        const at =
+          typeof o['arrive_by'] === 'string' ? minutesUntil(o['arrive_by'], undefined) : null;
+        const leave =
+          at !== null
+            ? new Date(Date.now() + (at - j.allow) * 60_000).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              })
+            : null;
+        return {
+          from: from.name,
+          to: dest.name,
+          mode,
+          minutes: j.minutes,
+          km: j.km,
+          allow_minutes: j.allow,
+          ...(leave ? { leave_by: leave } : {}),
+          note: mode === 'driving' ? 'No live traffic: allow_minutes adds a margin.' : undefined,
+        };
+      },
       shop: async (input) => {
         const o = (input ?? {}) as Record<string, unknown>;
         const str = (k: string, n = 600): string =>

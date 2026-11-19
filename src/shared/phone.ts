@@ -216,3 +216,35 @@ export function androidTimerLink(minutes: number, label = ''): string {
 export function androidAlarmLink(hour: number, minute: number, label = ''): string {
   return `intent:#Intent;action=android.intent.action.SET_ALARM;i.android.intent.extra.alarm.HOUR=${Math.floor(hour)};i.android.intent.extra.alarm.MINUTES=${Math.floor(minute)};S.android.intent.extra.alarm.MESSAGE=${enc(label || 'Alton alarm')};end`;
 }
+
+type SyncList = { name: string; items: Array<{ text: string; done: boolean }> };
+
+/** The PC's lists, with the phone's changes that haven't reached the PC yet put back on top
+ *  (added items, ticks and deletions), so a sync never makes them vanish from the phone. */
+export function mergeLists(
+  pc: SyncList[],
+  added: Array<{ list: string; text: string }>,
+  ops: Array<{ list: string; text: string; op: 'done' | 'remove' }>,
+): SyncList[] {
+  const out = pc.map((l) => ({ name: l.name, items: l.items.map((i) => ({ ...i })) }));
+  const find = (name: string): SyncList => {
+    const l = out.find((x) => x.name.toLowerCase() === name.toLowerCase());
+    if (l) return l;
+    const n = { name, items: [] as SyncList['items'] };
+    out.push(n);
+    return n;
+  };
+  const same = (a: string, b: string): boolean => a.trim().toLowerCase() === b.trim().toLowerCase();
+  for (const a of added) {
+    const l = find(a.list || 'To-do');
+    if (!l.items.some((i) => same(i.text, a.text))) l.items.push({ text: a.text, done: false });
+  }
+  for (const o of ops) {
+    const lists = o.list ? out.filter((l) => same(l.name, o.list)) : out;
+    for (const l of lists) {
+      if (o.op === 'remove') l.items = l.items.filter((i) => !same(i.text, o.text));
+      else for (const i of l.items) if (same(i.text, o.text)) i.done = true;
+    }
+  }
+  return out;
+}

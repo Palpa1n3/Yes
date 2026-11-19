@@ -13,6 +13,10 @@ export function nameVariants(name: string): string[] {
   const out = new Set([n]);
   if (n.length <= 4 && !n.includes(' ')) out.add(n.split('').join(' '));
   if (n === 'arc') out.add('ark');
+  // How "Alton" often comes out of speech recognition with Welsh and other UK accents.
+  if (n === 'alton')
+    for (const v of ['olton', 'allton', 'aulton', 'alltan', 'altan', 'olten', 'alten', "alton's"])
+      out.add(v);
   return [...out];
 }
 

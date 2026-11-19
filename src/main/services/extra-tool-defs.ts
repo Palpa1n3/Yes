@@ -140,6 +140,39 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'minecraft_build',
+    description:
+      'Build something in Minecraft (Java Edition): you design it as setblock / fill / clone commands with RELATIVE coordinates (~x ~y ~z, from where the player stands; build in front of them, e.g. starting at ~2 ~ ~2), and it is saved into their world as a datapack function. Then in game they type /reload and /function alton:<name> (cheats must be allowed). Use correct block ids (minecraft:oak_planks, minecraft:glass_pane[facing=…] etc.); prefer fill for walls/floors, hollow interiors with fill … hollow or air. Plan the size first, keep it buildable (under 20,000 commands). action "list" shows their worlds (most recent first; default world = most recently played). If the game is open, offer to type the two commands for them with Agent Mode.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['build', 'list'] },
+        name: { type: 'string', description: 'Short name, e.g. "castle".' },
+        description: { type: 'string' },
+        world: { type: 'string', description: 'World folder name (optional).' },
+        commands: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['action'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'journey_time',
+    description:
+      'How long it takes to get somewhere by car (default), on foot or by bike, from home (or "from"), using OpenStreetMap routes. There is no live traffic, so the answer already allows a margin for driving; say so. With arrive_by (HH:MM) it also gives the time to leave. For the user\'s calendar events with a location, Alton also gives "leave by" heads-ups by itself.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        to: { type: 'string', description: 'Place, address or postcode.' },
+        from: { type: 'string', description: 'Default: home.' },
+        mode: { type: 'string', enum: ['driving', 'walking', 'cycling'] },
+        arrive_by: { type: 'string', description: '24-hour HH:MM, optional.' },
+      },
+      required: ['to'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'shop',
     description:
       'Shop online for the user with Agent Mode (eBay, Amazon, Vinted, or another shop they name): search, scroll and compare listings, and depending on "goal": "find" (report the best options with prices incl. postage), "offer" (make an offer up to max_price) or "buy" (buy the best match within max_price). Offers, Buy It Now, checkout and paying ALWAYS need the user\'s approval (twice for the final payment); card details are never typed. With "seller_questions", it messages sellers to ask those things (allowed without asking per the user\'s permission setting; anything that commits to a price still asks). Seller replies take time: offer to check back later with schedule_agent_task ("check my eBay/Vinted messages and tell me the replies"). Before calling, make sure you know what they want (item, size, condition, budget); ask if unclear.',

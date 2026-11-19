@@ -10,6 +10,8 @@ export const DEFAULT_FISH_VOICE = '06cfdb3653a4496983d6ad77f98cc184';
 export const WHISPER_MODELS = {
   base: { id: 'Xenova/whisper-base.en', label: 'Standard', size: '≈ 75 MB' },
   small: { id: 'Xenova/whisper-small.en', label: 'Better', size: '≈ 250 MB' },
+  // Best with accents; slower (a second or two per sentence on most PCs).
+  medium: { id: 'Xenova/whisper-medium.en', label: 'Best (accents)', size: '≈ 800 MB' },
 } as const;
 export type WhisperModel = keyof typeof WHISPER_MODELS;
 

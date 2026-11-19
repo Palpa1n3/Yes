@@ -155,6 +155,7 @@ export function registerAssistantIpc(
       model: () => (getSettings().saver ? 'claude-haiku-5-5' : getSettings().model),
       researchModel: () => (getSettings().saver ? 'claude-haiku-5-5' : getSettings().researchModel),
       saver: () => getSettings().saver,
+      accent: () => getSettings().accent,
       systemPrompt,
       info,
       stats: getStats,

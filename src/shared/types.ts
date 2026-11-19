@@ -167,6 +167,8 @@ export interface Settings {
   /** The mic button (local Whisper speech-to-text). */
   voiceInput: boolean;
   whisperModel: WhisperModel;
+  /** How you speak (e.g. "Welsh"), so Alton allows for speech-recognition slips. */
+  accent: string;
   sfx: boolean;
   sfxVolume: number; // 0–1
   wakeWord: boolean; // placeholder, not implemented yet
@@ -234,6 +236,10 @@ export interface Settings {
   prompts: import('./prompts').SavedPrompt[];
   /** Show the saved prompts for what you just copied, from any app; '' = off. */
   clipboardHotkey: string;
+  /** Home address (or postcode) for journey times; '' = the weather town. */
+  homeAddress: string;
+  /** "Leave by" heads-ups for calendar events with a location. */
+  leaveReminders: boolean;
   /** Saver mode: cheapest model for chat and research, fewer web searches, no background
    *  memory learning. Agent Mode keeps its own model. */
   saver: boolean;
@@ -307,6 +313,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fishModel: 's2.1-pro-free',
   voiceInput: true,
   whisperModel: 'base',
+  accent: '',
   sfx: true,
   sfxVolume: 0.35,
   wakeWord: false,
@@ -341,6 +348,8 @@ export const DEFAULT_SETTINGS: Settings = {
   phoneAccess: false,
   phoneAppUrl: 'https://palpa1n3.github.io/Yes/',
   monthlyBudget: 0,
+  homeAddress: '',
+  leaveReminders: true,
   saver: false,
   onboarded: false,
   prompts: DEFAULT_PROMPTS.map((p) => ({ ...p })),

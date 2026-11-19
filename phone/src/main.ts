@@ -7,6 +7,7 @@ import {
   decodeSync,
   encodeSync,
   mergeChats,
+  mergeLists,
   type Person,
   type PhoneAction,
   type PhoneChat,
@@ -228,7 +229,8 @@ function takeHash(): void {
     systemPrompt: d.systemPrompt || S.systemPrompt,
     model: d.model || S.model,
     memories: [...new Set([...d.memories, ...S.newMemories])],
-    lists: d.lists,
+    // Keep the phone's not-yet-sent additions, ticks and deletions on top of the PC's lists.
+    lists: mergeLists(d.lists, S.newListItems, S.listOps),
     chats: mergeChats(S.chats, d.chats),
     pcUrl: d.pcUrl || S.pcUrl,
     macs: d.macs?.length ? d.macs : S.macs,
@@ -254,6 +256,7 @@ function systemText(): string {
   return [
     base,
     `You are running in ${S.name}'s phone app. The user's PC may be off, so you cannot control the PC, its files or apps here (if they need that, say they can open the full version from the PC tab when the PC is on).`,
+    "Messages are often spoken and turned into text by the phone, so words can be misheard (the user has a UK, possibly Welsh, accent). Work out what they most likely meant; if it could mean different things, ask a short question. Don't comment on the mistakes.",
     'Ideas for improving Alton: when the user wishes you could do something, a request fails because you lack a feature, or they suggest an improvement, add a short specific idea to the list "Alton roadmap" with add_to_list (it syncs to the PC roadmap) and mention it briefly.',
     'Alexa: you cannot reach Alexa directly; tell_alexa makes the phone say a command out loud for a nearby Echo (e.g. turning alarms or lights on).',
     'Shifts: you cannot open or read other apps. To add work shifts to the calendar, the user shares a screenshot of their rota/shift app (screenshot it, then Share › Alton, or the camera button here); read it and use add_shifts. If they ask without a screenshot, tell them that in one or two short steps.',
@@ -1428,7 +1431,11 @@ function toggleMic(): void {
   }
   const r = new R();
   recog = r;
-  r.lang = navigator.language || 'en-GB';
+  // UK English unless the phone is set to another English (better with UK accents).
+  r.lang =
+    /^en-(gb|ie)$/i.test(navigator.language) || !/^en/i.test(navigator.language)
+      ? 'en-GB'
+      : navigator.language;
   r.interimResults = true;
   const ta = $<HTMLTextAreaElement>('msg');
   const before = ta.value;

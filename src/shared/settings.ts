@@ -122,7 +122,8 @@ export function sanitizeSettings(raw: unknown): Settings {
       ? (r['fishModel'] as FishModel)
       : d.fishModel,
     voiceInput: bool('voiceInput'),
-    whisperModel: r['whisperModel'] === 'small' ? 'small' : 'base',
+    whisperModel:
+      r['whisperModel'] === 'small' || r['whisperModel'] === 'medium' ? r['whisperModel'] : 'base',
     sfx: bool('sfx'),
     sfxVolume:
       typeof r['sfxVolume'] === 'number' && r['sfxVolume'] >= 0 && r['sfxVolume'] <= 1
@@ -195,5 +196,8 @@ export function sanitizeSettings(raw: unknown): Settings {
       : '',
     followUp: bool('followUp'),
     saver: bool('saver'),
+    accent: str('accent', 40).trim(),
+    leaveReminders: bool('leaveReminders'),
+    homeAddress: str('homeAddress', 200).trim(),
   };
 }

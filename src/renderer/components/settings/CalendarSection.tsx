@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { CalendarUrlResult } from '@shared/calendar';
 import { useCalendarStore } from '@renderer/stores/calendarStore';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
-import { Field, Section, Select } from './controls';
+import { Field, Section, Select, Toggle } from './controls';
 
 /** Connect a calendar by its private iCal address (stored encrypted in main). */
 export function CalendarSection() {
@@ -103,6 +103,30 @@ export function CalendarSection() {
             { value: '15', label: '15 minutes before' },
             { value: '30', label: '30 minutes before' },
           ]}
+        />
+      </Field>
+      <Field
+        label="Leave-by reminders"
+        hint="For events with a location: works out the drive from home and tells you when to set off (10 minutes before). No live traffic, so it adds a margin."
+      >
+        <Toggle
+          label="Leave-by reminders"
+          checked={s.leaveReminders}
+          onChange={(v) => void update({ leaveReminders: v })}
+        />
+      </Field>
+      <Field
+        label="Home address or postcode"
+        hint="Where journeys start (only this is sent to OpenStreetMap to find it on the map). Blank = your weather town."
+        stacked
+      >
+        <input
+          className="h-8 w-full rounded-[6px] border border-line bg-panel-raised/80 px-2 text-[12px] text-text-primary placeholder:text-text-muted/70 focus:border-accent focus:outline-none"
+          aria-label="Home address or postcode"
+          placeholder="e.g. LS1 4AP"
+          defaultValue={s.homeAddress}
+          maxLength={200}
+          onBlur={(e) => void update({ homeAddress: e.target.value.trim() })}
         />
       </Field>
     </Section>

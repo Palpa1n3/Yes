@@ -1,4 +1,5 @@
-import { shell } from 'electron';
+import { JourneyService, LeaveReminders } from '../services/journey';
+import { shell, Notification } from 'electron';
 import type { MainContext } from '../context';
 import { SkillRegistry, systemReportSkill } from '../services/skills';
 import { toWebUrl } from '../services/command-executor';
@@ -63,6 +64,44 @@ export function registerIpc(ctx: MainContext): void {
     );
   });
   const calendar = registerCalendarIpc(ctx);
+  // "Leave by" heads-ups for calendar events with a location (journey from home).
+  {
+    const journeys = new JourneyService((url, init) => fetch(url, init));
+    let homeKey = '';
+    let home: { lat: number; lon: number; name: string } | null = null;
+    const leave = new LeaveReminders({
+      journeys,
+      home: () => home,
+      events: () => {
+        const st = calendar.state();
+        return st.configured ? st.events : null;
+      },
+      enabled: () => ctx.settings.get().leaveReminders,
+      notify: (text) => {
+        ctx.notify(text);
+        ctx.command({ type: 'notice', text });
+        if (Notification.isSupported())
+          new Notification({ title: ctx.settings.get().assistantName, body: text }).show();
+      },
+    });
+    const tick = async (): Promise<void> => {
+      const s = ctx.settings.get();
+      const key =
+        s.homeAddress || (s.weatherPlace ? `${s.weatherPlace.lat},${s.weatherPlace.lon}` : '');
+      if (key !== homeKey) {
+        homeKey = key;
+        home = s.homeAddress
+          ? await journeys.find(s.homeAddress).catch(() => null)
+          : s.weatherPlace
+            ? { lat: s.weatherPlace.lat, lon: s.weatherPlace.lon, name: s.weatherPlace.name }
+            : null;
+      }
+      await leave.tick().catch(() => undefined);
+    };
+    const t = setInterval(() => void tick(), 5 * 60_000);
+    t.unref?.();
+    setTimeout(() => void tick(), 60_000);
+  }
   const notes = registerNotesIpc(ctx);
   const media = registerMediaIpc(ctx);
   registerCleanupIpc(ctx);

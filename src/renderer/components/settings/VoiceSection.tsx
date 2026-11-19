@@ -234,6 +234,19 @@ export function VoiceSection() {
             onChange={(v) => void update({ voiceInput: v })}
           />
         </Field>
+        <Field
+          label="Your accent"
+          hint="Helps Alton make sense of anything the speech model mishears (e.g. Welsh, Scottish, Geordie). For accents, the Best speech model below helps most."
+        >
+          <input
+            className="h-8 w-40 shrink-0 rounded-[6px] border border-line bg-panel-raised/80 px-2 text-[12px] text-text-primary placeholder:text-text-muted/70 focus:border-accent focus:outline-none"
+            aria-label="Your accent"
+            placeholder="e.g. Welsh"
+            maxLength={40}
+            defaultValue={s.accent}
+            onBlur={(e) => void update({ accent: e.target.value.trim() })}
+          />
+        </Field>
         <Field label="Accuracy" hint={sttText}>
           <div className="flex items-center gap-2">
             <Segmented<WhisperModel>

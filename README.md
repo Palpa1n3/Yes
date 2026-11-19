@@ -158,6 +158,32 @@ When you say "I wish Alton could…", a request fails for lack of a feature, or 
 improvement, it adds a one-line idea to Notes › **Alton roadmap** (from the phone too; it
 syncs). Tell it "tick off X on the roadmap" when something's done.
 
+### Journey times and leave-by reminders
+
+Ask "how long to drive to Customer Cafe?" or "when do I need to leave to get to Leeds station
+by 9?". Routes come from OpenStreetMap; there's no live traffic, so driving times include a
+margin (+20% and 5 minutes). For calendar events with a location, Alton tells you when to set
+off, 10 minutes beforehand ("Leave by 12:25 for Customer Cafe…"). Set your home address or
+postcode in Settings › Connections › Calendar (blank = your weather town); turn the reminders
+off there too.
+
+### Minecraft building (Java Edition)
+
+"Build me a small stone castle in my survival world." Alton designs it as building commands and
+saves it into the world as a datapack. In Minecraft: type `/reload`, stand where you want it,
+then `/function alton:castle` (cheats needed). Only block-placing commands are allowed, and it
+builds relative to where you stand. It replaces blocks in the way and can't be undone, so try
+big builds in a copy of the world first.
+
+### Accents (speech recognition)
+
+Settings › Voice: set **Your accent** (e.g. "Welsh") and pick **Best (accents)** under
+Accuracy; it's a larger speech model (≈ 800 MB, downloaded once) that copes much better with
+accents, at the cost of a second or two per sentence. Alton is also told that spoken messages
+may be misheard, so it works out what you meant (or asks) instead of answering the misheard
+words. The wake word also accepts common accent versions of "Alton" (Olton, Allton…).
+The phone app uses UK English recognition.
+
 ### Saver mode
 
 Click the leaf next to the spending chip (or type `/saver`, or Settings › AI › Spending) to
