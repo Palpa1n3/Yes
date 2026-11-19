@@ -96,8 +96,10 @@ describe('settings sanitizer', () => {
       hacker: true,
       assistantName: '  ',
     });
-    expect(s).toEqual(DEFAULT_SETTINGS);
-    expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS);
+    // Settings saved by an older version count as already set up (no setup guide).
+    expect(s).toEqual({ ...DEFAULT_SETTINGS, onboarded: true });
+    expect(sanitizeSettings(null)).toEqual({ ...DEFAULT_SETTINGS, onboarded: true });
+    expect(sanitizeSettings({ ...DEFAULT_SETTINGS }).onboarded).toBe(false);
   });
   it('keeps valid values and mirrors the name into the personality', () => {
     const s = sanitizeSettings({ assistantName: 'JEEVES', theme: 'mono', sfxVolume: 0.5 });

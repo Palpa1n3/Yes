@@ -1,3 +1,4 @@
+import { DEFAULT_PROMPTS } from './prompts';
 import { DEFAULT_FISH_VOICE, type FishModel, type VoiceEngine, type WhisperModel } from './voice';
 import type { TempUnit, WeatherPlace, WindUnit } from './weather';
 import { DEFAULT_PERSONALITY, type Personality } from './personalities';
@@ -73,6 +74,8 @@ export interface UserMessage {
   timestamp: number;
   /** Which saved chat this belongs to. */
   chatId?: string;
+  /** Files and pictures sent with the message. */
+  attachments?: import('./attachments').Attachment[];
 }
 
 export interface AssistantResponse {
@@ -124,7 +127,7 @@ export interface ToolDef {
   parameters: Record<string, unknown>; // JSON schema
 }
 
-export type ThemeId = 'arc-cyan' | 'solar-gold' | 'crimson' | 'mono';
+export type ThemeId = 'arc-cyan' | 'solar-gold' | 'crimson' | 'sentinel' | 'violet' | 'mono';
 
 export type ReduceMotion = 'system' | 'on' | 'off';
 
@@ -175,6 +178,16 @@ export interface Settings {
   globalHotkey: string;
   /** Start/stop talking from any app; '' = off. */
   voiceHotkey: string;
+  /** Turn "open mic" (everything you say goes to ARC, no name needed) on/off; '' = off. */
+  openMicHotkey: string;
+  /** Open mic switches itself off after this many quiet minutes. */
+  openMicMinutes: number;
+  /** Screen awareness: keep a picture of the screen for Claude to look at when asked. */
+  screenAware: boolean;
+  /** Remember recent copied text (memory only, cleared on quit). */
+  clipboardHistory: boolean;
+  /** Heads-up about heat, full drives, low memory, long uptime. */
+  healthAlerts: boolean;
   /* Gaming mode */
   /** Spot running games and switch gaming mode on/off automatically. */
   gamingMode: boolean;
@@ -191,9 +204,77 @@ export interface Settings {
   model: AiModel;
   /** Model for chats in research mode (web search, fuller answers). */
   researchModel: AiModel;
+  /** Agent Mode ("handle this for me"): Alton uses the mouse and keyboard. */
+  agentMode: boolean;
+  agentModel: AiModel;
+  /** Notice and remember useful facts from chats automatically (shown in Notes › Memory). */
+  autoMemory: boolean;
+  /** Offer help unprompted (suggestions), outside quiet hours. */
+  initiative: boolean;
+  /** Quiet hours for suggestions: from this hour (0-23) until quietEnd. Equal = never quiet. */
+  quietStart: number;
+  quietEnd: number;
+  /** Offline AI: an Ollama model name (e.g. "llama3.2"); '' = the simple built-in replies. */
+  localModel: string;
+  /** Extra wake words besides the assistant's name (e.g. "Jarvis", "Computer"). */
+  wakeWords: string[];
+  /** Keep listening for the wake word while gaming (in-game voice help). */
+  gamingVoice: boolean;
+  /** Back up game saves changed during a gaming session. */
+  saveBackups: boolean;
+  /** Per-game extras while that game runs. */
+  gamingProfiles: Record<string, GameProfile>;
+  /** What Alton may do: ask first, just do it, or never. */
+  permissions: Record<PermissionKey, Permission>;
+  /** Overview panels the user has hidden. */
+  hiddenPanels: string[];
+  /** The first-run setup guide has been completed (or skipped). */
+  onboarded: boolean;
+  /** Your own slash commands (/fix, /summarize...); {text} = what follows or the clipboard. */
+  prompts: import('./prompts').SavedPrompt[];
+  /** Show the saved prompts for what you just copied, from any app; '' = off. */
+  clipboardHotkey: string;
+  /** Monthly Claude spending limit in US dollars for warnings (0 = no limit). */
+  monthlyBudget: number;
+  /** Where the phone-only app lives (GitHub Pages). */
+  phoneAppUrl: string;
+  /** Phone companion: serve a web app on the home network (pair with a code). */
+  phoneAccess: boolean;
+  /** Whisper mode: quieter, slower speech and no sound effects. */
+  whisper: boolean;
+  /** After answering a spoken request, keep listening a few seconds for a follow-up (no name needed). */
+  followUp: boolean;
+  /** The centre of the HUD: an animated face, or the rings. */
+  avatar: AvatarStyle;
+  /** ARC's project folder, read-only, so Claude can read its own code ('' = not set). */
+  sourceDir: string;
 }
 
+export type AvatarStyle = 'face' | 'rings' | 'code';
+
 export type AiProvider = 'mock' | 'anthropic';
+
+export const PERMISSION_KEYS = [
+  'launch_app',
+  'close_app',
+  'open_url',
+  'lock_screen',
+  'run_routine',
+  'set_volume',
+  'media_control',
+  'files',
+] as const;
+export type PermissionKey = (typeof PERMISSION_KEYS)[number];
+export type Permission = 'allow' | 'ask' | 'block';
+
+export interface GameProfile {
+  /** Extra apps to close while this game runs. */
+  closeApps: string[];
+  /** Use the High performance power plan for this game (else the global setting). */
+  highPerformance: boolean;
+  /** A note Alton gives Claude about this game (e.g. "competitive, keep quiet"). */
+  note?: string;
+}
 export const AI_MODELS = ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5'] as const;
 export type AiModel = (typeof AI_MODELS)[number];
 
@@ -229,6 +310,11 @@ export const DEFAULT_SETTINGS: Settings = {
   alarmVolume: 0.8,
   globalHotkey: 'CommandOrControl+Space',
   voiceHotkey: 'CommandOrControl+Alt+Space',
+  openMicHotkey: 'CommandOrControl+Alt+M',
+  openMicMinutes: 5,
+  screenAware: true,
+  clipboardHistory: true,
+  healthAlerts: true,
   gamingMode: false,
   gamingPowerPlan: true,
   gamingQuiet: true,
@@ -237,6 +323,38 @@ export const DEFAULT_SETTINGS: Settings = {
   provider: 'mock',
   model: 'claude-haiku-5-5',
   researchModel: 'claude-sonnet-5-5',
+  agentMode: true,
+  agentModel: 'claude-sonnet-5-5',
+  autoMemory: true,
+  initiative: true,
+  quietStart: 22,
+  quietEnd: 8,
+  avatar: 'face',
+  sourceDir: '',
+  whisper: false,
+  followUp: true,
+  localModel: '',
+  phoneAccess: false,
+  phoneAppUrl: 'https://palpa1n3.github.io/Yes/',
+  monthlyBudget: 0,
+  onboarded: false,
+  prompts: DEFAULT_PROMPTS.map((p) => ({ ...p })),
+  clipboardHotkey: 'CommandOrControl+Alt+C',
+  wakeWords: [],
+  gamingVoice: false,
+  saveBackups: true,
+  gamingProfiles: {},
+  permissions: {
+    launch_app: 'allow',
+    close_app: 'ask',
+    open_url: 'allow',
+    lock_screen: 'ask',
+    run_routine: 'ask',
+    set_volume: 'allow',
+    media_control: 'allow',
+    files: 'allow',
+  },
+  hiddenPanels: [],
 };
 
 export interface WindowStatePayload {
@@ -250,7 +368,18 @@ export type AppCommand =
   | { type: 'open-settings' }
   | { type: 'notice'; text: string }
   | { type: 'voice-toggle' }
-  | { type: 'run-routine'; id: string };
+  | { type: 'open-mic-toggle' }
+  | { type: 'run-routine'; id: string }
+  | { type: 'emergency-stop' }
+  | {
+      type: 'remote-message';
+      id: string;
+      text: string;
+      chatId?: string;
+      images?: Array<{ name: string; data: string; thumb: string }>;
+    }
+  | { type: 'remote-cancel' }
+  | { type: 'clipboard-actions'; text: string };
 
 /** What extra (expensive) telemetry the renderer currently needs. */
 export interface TelemetryDetail {
@@ -270,7 +399,13 @@ export interface CommandInfoShared {
 }
 
 export type StoredMessage =
-  | { id: string; role: 'user'; text: string; timestamp: number }
+  | {
+      id: string;
+      role: 'user';
+      text: string;
+      timestamp: number;
+      attachments?: import('./attachments').AttachmentInfo[];
+    }
   | {
       id: string;
       role: 'assistant';
@@ -279,6 +414,8 @@ export type StoredMessage =
       streaming: boolean;
       revealed: boolean;
       sources?: import('./chats').Source[];
+      /** Picture cards for the pages/products the answer links to. */
+      previews?: import('./preview').LinkPreview[];
     }
   | { id: string; role: 'command'; timestamp: number; command: CommandInfoShared }
   | { id: string; role: 'system'; text: string; timestamp: number; tone: 'info' | 'error' };
@@ -292,6 +429,8 @@ export interface AppInfo {
   /** Global shortcut actually registered (may differ from the setting if it was taken). */
   activeHotkey: string | null;
   activeVoiceHotkey: string | null;
+  activeOpenMicHotkey: string | null;
+  activeClipboardHotkey: string | null;
 }
 
 /** One entry in userData/apps.json. */
@@ -419,4 +558,6 @@ export interface TimerInfo {
   dueAt: number;
   /** 'ringing' until dismissed or snoozed. */
   status: 'running' | 'ringing';
+  /** A focus session: suggestions and alerts stay quiet until it ends. */
+  kind?: 'focus';
 }

@@ -14,6 +14,9 @@ const launchedAt = Date.now();
 /** Stop whatever ARC is saying (e.g. when the mic opens). */
 export let stopSpeaking: () => void = () => webSpeechOutput.cancel();
 
+/** Read one message aloud now (the speaker button), in the chosen voice. */
+export let speakNow: (text: string) => void = (text) => webSpeechOutput.speak(text);
+
 /** Reads finished replies aloud when "Speak replies" is on and voice isn't muted, in the
  *  Fish Audio voice when it's set up (falling back to the Windows voice if it fails). */
 export function useSpeechOutput(): void {
@@ -68,6 +71,15 @@ export function useSpeechOutput(): void {
       fish.cancel();
       webSpeechOutput.cancel();
       done();
+    };
+    speakNow = (text) => {
+      stopSpeaking();
+      const useFish =
+        useSettingsStore.getState().settings.voiceEngine === 'fish' &&
+        useVoiceStore.getState().status.fishKey;
+      assistant().setSpeechActive(true);
+      if (useFish) fish.speak(text);
+      else speakSystem(text);
     };
 
     const unsub = useConversationStore.subscribe((s) => {

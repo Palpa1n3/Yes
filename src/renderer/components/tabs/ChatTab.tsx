@@ -292,7 +292,7 @@ export function ChatTab() {
             </p>
             {meta?.research && provider !== 'anthropic' && (
               <p className="max-w-md text-[12px] text-amber">
-                Research needs Claude: add your API key in Settings › Advanced.
+                Research needs Claude: add your API key in Settings › AI.
               </p>
             )}
           </div>

@@ -4,6 +4,9 @@ import { useElementSize } from '@renderer/hooks/useElementSize';
 import { useReducedMotion } from '@renderer/hooks/useReducedMotion';
 import { useTween } from '@renderer/hooks/useTween';
 import { CoreCanvas } from './CoreCanvas';
+import { CoreFace } from './CoreFace';
+import { CoreCode } from './CoreCode';
+import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { polar } from './geometry';
 
 export interface Connector {
@@ -59,6 +62,9 @@ export function CoreDisplay({
   const [ref, { w, h }] = useElementSize<HTMLDivElement>();
   const reduced = useReducedMotion();
   const v = useTween(value);
+  const avatar = useSettingsStore((x) => x.settings.avatar);
+  /** Face and code ring show a small state label instead of the rings' readout. */
+  const face = avatar !== 'rings';
 
   const cx = w / 2;
   const cy = h / 2;
@@ -112,18 +118,55 @@ export function CoreDisplay({
             })}
           </svg>
 
-          <CoreCanvas
-            size={{ w, h }}
-            center={{ x: cx, y: cy }}
-            radius={R}
-            state={state}
-            ringText={ringText}
-            reducedMotion={reduced}
-            getLevel={getLevel}
-            themeKey={themeKey}
-          />
+          {avatar === 'code' ? (
+            <CoreCode
+              size={{ w, h }}
+              center={{ x: cx, y: cy }}
+              radius={R}
+              state={state}
+              reducedMotion={reduced}
+              getLevel={getLevel}
+              themeKey={themeKey}
+            />
+          ) : face ? (
+            <CoreFace
+              size={{ w, h }}
+              center={{ x: cx, y: cy }}
+              radius={R}
+              state={state}
+              reducedMotion={reduced}
+              getLevel={getLevel}
+              themeKey={themeKey}
+            />
+          ) : (
+            <CoreCanvas
+              size={{ w, h }}
+              center={{ x: cx, y: cy }}
+              radius={R}
+              state={state}
+              ringText={ringText}
+              reducedMotion={reduced}
+              getLevel={getLevel}
+              themeKey={themeKey}
+            />
+          )}
 
-          {!compact && (
+          {!compact && face && stateLabel && detail && (
+            <div
+              className="pointer-events-none absolute left-0 right-0 text-center"
+              style={{ top: cy + R * (avatar === 'code' ? 0.27 : 0.76) }}
+            >
+              <span
+                className={`font-display uppercase text-glow-md ${tone}`}
+                style={{ fontSize: fs(0.05, 10), letterSpacing: '0.28em' }}
+              >
+                {stateLabel}
+                {stateDetail ? ` · ${stateDetail.slice(0, 40)}` : ''}
+              </span>
+            </div>
+          )}
+
+          {!compact && !face && (
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
               <AnimatePresence mode="wait" initial={false}>
                 {stateLabel ? (

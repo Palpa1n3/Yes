@@ -6,6 +6,8 @@ const SHORT: Record<ThemeId, string> = {
   'arc-cyan': 'Cyan',
   'solar-gold': 'Gold',
   crimson: 'Crimson',
+  sentinel: 'Sentinel',
+  violet: 'Violet',
   mono: 'Mono',
 };
 
@@ -29,13 +31,16 @@ export function Palette() {
             aria-label={THEMES[id].name}
             title={THEMES[id].name}
             onClick={() => void update({ theme: id })}
-            className={`flex h-6 items-center gap-1.5 rounded-[2px] border px-1.5 font-mono text-[10px] uppercase tracking-[0.12em] transition-[color,border-color,box-shadow] duration-150 ${
+            className={`flex h-6 items-center gap-1.5 rounded-[5px] border px-1.5 font-mono text-[10px] uppercase tracking-[0.12em] transition-[color,border-color,box-shadow] duration-150 ${
               active
                 ? 'border-accent bg-accent/10 text-ice shadow-glow-sm'
                 : 'border-line/60 text-text-muted hover:border-accent hover:text-accent'
             }`}
           >
-            <span className="h-2 w-2" style={{ background: THEMES[id].colors.accent }} />
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ background: THEMES[id].colors.accent }}
+            />
             <span className="hidden wide:inline">{SHORT[id]}</span>
           </button>
         );

@@ -15,6 +15,10 @@ import { Panel } from './Panel';
 
 /** Survives switching tabs (a scan takes a few seconds). */
 let lastScan: CleanupScan | null = null;
+/** A scan run elsewhere ("free up space" by voice) shows here when the tab opens. */
+export const primeCleanupScan = (s: CleanupScan): void => {
+  lastScan = s;
+};
 
 const box = (on: boolean): string =>
   `grid h-4 w-4 shrink-0 place-items-center border ${on ? 'border-accent bg-accent/20 text-accent' : 'border-line'}`;

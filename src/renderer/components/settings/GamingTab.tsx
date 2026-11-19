@@ -171,7 +171,106 @@ export function GamingTab() {
         >
           <span />
         </Field>
+        <Field
+          label="Voice help in game"
+          hint={`Keep listening for “${s.assistantName}” while gaming (even with quiet mode on), so you can ask for help mid-game.`}
+        >
+          <Toggle
+            label="Voice help in game"
+            checked={s.gamingVoice}
+            onChange={(v) => void update({ gamingVoice: v })}
+          />
+        </Field>
+        <Field
+          label="Back up game saves"
+          hint="After each gaming session, save files that changed (Saved Games, Documents › My Games, AppData › LocalLow, Minecraft worlds) are copied to ARC's save-backups folder. The last 5 per game are kept."
+        >
+          <span className="flex items-center gap-2">
+            <button
+              type="button"
+              className="hud-button"
+              onClick={() => window.arc.app.openPath('saveBackups')}
+            >
+              Open
+            </button>
+            <Toggle
+              label="Back up game saves"
+              checked={s.saveBackups}
+              onChange={(v) => void update({ saveBackups: v })}
+            />
+          </span>
+        </Field>
       </Section>
+      <ProfilesSection />
     </>
+  );
+}
+
+/** Per-game extras: more apps to close, and High performance just for that game. */
+function ProfilesSection() {
+  const { settings: s, update } = useSettingsStore();
+  const [game, setGame] = useState('');
+  const entries = Object.entries(s.gamingProfiles);
+  const put = (name: string, p: (typeof s.gamingProfiles)[string] | null): void => {
+    const next = Object.fromEntries(Object.entries(s.gamingProfiles).filter(([k]) => k !== name));
+    void update({ gamingProfiles: p ? { ...next, [name]: p } : next });
+  };
+  return (
+    <Section title="Game profiles">
+      <p className="py-1 text-[12px] text-text-muted">
+        Extra settings for one game, used when gaming mode spots it (matched by name).
+      </p>
+      {entries.map(([name, p]) => (
+        <div key={name} className="mb-2 rounded-[6px] border border-line/60 p-2">
+          <div className="mb-1 flex items-center gap-2 text-[13px] text-ice">
+            <Gamepad2 size={13} className="text-accent" />
+            <span className="flex-1">{name}</span>
+            <button
+              type="button"
+              aria-label={`Remove profile ${name}`}
+              onClick={() => put(name, null)}
+              className="text-text-muted hover:text-alert"
+            >
+              <X size={12} />
+            </button>
+          </div>
+          <Field label="High performance for this game">
+            <Toggle
+              label={`High performance for ${name}`}
+              checked={p.highPerformance}
+              onChange={(v) => put(name, { ...p, highPerformance: v })}
+            />
+          </Field>
+          <Field label="Also close" stacked>
+            <NameList
+              label={`Apps to close for ${name}`}
+              values={p.closeApps}
+              placeholder="App name"
+              onChange={(v) => put(name, { ...p, closeApps: v })}
+            />
+          </Field>
+        </div>
+      ))}
+      <form
+        className="flex gap-1.5 py-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const n = game.trim();
+          if (n && !s.gamingProfiles[n]) put(n, { closeApps: [], highPerformance: true });
+          setGame('');
+        }}
+      >
+        <input
+          value={game}
+          onChange={(e) => setGame(e.target.value)}
+          placeholder="Game name, e.g. Fortnite"
+          aria-label="New game profile"
+          className="h-7 min-w-0 flex-1 rounded-[5px] border border-line bg-panel-raised px-2 text-[12px] text-text-primary focus:border-accent focus:outline-none"
+        />
+        <button type="submit" className="hud-button" disabled={!game.trim()}>
+          Add profile
+        </button>
+      </form>
+    </Section>
   );
 }

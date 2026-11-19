@@ -49,7 +49,9 @@ export function TabBar() {
             title={`${t.label} (Ctrl+${i + 1})`}
             onClick={() => setTab(t.id)}
             className={`group relative flex h-full items-center gap-2 px-2.5 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors duration-150 full:px-4 ${
-              active ? 'bg-accent/[0.07] text-ice' : 'text-text-muted hover:text-accent'
+              active
+                ? 'bg-gradient-to-t from-accent/[0.14] to-transparent text-ice'
+                : 'text-text-muted hover:bg-accent/[0.04] hover:text-accent'
             }`}
           >
             <Icon size={15} strokeWidth={1.5} className={active ? 'text-accent' : ''} />

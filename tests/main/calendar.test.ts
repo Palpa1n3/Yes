@@ -125,7 +125,7 @@ describe('calendar helpers', () => {
         out.push(c);
       return out.map((c) => (c.type === 'text' ? c.delta : '')).join('');
     };
-    expect(await ask("what's on today?", null)).toMatch(/Settings › General › Calendar/);
+    expect(await ask("what's on today?", null)).toMatch(/Settings › Connections › Calendar/);
     expect(await ask('what is on my calendar', [])).toMatch(/clear today/);
   });
 });

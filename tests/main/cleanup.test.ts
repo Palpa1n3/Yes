@@ -1,7 +1,7 @@
-import { existsSync, mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Cleanup, cleanupTargets } from '../../src/main/services/cleanup';
 
 const MB = 1024 ** 2;
@@ -15,8 +15,15 @@ function file(p: string, bytes: number, ageDays = 0): string {
   return p;
 }
 
+/** Fake machines made by the tests; removed afterwards (each holds ~250 MB of files). */
+const roots: string[] = [];
+afterAll(() => {
+  for (const r of roots) rmSync(r, { recursive: true, force: true });
+});
+
 function machine() {
   const root = mkdtempSync(join(tmpdir(), 'arc-clean-'));
+  roots.push(root);
   const env = {
     temp: join(root, 'Temp'),
     downloads: join(root, 'Downloads'),

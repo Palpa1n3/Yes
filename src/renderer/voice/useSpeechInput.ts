@@ -1,3 +1,4 @@
+import { noteVoiceRequest } from './useWakeWord';
 import { useCallback, useEffect, useRef } from 'react';
 import { useAssistantStore } from '@renderer/stores/assistantStore';
 import { deriveState, useConversationStore } from '@renderer/stores/conversationStore';
@@ -46,8 +47,10 @@ async function finish(cancel = false): Promise<void> {
     const text = await window.arc.voice.transcribe(audio);
     useVoiceStore.setState({ mic: 'idle' });
     settle();
-    if (text) await useConversationStore.getState().send(text);
-    else
+    if (text) {
+      noteVoiceRequest();
+      await useConversationStore.getState().send(text);
+    } else
       conv.pushSystem(
         "Sorry, I couldn't make out any words. Try again a little closer to the mic.",
       );

@@ -19,6 +19,6 @@
   --glow-lg: 0 0 32px rgb(var(--accent) / 0.25), 0 0 8px rgb(var(--accent) / 0.6);
 
   --titlebar-h: 32px;
-  --shell-radius: 10px;
-  --panel-radius: 4px;
+  --shell-radius: 14px;
+  --panel-radius: 8px;
 }

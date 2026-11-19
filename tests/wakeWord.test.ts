@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { sanitizeSettings } from '@shared/settings';
-import { UtteranceSegmenter, matchWake, nameVariants } from '@renderer/voice/wakeWord';
+import {
+  UtteranceSegmenter,
+  editDistance,
+  isPhantom,
+  matchWake,
+  nameVariants,
+} from '@renderer/voice/wakeWord';
 
 describe('matchWake', () => {
   it('spots the wake phrase and keeps the request', () => {
@@ -70,5 +76,28 @@ describe('voice hotkey setting', () => {
     expect(sanitizeSettings({}).voiceHotkey).toBe('CommandOrControl+Alt+Space');
     expect(sanitizeSettings({ voiceHotkey: '' }).voiceHotkey).toBe('');
     expect(sanitizeSettings({ voiceHotkey: 'F9' }).voiceHotkey).toBe('F9');
+  });
+});
+
+describe('wake word without "hey", and open mic', () => {
+  it('accepts just the name, with or without a greeting', () => {
+    expect(matchWake('Alton, what time is it?', 'Alton')).toBe('what time is it?');
+    expect(matchWake('Hey Alton open notes', 'Alton')).toBe('open notes');
+    expect(matchWake('Alton.', 'Alton')).toBe('');
+  });
+
+  it('tolerates near-misses of longer names', () => {
+    expect(matchWake('Elton, pause the music', 'Alton')).toBe('pause the music');
+    expect(matchWake("Alton's here, what's up", 'Alton')).toBe("here, what's up");
+    expect(matchWake('Alten what is the weather', 'Alton')).toBe('what is the weather');
+    expect(matchWake('Walton Street is closed', 'Alton')).toBeNull();
+    expect(matchWake('Also, the shop is shut', 'Alton')).toBeNull();
+    expect(editDistance('elton', 'alton')).toBe(1);
+  });
+
+  it("ignores Whisper's phantom phrases", () => {
+    for (const t of ['Thank you.', 'Thanks for watching!', 'you', '...', 'Subscribe!'])
+      expect(isPhantom(t)).toBe(true);
+    expect(isPhantom('Thank you for the help with my essay')).toBe(false);
   });
 });

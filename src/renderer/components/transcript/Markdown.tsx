@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useRef, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -53,7 +53,7 @@ const components: Components = {
     ) : (
       <code className="bg-panel-raised px-1 font-mono text-[12px] text-ice">{children}</code>
     ),
-  pre: ({ children }) => <pre className="my-2">{children}</pre>,
+  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
   table: ({ children }) => (
     <div className="my-2 overflow-x-auto">
       <table className="w-full border-collapse text-[12px]">{children}</table>
@@ -79,3 +79,27 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
     </div>
   );
 });
+
+/** A code block with a Copy button. */
+function CodeBlock({ children }: { children?: ReactNode }) {
+  const ref = useRef<HTMLPreElement>(null);
+  const [done, setDone] = useState(false);
+  return (
+    <div className="group/code relative my-2">
+      <pre ref={ref}>{children}</pre>
+      <button
+        type="button"
+        aria-label="Copy code"
+        onClick={() =>
+          void navigator.clipboard.writeText(ref.current?.textContent ?? '').then(() => {
+            setDone(true);
+            setTimeout(() => setDone(false), 1200);
+          })
+        }
+        className="absolute right-1.5 top-1.5 rounded-[4px] border border-line/70 bg-panel/90 px-1.5 font-mono text-[10px] uppercase text-text-muted opacity-0 transition-opacity hover:text-accent focus:opacity-100 group-hover/code:opacity-100"
+      >
+        {done ? 'Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+}

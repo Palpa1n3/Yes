@@ -1,4 +1,4 @@
-import { AlarmClock } from 'lucide-react';
+import { AlarmClock, Target } from 'lucide-react';
 import { useClock } from '@renderer/hooks/useClock';
 import { fmtRemaining, timerTitle, useTimersStore } from '@renderer/stores/timersStore';
 import { useUiStore } from '@renderer/stores/uiStore';
@@ -27,8 +27,16 @@ export function TimerChip() {
           : `Next timer: ${timerTitle(t)}, ${fmtRemaining(t.dueAt - now)} left`
       }
     >
-      <AlarmClock size={13} strokeWidth={1.5} />
-      {ringing ? "TIME'S UP" : fmtRemaining(t.dueAt - now)}
+      {t.kind === 'focus' ? (
+        <Target size={13} strokeWidth={1.5} className="text-accent" />
+      ) : (
+        <AlarmClock size={13} strokeWidth={1.5} />
+      )}
+      {ringing
+        ? t.kind === 'focus'
+          ? 'FOCUS DONE'
+          : "TIME'S UP"
+        : `${t.kind === 'focus' ? 'FOCUS ' : ''}${fmtRemaining(t.dueAt - now)}`}
     </button>
   );
 }

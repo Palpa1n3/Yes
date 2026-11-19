@@ -15,6 +15,7 @@ import { TasksTab } from '@renderer/components/tabs/TasksTab';
 import { bindDevStateKeys, DevStateSwitcher } from '@renderer/components/core/DevStateSwitcher';
 import { useFakeAudio } from '@renderer/hooks/useFakeAudio';
 import { SettingsPanel } from '@renderer/components/settings/SettingsPanel';
+import { DropZone } from '@renderer/components/hud/DropZone';
 import { startSession } from '@renderer/session';
 import {
   bindAssistantStream,
@@ -26,6 +27,9 @@ import { bindVoice } from '@renderer/stores/voiceStore';
 import { bindChats } from '@renderer/stores/chatsStore';
 import { bindNotes } from '@renderer/stores/notesStore';
 import { bindMedia } from '@renderer/stores/mediaStore';
+import { bindEmail } from '@renderer/stores/emailStore';
+import { bindUpdates } from '@renderer/stores/updatesStore';
+import { bindClipboard } from '@renderer/stores/clipboardStore';
 import { bindGaming } from '@renderer/stores/gamingStore';
 import { useAssistantStore } from '@renderer/stores/assistantStore';
 import { bindCalendar } from '@renderer/stores/calendarStore';
@@ -33,9 +37,14 @@ import { bindRoutines } from '@renderer/stores/routinesStore';
 import { bindTimers, timerTitle, useTimersStore } from '@renderer/stores/timersStore';
 import { startAlarm, stopAlarm } from '@renderer/voice/alarm';
 import { RingingBanner } from '@renderer/components/hud/RingingBanner';
+import { AgentPanel } from '@renderer/components/hud/AgentPanel';
+import { ApprovalCards, bindApprovals } from '@renderer/components/hud/ApprovalCards';
+import { SuggestionToast, bindSuggestions } from '@renderer/components/hud/SuggestionToast';
+import { bindAgent } from '@renderer/stores/agentStore';
 import { useSpeechOutput } from '@renderer/voice/useSpeechOutput';
 import { useWakeWord } from '@renderer/voice/useWakeWord';
 import { BootSequence, shouldBoot } from '@renderer/components/core/BootSequence';
+import { SetupGuide, SETUP_EVENT } from '@renderer/components/hud/SetupGuide';
 import { CompactView } from '@renderer/components/hud/CompactView';
 import { useReducedMotion } from '@renderer/hooks/useReducedMotion';
 import { TABS } from '@renderer/components/tabs/registry';
@@ -62,6 +71,12 @@ export function App() {
   const { settings, loaded } = useSettingsStore();
   const reduced = useReducedMotion();
   const [booting, setBooting] = useState<boolean | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
+  useEffect(() => {
+    const open = (): void => setSetupOpen(true);
+    window.addEventListener(SETUP_EVENT, open);
+    return () => window.removeEventListener(SETUP_EVENT, open);
+  }, []);
 
   // Decide once settings have loaded (the boot toggle lives there).
   useEffect(() => {
@@ -91,9 +106,25 @@ export function App() {
 
   useEffect(() => bindWeather(), []);
   useEffect(() => bindVoice(), []);
+  useEffect(() => {
+    document.title = settings.assistantName;
+  }, [settings.assistantName]);
   useEffect(() => bindChats(), []);
   useEffect(() => bindNotes(), []);
   useEffect(() => bindMedia(), []);
+  useEffect(() => bindEmail(), []);
+  useEffect(() => bindUpdates(), []);
+  useEffect(() => bindSuggestions(), []);
+  useEffect(() => bindApprovals(), []);
+  useEffect(
+    () =>
+      bindAgent({
+        say: (t) => useConversationStore.getState().pushAssistant(t),
+        note: (t, tone) => useConversationStore.getState().pushSystem(t, tone),
+      }),
+    [],
+  );
+  useEffect(() => bindClipboard((text) => useConversationStore.getState().pushAssistant(text)), []);
   useEffect(
     () =>
       bindGaming((s, prev) => {
@@ -183,9 +214,16 @@ export function App() {
         </main>
         <StatusBar />
         <SettingsPanel />
+        <DropZone />
         <RingingBanner />
+        <AgentPanel />
+        <ApprovalCards />
+        <SuggestionToast />
         {import.meta.env.DEV && <DevStateSwitcher />}
         {booting && <BootSequence onDone={() => setBooting(false)} />}
+        {!booting && (setupOpen || !settings.onboarded) && (
+          <SetupGuide onClose={() => setSetupOpen(false)} />
+        )}
       </div>
     </MotionConfig>
   );

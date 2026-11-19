@@ -5,6 +5,7 @@ export const useNotesStore = create<NotesState & { apply(op: NotesOp): Promise<v
   lists: [],
   notes: [],
   memories: [],
+  goals: [],
   async apply(op) {
     set(await window.arc.notes.apply(op));
   },

@@ -13,8 +13,22 @@ files:
   # Transformers.js bundles the browser runtime it needs; the separate package is unused.
   - '!node_modules/onnxruntime-web/**'
 asar: true
-# No auto-update server: builds are made and installed locally.
-publish: null
+# A read-only copy of the source, so Alton can read its own code (read_arc_source).
+extraResources:
+  - { from: src, to: source/src, filter: ['**/*'] }
+  - { from: phone/src, to: source/phone/src, filter: ['**/*'] }
+  - { from: tests, to: source/tests, filter: ['**/*'] }
+  - { from: README.md, to: source/README.md }
+  - { from: electron-builder.yml, to: source/electron-builder.yml }
+  - { from: electron.vite.config.ts, to: source/electron.vite.config.ts }
+  - { from: tsconfig.json, to: source/tsconfig.json }
+# Updates: GitHub Actions builds the installer and publishes it as a GitHub Release;
+# the installed app checks there (electron-updater). Local builds never publish.
+publish:
+  provider: github
+  owner: Palpa1n3
+  repo: Yes
+  releaseType: release
 # Native speech-recognition runtime (Whisper) must sit outside the asar archive.
 asarUnpack:
   - node_modules/onnxruntime-node/**

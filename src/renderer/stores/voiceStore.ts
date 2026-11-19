@@ -6,11 +6,14 @@ export type MicState = 'idle' | 'listening' | 'transcribing';
 interface VoiceState {
   status: VoiceStatus;
   mic: MicState;
+  /** Open mic: everything said goes to ARC (no wake word) until turned off. */
+  openMic: boolean;
 }
 
 export const useVoiceStore = create<VoiceState>(() => ({
   status: { fishKey: false, stt: { state: 'idle', progress: null, model: 'base' } },
   mic: 'idle',
+  openMic: false,
 }));
 
 export function bindVoice(): () => void {

@@ -258,14 +258,72 @@ export function VoiceSection() {
           </div>
         </Field>
         <Field
-          label={`Wake word “Hey ${s.assistantName}”`}
-          hint={`Say “Hey ${s.assistantName}” then your request, all in one go or after the chime. The mic stays on while this is on (Windows shows the mic icon); only speech is checked, on this PC. Music or TV nearby makes it work harder.`}
+          label={`Wake word “${s.assistantName}”`}
+          hint={`Start with the name: “${s.assistantName}, what's the time?” (or say “${s.assistantName}”, wait for the chime, then ask). “Hey” is optional. The mic stays on while this is on (Windows shows the mic icon); only speech is checked, on this PC. Music or TV nearby makes it work harder.`}
         >
           <Toggle
             label="Wake word"
             checked={s.wakeWord}
             onChange={(v) => void update({ wakeWord: v })}
             disabled={!s.voiceInput}
+          />
+        </Field>
+        <Field
+          label="Extra wake words"
+          hint={`Other names that wake it as well as “${s.assistantName}”, separated by commas (e.g. Jarvis, Computer). Short or common words trigger by mistake more often.`}
+          stacked
+        >
+          <input
+            defaultValue={s.wakeWords.join(', ')}
+            onBlur={(e) =>
+              void update({
+                wakeWords: e.target.value
+                  .split(',')
+                  .map((w) => w.trim())
+                  .filter((w) => w.length >= 3)
+                  .slice(0, 5),
+              })
+            }
+            placeholder="Jarvis, Computer"
+            aria-label="Extra wake words"
+            className="h-7 w-full rounded-[5px] border border-line bg-panel-raised px-2 text-[12px] text-text-primary focus:border-accent focus:outline-none"
+          />
+        </Field>
+        <Field
+          label="Follow-up without the name"
+          hint={`After ${s.assistantName} answers something you said, it listens for 8 more seconds so you can carry on (“and tomorrow?”) without saying its name again. Needs the wake word on.`}
+        >
+          <Toggle
+            label="Follow-up"
+            checked={s.followUp}
+            onChange={(v) => void update({ followUp: v })}
+            disabled={!s.voiceInput || !s.wakeWord}
+          />
+        </Field>
+        <Field
+          label="Whisper mode"
+          hint={`Quieter, slower speech and no sound effects (late at night, or others nearby). Or say “whisper mode” / “speak normally”.`}
+        >
+          <Toggle
+            label="Whisper mode"
+            checked={s.whisper}
+            onChange={(v) => void update({ whisper: v })}
+          />
+        </Field>
+        <Field
+          label="Open mic"
+          hint={`Press the open-mic shortcut (Settings › Hotkeys, Ctrl+Alt+M by default) and everything you say goes to ${s.assistantName}, no name needed, until you press it again. A green MIC ON chip shows while it's listening.`}
+        >
+          <Select
+            label="Open mic switches off after"
+            value={String(s.openMicMinutes)}
+            onChange={(v) => void update({ openMicMinutes: Number(v) })}
+            options={[
+              { value: '2', label: 'Off after 2 quiet min' },
+              { value: '5', label: 'Off after 5 quiet min' },
+              { value: '10', label: 'Off after 10 quiet min' },
+              { value: '30', label: 'Off after 30 quiet min' },
+            ]}
           />
         </Field>
       </Section>

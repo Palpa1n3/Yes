@@ -41,8 +41,9 @@ function tone(
 
 /** Play a cue unless sound effects are off. `force` ignores the setting (Settings "Test"). */
 export function playSfx(name: Sfx, force = false): void {
-  const { sfx, sfxVolume } = useSettingsStore.getState().settings;
-  if ((!sfx && !force) || sfxVolume <= 0 || (!force && gamingQuiet())) return;
+  const { sfx, sfxVolume, whisper } = useSettingsStore.getState().settings;
+  if ((!sfx && !force) || (whisper && !force) || sfxVolume <= 0 || (!force && gamingQuiet()))
+    return;
   const ac = audio();
   if (!ac) return;
   const out = ac.createGain();

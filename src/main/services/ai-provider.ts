@@ -19,6 +19,8 @@ import { describeWeather, rainSoon, tempSymbol, type WeatherData } from '@shared
 import { agendaSentence, eventsOn, fmtTime, type CalEvent } from '@shared/calendar';
 import { listName, splitItems } from '@shared/notes';
 import type { NowPlaying } from '@shared/media';
+import type { Attachment } from '@shared/attachments';
+import { emailSentence, senderName, type EmailState } from '@shared/email';
 import { snapshot } from './system-stats';
 
 /** What the offline brain needs from the notes store. */
@@ -35,6 +37,8 @@ export interface SendOptions {
   runTool?(toolUseId: string, intent: RawIntent): Promise<ToolOutcome>;
   /** Research mode: web search, a smarter model, fuller answers with sources. */
   research?: boolean;
+  /** Files and pictures sent with this message. */
+  attachments?: Attachment[];
 }
 
 export interface AIProvider {
@@ -119,6 +123,8 @@ export function plan(
   getCalendar: () => CalEvent[] | null = () => null,
   notes: NotesApi | null = null,
   nowPlaying: () => NowPlaying | null = () => null,
+  clipboard: ((q?: string) => Array<{ copied: string; text: string }>) | null = null,
+  emailState: () => EmailState | null = () => null,
 ): Plan {
   const { personality: p } = persona;
   const title = resolveTitle(p.userTitle, persona.userName);
@@ -157,6 +163,47 @@ export function plan(
           ? 'Nothing playing.'
           : "Nothing's playing right now that Windows can see."
         : `${n.playing ? '' : 'Paused: '}${n.title}${n.artist ? ` by ${n.artist}` : ''}${v <= 1 ? '' : `, in ${n.app}`}.`,
+    };
+  }
+  if (
+    /\b(what'?s|what is|look at|see|read) (on )?(my |the |this )?screen\b|\bwhat am i looking at\b|\bthis error\b/.test(
+      lower,
+    )
+  ) {
+    return {
+      text:
+        v <= 1
+          ? 'Needs Claude (Settings › Advanced).'
+          : 'To look at your screen I need Claude connected (Settings › Advanced). Then just ask, and I’ll take a look.',
+    };
+  }
+  if (
+    clipboard &&
+    /\bwhat (?:did|have) i (?:just )?copied?\b|\bwhat'?s on (?:my|the) clipboard\b|\bclipboard history\b|\blast thing i copied\b/.test(
+      lower,
+    )
+  ) {
+    const items = clipboard('');
+    return {
+      text: items.length
+        ? `You copied: “${(items[0]?.text ?? '').slice(0, 200)}”${items.length > 1 ? ` (and ${items.length - 1} earlier; they're in the Notes tab)` : ''}.`
+        : "I don't have anything you've copied since I started.",
+    };
+  }
+  if (/\b(any )?(new |unread |important )?(e-?mails?|inbox|gmail)\b/.test(lower)) {
+    const st = emailState();
+    if (!st || !st.configured)
+      return {
+        text: 'Your email isn’t connected yet. Add Gmail in Settings › Connections › Email.',
+      };
+    if (st.error) return { text: st.error };
+    const line = emailSentence(st) ?? 'No unread email.';
+    const newest = st.recent.find((e) => e.unread);
+    return {
+      text:
+        v <= 1 || !newest
+          ? line
+          : `${line} The newest is “${newest.subject}” from ${senderName(newest.from)}.`,
     };
   }
   if (notes) {
@@ -284,6 +331,18 @@ export function plan(
   }
   if (
     (m = lower.match(
+      /^(?:start\s+(?:a\s+)?)?focus(?:\s+(?:mode|session|time))?(?:\s+(?:for\s+)?(\d+(?:\.\d+)?)\s*(minutes?|mins?|m|hours?|hrs?|h)?)?[.!]?$/,
+    ))
+  ) {
+    const n = Number(m[1] ?? 25);
+    const minutes = (m[2] ?? 'm').startsWith('h') ? n * 60 : n;
+    return {
+      text: ok(`Focus mode for ${minutes} minutes. I'll keep quiet.`),
+      intent: { action: 'set_timer', target: String(minutes), args: ['Focus session', 'focus'] },
+    };
+  }
+  if (
+    (m = lower.match(
       /(?:remind me|set (?:a )?(?:timer|reminder)|timer)\s+(?:for\s+|in\s+)?(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b(?:\s+(?:to|that|for|about)\s+(.+?))?[.!]?$/,
     ))
   ) {
@@ -392,8 +451,8 @@ export function plan(
       return {
         text:
           v <= 1
-            ? 'No calendar connected. Settings › General › Calendar.'
-            : 'Your calendar is not connected yet. Add your Google Calendar in Settings › General › Calendar and I will keep you posted.',
+            ? 'No calendar connected. Settings › Connections › Calendar.'
+            : 'Your calendar is not connected yet. Add your Google Calendar in Settings › Connections › Calendar and I will keep you posted.',
       };
     const now = Date.now();
     if (/\btomorrow\b/.test(lower)) {
@@ -508,12 +567,23 @@ export class MockProvider implements AIProvider {
     private readonly getCalendar: () => CalEvent[] | null = () => null,
     private readonly notes: NotesApi | null = null,
     private readonly nowPlaying: () => NowPlaying | null = () => null,
+    private readonly clipboard:
+      ((q?: string) => Array<{ copied: string; text: string }>) | null = null,
+    private readonly emailState: () => EmailState | null = () => null,
   ) {}
 
   async *send(messages: ChatMessage[], opts: SendOptions): AsyncIterable<ProviderChunk> {
     const { signal } = opts;
     const last = [...messages].reverse().find((m) => m.role === 'user');
     const persona = this.getPersona() ?? { personality: DEFAULT_PERSONALITY, userName: '' };
+    if (opts.attachments?.length) {
+      yield* this.stream(
+        'I can’t read files or pictures offline. Connect Claude in Settings › AI and send it again.',
+        signal,
+      );
+      yield { type: 'done' };
+      return;
+    }
     const p = plan(
       last?.content ?? '',
       this.turn++,
@@ -523,6 +593,8 @@ export class MockProvider implements AIProvider {
       this.getCalendar,
       this.notes,
       this.nowPlaying,
+      this.clipboard,
+      this.emailState,
     );
 
     await sleep(350 + Math.random() * 450, signal); // "thinking"

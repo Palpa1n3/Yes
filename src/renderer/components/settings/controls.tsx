@@ -1,4 +1,10 @@
-import { useId, type ReactNode } from 'react';
+import { createContext, useContext, useId, type ReactNode } from 'react';
+
+/** The settings search text; rows that don't match hide themselves. */
+export const SettingsSearch = createContext('');
+
+const textOf = (n: ReactNode): string =>
+  typeof n === 'string' || typeof n === 'number' ? String(n) : '';
 
 /** Labelled row: label + optional description on the left, control on the right. */
 export function Field({
@@ -12,12 +18,15 @@ export function Field({
   children: ReactNode;
   stacked?: boolean;
 }) {
+  const q = useContext(SettingsSearch).trim().toLowerCase();
+  const match = !q || `${label} ${textOf(hint)}`.toLowerCase().includes(q);
   return (
     <div
-      className={`border-b border-line/40 py-3 last:border-0 ${stacked ? 'space-y-2' : 'flex items-center gap-4'}`}
+      hidden={!match}
+      className={`settings-field border-b border-line/30 py-3 last:border-0 ${stacked ? 'space-y-2' : 'flex items-center gap-4'}`}
     >
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] text-text-primary">{label}</div>
+        <div className="text-[13px] font-medium text-text-primary">{label}</div>
         {hint && <div className="mt-0.5 text-[12px] leading-snug text-text-muted">{hint}</div>}
       </div>
       {children}
@@ -25,15 +34,28 @@ export function Field({
   );
 }
 
+/** A card of related settings. Hidden while searching if none of its rows match. */
 export function Section({ title, children }: { title: string; children: ReactNode }) {
+  const q = useContext(SettingsSearch).trim().toLowerCase();
+  const titleMatch = !!q && title.toLowerCase().includes(q);
   return (
-    <section className="mb-5">
-      <h3 className="mb-1 flex items-center gap-3">
-        <span className="hud-label">{title}</span>
-        <span className="h-px flex-1 bg-line/70" aria-hidden />
-      </h3>
-      {children}
-    </section>
+    <SettingsSearch.Provider value={titleMatch ? '' : q}>
+      <section
+        className="settings-section mb-4 rounded-[10px] border border-line/60 bg-panel-raised/35 px-4 pb-1 pt-3 shadow-[inset_0_1px_0_rgb(var(--ice)/0.03)]"
+        data-searching={q && !titleMatch ? 'true' : undefined}
+      >
+        <h3 className="mb-1 flex items-center gap-2">
+          <span
+            className="h-1.5 w-1.5 rotate-45 bg-accent shadow-[0_0_6px_rgb(var(--accent))]"
+            aria-hidden
+          />
+          <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-ice">
+            {title}
+          </span>
+        </h3>
+        {children}
+      </section>
+    </SettingsSearch.Provider>
   );
 }
 
@@ -56,10 +78,10 @@ export function Toggle({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative h-5 w-9 shrink-0 border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${checked ? 'border-accent bg-accent/20' : 'border-line bg-panel-raised'}`}
+      className={`relative h-[22px] w-10 shrink-0 rounded-full border transition-[background-color,border-color,box-shadow] duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${checked ? 'border-accent bg-accent/25 shadow-glow-sm' : 'border-line bg-panel-raised'}`}
     >
       <span
-        className={`absolute top-[3px] h-3 w-3 transition-all ${checked ? 'left-[19px] bg-accent shadow-glow-sm' : 'left-[3px] bg-text-muted'}`}
+        className={`absolute top-[3px] h-3.5 w-3.5 rounded-full transition-all duration-200 ${checked ? 'left-[21px] bg-accent shadow-[0_0_8px_rgb(var(--accent))]' : 'left-[3px] bg-text-muted'}`}
       />
     </button>
   );
@@ -88,7 +110,7 @@ export function TextField({
       placeholder={placeholder}
       maxLength={maxLength}
       spellCheck={false}
-      className={`${width} h-8 shrink-0 border border-line bg-panel-raised/80 px-2 font-mono text-[12px] text-text-primary placeholder:text-text-muted/70 focus:border-accent focus:outline-none`}
+      className={`${width} h-8 shrink-0 rounded-[6px] border border-line bg-panel-raised/80 px-2 font-mono text-[12px] text-text-primary placeholder:text-text-muted/70 focus:border-accent focus:outline-none`}
     />
   );
 }
@@ -109,7 +131,7 @@ export function Select<T extends string>({
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
       aria-label={label}
-      className="h-8 shrink-0 border border-line bg-panel-raised px-2 font-mono text-[12px] text-text-primary focus:border-accent focus:outline-none"
+      className="h-8 shrink-0 rounded-[6px] border border-line bg-panel-raised px-2 font-mono text-[12px] text-text-primary focus:border-accent focus:outline-none"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
@@ -132,7 +154,11 @@ export function Segmented<T extends string>({
   label: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex shrink-0 border border-line">
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="flex shrink-0 gap-0.5 rounded-[7px] border border-line bg-panel-raised/60 p-0.5"
+    >
       {options.map((o) => (
         <button
           key={o.value}
@@ -140,7 +166,7 @@ export function Segmented<T extends string>({
           role="radio"
           aria-checked={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${value === o.value ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-accent'}`}
+          className={`rounded-[5px] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${value === o.value ? 'bg-accent/20 text-accent shadow-[inset_0_0_0_1px_rgb(var(--accent)/0.5)]' : 'text-text-muted hover:text-accent'}`}
         >
           {o.label}
         </button>

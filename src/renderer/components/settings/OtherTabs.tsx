@@ -1,3 +1,6 @@
+import { PromptsSection } from './PromptsSection';
+import { useUiStore } from '@renderer/stores/uiStore';
+import { SETUP_EVENT } from '@renderer/components/hud/SetupGuide';
 import { FolderOpen, FileJson, RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { buildSystemPrompt } from '@shared/personalities';
@@ -7,10 +10,22 @@ import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { THEMES, THEME_TOKENS } from '@renderer/themes/themes';
 import { playSfx } from '@renderer/voice/sfx';
 import { playChime } from '@renderer/voice/alarm';
-import { Field, Section, Segmented, Slider, TextField, Toggle } from './controls';
+import { Field, Section, Segmented, Select, Slider, TextField, Toggle } from './controls';
+
+const HOURS = Array.from({ length: 24 }, (_, h) => ({
+  value: String(h),
+  label: `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`,
+}));
 import { AiSection } from './AiSection';
 import { VoiceSection } from './VoiceSection';
 import { CalendarSection } from './CalendarSection';
+import { EmailSection } from './EmailSection';
+import { DiscordSection } from './DiscordSection';
+import { PhoneAppSection, PhoneSection } from './PrivacyTab';
+import { SpendingSection } from './SpendingSection';
+import { OVERVIEW_PANELS } from '@renderer/components/tabs/OverviewTab';
+import type { PluginInfo } from '@shared/ipc';
+import { UpdatesSection } from './UpdatesSection';
 import { PlaceSearch } from '@renderer/components/weather/PlaceSearch';
 import { placeLabel } from '@shared/weather';
 import { HotkeyRecorder, prettyAccel } from './HotkeyRecorder';
@@ -93,7 +108,6 @@ export function GeneralTab() {
           />
         </Field>
       </Section>
-      <CalendarSection />
       <Section title="Window">
         <Field
           label="Close to tray"
@@ -194,6 +208,43 @@ export function AppearanceTab() {
           })}
         </div>
       </Section>
+      <Section title="Dashboard">
+        <p className="py-1 text-[12px] text-text-muted">Choose the panels on the Overview.</p>
+        <div className="grid grid-cols-2 gap-x-4">
+          {OVERVIEW_PANELS.map((p) => (
+            <Field key={p.id} label={p.label}>
+              <Toggle
+                label={p.label}
+                checked={!s.hiddenPanels.includes(p.id)}
+                onChange={(v) =>
+                  void update({
+                    hiddenPanels: v
+                      ? s.hiddenPanels.filter((x) => x !== p.id)
+                      : [...s.hiddenPanels, p.id],
+                  })
+                }
+              />
+            </Field>
+          ))}
+        </div>
+      </Section>
+      <Section title="Avatar">
+        <Field
+          label="Centre display"
+          hint="An animated face that looks around, reacts and talks; a code ring of turning, self-rewriting code that storms while thinking and pulses as it speaks; or the classic rings."
+        >
+          <Segmented<'face' | 'code' | 'rings'>
+            label="Centre display"
+            value={s.avatar}
+            onChange={(v) => void update({ avatar: v })}
+            options={[
+              { value: 'face', label: 'Face' },
+              { value: 'code', label: 'Code ring' },
+              { value: 'rings', label: 'Rings' },
+            ]}
+          />
+        </Field>
+      </Section>
       <Section title="Effects">
         <Field label="Background particles">
           <Toggle
@@ -291,7 +342,7 @@ export function VoiceTab() {
 
 export function HotkeysTab() {
   const { settings: s, update } = useSettingsStore();
-  const info = useAppInfo([s.globalHotkey, s.voiceHotkey]);
+  const info = useAppInfo([s.globalHotkey, s.voiceHotkey, s.openMicHotkey, s.clipboardHotkey]);
   const fallback = info?.activeHotkey && info.activeHotkey !== s.globalHotkey;
   const keys: Array<[string, string]> = [
     ['Ctrl + 1…7', 'Switch tabs'],
@@ -369,6 +420,82 @@ export function HotkeysTab() {
             )}
           </div>
         </Field>
+        <Field
+          label="Open mic on / off"
+          hint={
+            !s.openMicHotkey
+              ? 'Off.'
+              : info?.activeOpenMicHotkey === null
+                ? 'Could not register it; another app may be using it.'
+                : info?.activeOpenMicHotkey && info.activeOpenMicHotkey !== s.openMicHotkey
+                  ? `That shortcut was taken, so ${prettyAccel(info.activeOpenMicHotkey)} is active instead.`
+                  : 'Works from any app: while on, everything you say goes to the assistant (no name needed).'
+          }
+          stacked
+        >
+          <div className="flex items-center gap-2">
+            <HotkeyRecorder
+              value={s.openMicHotkey}
+              onChange={(v) => void update({ openMicHotkey: v })}
+            />
+            {s.openMicHotkey !== 'CommandOrControl+Alt+M' && (
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => void update({ openMicHotkey: 'CommandOrControl+Alt+M' })}
+              >
+                Reset
+              </button>
+            )}
+            {s.openMicHotkey && (
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => void update({ openMicHotkey: '' })}
+              >
+                Turn off
+              </button>
+            )}
+          </div>
+        </Field>
+        <Field
+          label="Clipboard actions"
+          hint={
+            !s.clipboardHotkey
+              ? 'Off.'
+              : info?.activeClipboardHotkey === null
+                ? 'Could not register it; another app may be using it.'
+                : info?.activeClipboardHotkey && info.activeClipboardHotkey !== s.clipboardHotkey
+                  ? `That shortcut was taken, so ${prettyAccel(info.activeClipboardHotkey)} is active instead.`
+                  : 'Copy some text in any app, press this, and pick a saved prompt (fix, summarise, translate, reply…).'
+          }
+          stacked
+        >
+          <div className="flex items-center gap-2">
+            <HotkeyRecorder
+              value={s.clipboardHotkey}
+              onChange={(v) => void update({ clipboardHotkey: v })}
+            />
+            {s.clipboardHotkey !== 'CommandOrControl+Alt+C' && (
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => void update({ clipboardHotkey: 'CommandOrControl+Alt+C' })}
+              >
+                Reset
+              </button>
+            )}
+            {s.clipboardHotkey && (
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => void update({ clipboardHotkey: '' })}
+              >
+                Turn off
+              </button>
+            )}
+          </div>
+        </Field>
       </Section>
       <Section title="In the app">
         <dl className="py-1">
@@ -388,27 +515,12 @@ export function HotkeysTab() {
 }
 
 export function AdvancedTab() {
-  const { settings: s } = useSettingsStore();
+  const { settings: s, update } = useSettingsStore();
   const info = useAppInfo();
   const [confirmReset, setConfirmReset] = useState(false);
   return (
     <>
-      <Section title="AI model">
-        <AiSection />
-        <Field
-          label="System prompt"
-          hint="Generated from the personality; sent to a real model."
-          stacked
-        >
-          <pre
-            tabIndex={0}
-            aria-label="Generated system prompt"
-            className="max-h-40 overflow-auto whitespace-pre-wrap border border-line/60 bg-panel-raised/60 p-2 font-mono text-[11px] text-text-muted"
-          >
-            {buildSystemPrompt({ ...s.personality, assistantName: s.assistantName }, s.userName)}
-          </pre>
-        </Field>
-      </Section>
+      <UpdatesSection />
       <Section title="Data">
         <Field label="Data folder" hint={info?.userDataPath}>
           <button
@@ -429,6 +541,62 @@ export function AdvancedTab() {
             onClick={() => window.arc.app.openPath('appsJson')}
           >
             <FileJson size={12} strokeWidth={1.5} /> Edit
+          </button>
+        </Field>
+        <Field
+          label="Self-debugging: source folder"
+          hint={
+            s.sourceDir
+              ? `${s.assistantName} can read (never change) its own code in ${s.sourceDir} to explain bugs and suggest fixes. Ask “why isn't X working?”.`
+              : `${s.assistantName} already reads (never changes) the copy of its code that comes with the app: ask “why isn't X working?” or “how does the code ring work?”. Choose your project folder (the “arc” folder with package.json) if you edit the code, so it sees your latest changes and can run its tests.`
+          }
+          stacked
+        >
+          <span className="flex gap-1.5">
+            <button
+              type="button"
+              className="hud-button"
+              onClick={() => void window.arc.app.pickSourceDir()}
+            >
+              <FolderOpen size={12} strokeWidth={1.5} /> {s.sourceDir ? 'Change' : 'Choose'}
+            </button>
+            {s.sourceDir && (
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => void update({ sourceDir: '' })}
+              >
+                Forget
+              </button>
+            )}
+          </span>
+        </Field>
+        <Field
+          label="Setup guide"
+          hint="The five-step first-run setup (name, Claude, voice, smart features, phone)."
+        >
+          <button
+            type="button"
+            className="hud-button"
+            onClick={() => {
+              useUiStore.getState().closeSettings();
+              window.dispatchEvent(new Event(SETUP_EVENT));
+            }}
+          >
+            Run setup again
+          </button>
+        </Field>
+        <PluginsField />
+        <Field
+          label="Error log"
+          hint={`Errors and warnings, kept on this PC. ${s.assistantName} reads it when you ask it to work out what went wrong.`}
+        >
+          <button
+            type="button"
+            className="hud-button"
+            onClick={() => window.arc.app.openPath('logs')}
+          >
+            <FolderOpen size={12} strokeWidth={1.5} /> Open
           </button>
         </Field>
         <Field
@@ -476,6 +644,177 @@ export function AdvancedTab() {
             </div>
           ))}
         </dl>
+      </Section>
+    </>
+  );
+}
+
+function PluginsField() {
+  const [list, setList] = useState<PluginInfo[] | null>(null);
+  const load = (): void => void window.arc.app.plugins().then(setList);
+  useEffect(load, []);
+  return (
+    <Field
+      label="Plugins"
+      hint="Add .json files to the plugins folder to teach Alton extra knowledge and house rules, or add ready-made routines (the folder has a README with an example). Plugins can't run code."
+      stacked
+    >
+      <span className="flex gap-1.5">
+        <button
+          type="button"
+          className="hud-button"
+          onClick={() => window.arc.app.openPath('plugins')}
+        >
+          <FolderOpen size={12} strokeWidth={1.5} /> Open folder
+        </button>
+        <button type="button" className="hud-button" onClick={load}>
+          Reload
+        </button>
+      </span>
+      <ul className="mt-1 space-y-0.5 text-[12px]">
+        {list?.map((p) => (
+          <li key={p.file} className={p.error ? 'text-alert' : 'text-text-primary'}>
+            {p.name}
+            <span className="text-text-muted">
+              {p.error
+                ? ` · ${p.error}`
+                : `${p.description ? ` · ${p.description}` : ''}${p.routines ? ` · ${p.routines} routine(s)` : ''}`}
+            </span>
+          </li>
+        ))}
+        {list && !list.length && <li className="text-text-muted">No plugins yet.</li>}
+      </ul>
+    </Field>
+  );
+}
+
+/** Screen, clipboard and health awareness; initiative, learning and Agent Mode. */
+export function SmartTab() {
+  const { settings: s, update } = useSettingsStore();
+  return (
+    <>
+      <PromptsSection />
+      <Section title="Awareness">
+        <Field
+          label={`Let ${s.assistantName} see your screen`}
+          hint="Keeps one picture of the screen you're using (never ARC itself), refreshed every few seconds, on this PC only. It's sent to Claude only when a question needs it, like “what's this error?”. Paused during gaming mode."
+        >
+          <Toggle
+            label="Screen awareness"
+            checked={s.screenAware}
+            onChange={(v) => void update({ screenAware: v })}
+          />
+        </Field>
+        <Field
+          label="Clipboard history"
+          hint="Remembers your last 50 copies (text only) so you can copy them again or ask about them. Memory only: cleared when ARC quits. Anything that looks like a password is hidden from Claude."
+        >
+          <Toggle
+            label="Clipboard history"
+            checked={s.clipboardHistory}
+            onChange={(v) => void update({ clipboardHistory: v })}
+          />
+        </Field>
+        <Field
+          label="PC health alerts"
+          hint="A heads-up (notification and spoken) when the processor or graphics card runs hot, memory or a drive is nearly full, the battery is low, or the PC hasn't restarted in a week."
+        >
+          <Toggle
+            label="PC health alerts"
+            checked={s.healthAlerts}
+            onChange={(v) => void update({ healthAlerts: v })}
+          />
+        </Field>
+      </Section>
+      <Section title="Initiative & memory">
+        <Field
+          label="Agent Mode"
+          hint={`Say or type “${s.assistantName}, handle this for me” (optionally with the task, like “handle this for me: sort my desktop into folders”) and ${s.assistantName} uses the mouse and keyboard to do it. A red banner shows while it works; press Esc or say “stop” to take over. It always asks before paying, sending, deleting or changing settings, and never types passwords or card numbers. Needs Claude.`}
+        >
+          <Toggle
+            label="Agent Mode"
+            checked={s.agentMode}
+            onChange={(v) => void update({ agentMode: v })}
+          />
+        </Field>
+        <Field
+          label="Learn about me automatically"
+          hint={`After a chat, ${s.assistantName} notes lasting facts you mention (your job, people's names, preferences) in Notes › Memory, where you can check or delete them. Needs Claude.`}
+        >
+          <Toggle
+            label="Learn automatically"
+            checked={s.autoMemory}
+            onChange={(v) => void update({ autoMemory: v })}
+          />
+        </Field>
+        <Field
+          label="Offer help unprompted"
+          hint={`${s.assistantName} speaks up now and then: an app hogging memory, rain before an event, an important email, an evening wind-down. Never during gaming or quiet hours.`}
+        >
+          <Toggle
+            label="Suggestions"
+            checked={s.initiative}
+            onChange={(v) => void update({ initiative: v })}
+          />
+        </Field>
+        {s.initiative && (
+          <Field label="Quiet hours" hint="No suggestions between these times.">
+            <span className="flex items-center gap-2 text-[12px] text-text-muted">
+              <Select<string>
+                label="Quiet from"
+                value={String(s.quietStart)}
+                onChange={(v) => void update({ quietStart: Number(v) })}
+                options={HOURS}
+              />
+              to
+              <Select<string>
+                label="Quiet until"
+                value={String(s.quietEnd)}
+                onChange={(v) => void update({ quietEnd: Number(v) })}
+                options={HOURS}
+              />
+            </span>
+          </Field>
+        )}
+      </Section>
+    </>
+  );
+}
+
+/** Calendar, email, Discord. */
+export function ConnectionsTab() {
+  return (
+    <>
+      <PhoneSection />
+      <PhoneAppSection />
+      <CalendarSection />
+      <EmailSection />
+      <DiscordSection />
+    </>
+  );
+}
+
+/** Which AI answers, its model and key, and the generated instructions. */
+export function AiTab() {
+  const { settings: s } = useSettingsStore();
+  return (
+    <>
+      <SpendingSection />
+      <Section title="AI model">
+        <AiSection />
+        <Field
+          label="System prompt"
+          hint="Generated from the personality; sent to a real model."
+          stacked
+        >
+          <pre
+            tabIndex={0}
+            aria-label="Generated system prompt"
+            className="max-h-40 overflow-auto whitespace-pre-wrap border border-line/60 bg-panel-raised/60 p-2 font-mono text-[11px] text-text-muted"
+          >
+            {buildSystemPrompt({ ...s.personality, assistantName: s.assistantName }, s.userName)}
+          </pre>
+        </Field>
       </Section>
     </>
   );

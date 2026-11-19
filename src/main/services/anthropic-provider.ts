@@ -5,6 +5,10 @@ import { describeSchedule, describeStep, type Routine } from '@shared/routines';
 import { fmtTime, type CalEvent } from '@shared/calendar';
 import type { Source } from '@shared/chats';
 import type { NowPlaying } from '@shared/media';
+import { ARC_ACTIONS } from '@shared/arcCommands';
+import { attachmentBlocks } from '@shared/attachments';
+import type { Frame } from './screen-watch';
+import type { EmailService } from './email';
 import { weatherSummary, type WeatherData } from '@shared/weather';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
@@ -17,6 +21,7 @@ import type {
   TimerInfo,
 } from '@shared/types';
 import type { AIProvider, SendOptions } from './ai-provider';
+import { EXTRA_TOOL_DEFS, EXTRA_TOOL_NAMES } from './extra-tool-defs';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
 type ToolResult = Anthropic.Beta.BetaToolResultBlockParam;
@@ -30,6 +35,25 @@ export const MODEL_LABEL: Record<AiModel, string> = {
   'claude-haiku-5-5': 'Haiku 5.5',
   'claude-sonnet-5-5': 'Sonnet 5.5',
   'claude-opus-5-5': 'Opus 5.5',
+};
+
+/** What the console says while a local tool runs. */
+const ACTIVITY_TEXT: Record<string, string> = {
+  search_past_chats: 'Searching past chats…',
+  read_arc_logs: 'Checking my own logs…',
+  read_arc_source: 'Reading my own code…',
+  create_routine: 'Making a routine…',
+  get_recent_crashes: 'Reading the crash records…',
+  list_installed_games: 'Looking for your games…',
+  launch_game: 'Starting the game…',
+  run_benchmark: 'Running a quick benchmark…',
+  search_documents: 'Searching your files…',
+  organize_folder: 'Planning the tidy-up…',
+  get_optimization_tips: 'Checking the PC…',
+  check_minecraft_mods: 'Checking your mods…',
+  run_self_test: 'Running my tests…',
+  start_background_research: 'Starting background research…',
+  look_at_all_screens: 'Looking at all your screens…',
 };
 
 /** Thrown when the network is unreachable, so the caller can fall back to the mock. */
@@ -159,6 +183,11 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
       properties: {
         minutes: { type: 'number', exclusiveMinimum: 0, maximum: 1440 },
         label: { type: 'string' },
+        focus: {
+          type: 'boolean',
+          description:
+            'A focus session ("focus for 30 minutes", "help me concentrate"): suggestions and alerts stay quiet until it ends.',
+        },
       },
       required: ['minutes'],
       additionalProperties: false,
@@ -228,11 +257,35 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
   {
     name: 'remember',
     description:
-      'Remember a fact about the user for all future chats (preferences, people, dates, details they ask you to keep). Only when they ask you to remember something, or clearly want it kept.',
+      'Remember a fact about the user for all future chats (preferences, people, dates, details they ask you to keep), or the fix for a problem you solved together (category "solutions") so you can reuse it next time. Use when they ask you to remember something, clearly want it kept, or a troubleshooting session ended with a working fix.',
     input_schema: {
       type: 'object',
-      properties: { fact: { type: 'string' } },
+      properties: {
+        fact: { type: 'string' },
+        category: {
+          type: 'string',
+          enum: ['about', 'people', 'preferences', 'work', 'solutions', 'apps', 'other'],
+        },
+        project: { type: 'string', description: 'Project name, if it belongs to one' },
+      },
       required: ['fact'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'manage_goal',
+    description:
+      "The user's long-term goals with progress (shown in the Notes tab and the morning briefing). list them, add one, update progress (0-100) with a short note of what was done, or remove one.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['list', 'add', 'update', 'remove'] },
+        goal: { type: 'string', description: 'Goal title (or part of it)' },
+        progress: { type: 'integer', minimum: 0, maximum: 100 },
+        note: { type: 'string' },
+        due: { type: 'string', description: 'YYYY-MM-DD' },
+      },
+      required: ['action'],
       additionalProperties: false,
     },
   },
@@ -245,6 +298,190 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
       required: ['about'],
       additionalProperties: false,
     },
+  },
+  {
+    name: 'search_past_chats',
+    description:
+      'Search the user\'s earlier saved conversations with you (all chats, not just this one) for words or a topic. Use when they refer to something discussed before ("what was that recipe we talked about?", "remind me what you said about my router") or when earlier context would help. Returns matching excerpts with chat names and dates.',
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Key words to look for' } },
+      required: ['query'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'create_routine',
+    description:
+      "Create (or replace, same name) a routine from the user's description: a named list of steps run in order, triggered by its phrases, a click in the Routines tab, at startup, or on a schedule. Step kinds and targets: launch_app (app name), close_app (app name), set_volume (0-100, mute or unmute), media_control (play_pause, next, previous, stop), open_folder (desktop, documents, downloads, pictures, music, videos), open_url (http(s) address), search_web (query), set_timer (minutes; label = what for), say (words to speak), briefing (no target), wait (seconds), lock_screen (no target). Only use when the user asks for a routine, shortcut phrase or scheduled automation. Tell them what you created.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Short name, e.g. "Work mode"' },
+        phrases: { type: 'array', items: { type: 'string' }, description: 'Phrases that run it' },
+        steps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              kind: { type: 'string' },
+              target: { type: 'string' },
+              label: { type: 'string' },
+            },
+            required: ['kind'],
+          },
+        },
+        runAtStartup: { type: 'boolean' },
+        schedule: {
+          type: 'object',
+          description: 'Run automatically at a time on chosen days.',
+          properties: {
+            time: { type: 'string', description: '24-hour HH:MM' },
+            days: {
+              type: 'array',
+              items: { type: 'integer', minimum: 0, maximum: 6 },
+              description: '0 = Sunday',
+            },
+          },
+          required: ['time', 'days'],
+        },
+      },
+      required: ['name', 'steps'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_recent_crashes',
+    description:
+      "Windows' record of recent app crashes and hangs (with the faulting module and error code) and unexpected shutdowns or restarts. Use when the user says a game or app crashed, froze or the PC restarted by itself; explain the likely cause in plain words and suggest fixes (verify game files, update or roll back the graphics driver, disable overlays or recently added mods, check temperatures).",
+    input_schema: {
+      type: 'object',
+      properties: {
+        days: { type: 'integer', minimum: 1, maximum: 30 },
+        app: { type: 'string', description: 'Only this app (e.g. "FortniteClient")' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'list_installed_games',
+    description:
+      'Games installed through Steam or the Epic Games Launcher on this PC (names, store, size).',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'launch_game',
+    description: 'Start an installed Steam or Epic game by name (through its launcher).',
+    input_schema: {
+      type: 'object',
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_gaming_sessions',
+    description:
+      'Recent gaming sessions with performance: game, length, average/peak CPU and GPU load and temperatures, memory use. Use for questions about game performance, stutter, overheating or how long they played.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'read_arc_logs',
+    description:
+      "Your own (ARC's) recent error and warning log: crashes, failed actions, network or API errors. Use when the user says something in ARC isn't working, or asks you to debug yourself.",
+    input_schema: {
+      type: 'object',
+      properties: { lines: { type: 'integer', minimum: 10, maximum: 300 } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_arc_source',
+    description:
+      "Read your own (ARC's) source code, read-only, to explain how a feature works, find the cause of a bug or draft a fix for the user to apply. Without path: lists the files. With query: finds files and lines containing it. With path: returns that file (optionally a line range). It reads the copy of your code that ships with the app (or the user's project folder if they chose one in Settings › Advanced, which has their latest edits). You cannot change files; give the user the exact edit instead.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'File path relative to the project, e.g. src/main/index.ts',
+        },
+        query: { type: 'string', description: 'Text to search for across the source' },
+        from: { type: 'integer', minimum: 1 },
+        to: { type: 'integer', minimum: 1 },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'control_arc',
+    description:
+      "Control ARC's own interface: open a tab (value: overview, chat, notes, system, tasks, apps, network, storage, routines), open settings (value: optional section such as voice or gaming), start a new chat, start a research chat (value: optional topic), turn research mode on/off for this chat, switch to a saved chat (value: its name), export or pin this chat, rename it (value: new name), scan for disk space to free (the user then chooses in the Storage tab), or turn gaming mode on/off.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: [
+            'open_tab',
+            'open_settings',
+            'new_chat',
+            'research',
+            'research_on',
+            'research_off',
+            'switch_chat',
+            'export_chat',
+            'pin_chat',
+            'rename_chat',
+            'scan_space',
+            'gaming_on',
+            'gaming_off',
+            'open_mic_on',
+            'open_mic_off',
+          ],
+        },
+        value: { type: 'string' },
+      },
+      required: ['action'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_emails',
+    description:
+      "The user's newest Gmail inbox messages (sender, subject, date, unread), plus the unread count. Read-only.",
+    input_schema: {
+      type: 'object',
+      properties: { unreadOnly: { type: 'boolean' }, query: { type: 'string' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_email',
+    description:
+      'The text of one email from get_emails (by its uid). Read-only: it is not marked as read.',
+    input_schema: {
+      type: 'object',
+      properties: { uid: { type: 'number' } },
+      required: ['uid'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'get_clipboard_history',
+    description:
+      'Text the user copied recently (newest first, passwords hidden), optionally only items containing some words. Use for "what did I copy", "paste that link again", etc.',
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'look_at_screen',
+    description:
+      "See what's on the user's screen right now (the app or game they're using, not ARC). Use whenever they refer to something they're looking at: an error, a setting, a page, a game menu, 'this', 'here', 'what should I pick'.",
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'get_now_playing',
@@ -286,6 +523,7 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     description: "Lock the user's computer (Windows lock screen).",
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
+  ...EXTRA_TOOL_DEFS,
 ].map((t) => ({ ...t, eager_input_streaming: true }) as Anthropic.Beta.BetaTool);
 
 /** Validate a (tolerantly parsed) tool input; returns the intent to run, or an error. */
@@ -303,13 +541,18 @@ export function toIntent(
         | 'list_routines'
         | 'get_calendar'
         | 'notes'
-        | 'get_now_playing';
+        | 'get_now_playing'
+        | 'look_at_screen'
+        | 'get_clipboard_history'
+        | 'email'
+        | 'extra';
     } {
   const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   const str = (k: string): string | null =>
     typeof o[k] === 'string' && (o[k] as string).trim()
       ? (o[k] as string).trim().slice(0, 300)
       : null;
+  if (EXTRA_TOOL_NAMES.has(name)) return { local: 'extra' };
   switch (name) {
     case 'launch_app': {
       const app = str('app');
@@ -374,6 +617,14 @@ export function toIntent(
           : NaN;
       if (!(m > 0 && m <= 1440)) return { error: '"minutes" must be between 0 and 1440.' };
       const label = str('label');
+      if (o['focus'] === true)
+        return {
+          intent: {
+            action: 'set_timer',
+            target: String(m),
+            args: [label || 'Focus session', 'focus'],
+          },
+        };
       return {
         intent: { action: 'set_timer', target: String(m), ...(label ? { args: [label] } : {}) },
       };
@@ -388,6 +639,22 @@ export function toIntent(
       return { local: 'get_calendar' };
     case 'get_now_playing':
       return { local: 'get_now_playing' };
+    case 'look_at_screen':
+      return { local: 'look_at_screen' };
+    case 'get_clipboard_history':
+      return { local: 'get_clipboard_history' };
+    case 'get_emails':
+    case 'read_email':
+      return { local: 'email' };
+    case 'control_arc': {
+      const action = str('action');
+      if (!action || !(ARC_ACTIONS as readonly string[]).includes(action))
+        return { error: '"action" must be one of the listed actions.' };
+      const value = str('value');
+      return {
+        intent: { action: 'arc_control', target: action, ...(value ? { args: [value] } : {}) },
+      };
+    }
     case 'add_to_list':
     case 'get_lists':
     case 'update_list_item':
@@ -395,7 +662,17 @@ export function toIntent(
     case 'get_notes':
     case 'remember':
     case 'forget':
+    case 'manage_goal':
       return { local: 'notes' };
+    case 'search_past_chats':
+    case 'create_routine':
+    case 'get_recent_crashes':
+    case 'list_installed_games':
+    case 'launch_game':
+    case 'get_gaming_sessions':
+    case 'read_arc_logs':
+    case 'read_arc_source':
+      return { local: 'extra' };
     case 'run_routine': {
       const n = str('name');
       return n ? { intent: { action: 'run_routine', target: n } } : { error: 'Missing "name".' };
@@ -413,7 +690,7 @@ export function toIntent(
 
 /** Compact telemetry for the model (bytes → GB, rounded), so tool results stay small. */
 const RESEARCH_NOTE =
-  'Research mode is on for this chat. Give thorough, well-organised answers in Markdown (short headings, bullet lists, bold for key points, tables when comparing). Search the web for anything current, factual or specific that you are not certain of, read the most relevant pages, and cite sources inline as Markdown links. Say clearly when sources disagree or information may be out of date.';
+  "Research mode is on for this chat. Give thorough, well-organised answers in Markdown (short headings, bullet lists, bold for key points, tables when comparing). Search the web for anything current, factual or specific that you are not certain of, read the most relevant pages, and cite sources inline as Markdown links. Say clearly when sources disagree or information may be out of date. When recommending products, compare them in a table with approximate prices, and link each product to a page where it can be bought or reviewed (for example Amazon UK or the maker's site); ARC shows those links as picture cards under your answer.";
 
 /** Web search and fetch (server tools). Newer models get the versions that filter
  *  results before they reach the context; Haiku uses the basic versions. */
@@ -540,8 +817,17 @@ export interface AnthropicDeps {
   notes?: { tool(name: string, input: unknown): unknown };
   memories?(): string[];
   nowPlaying?(): NowPlaying | null;
+  clipboard?(query?: string): Array<{ copied: string; text: string }>;
+  email?: Pick<EmailService, 'get' | 'read'>;
+  screenshot?(): Promise<{ frame: Frame; ageSec: number; arcVisible: boolean } | null>;
   /** null = no calendar connected. */
   calendar?(): CalEvent[] | null;
+  /** What the user is doing right now (app in front, gaming…), added to each turn. */
+  context?(): string;
+  /** search_past_chats, read_arc_logs, read_arc_source. */
+  extra?: Partial<Record<string, (input: unknown) => unknown>>;
+  /** Spending: every finished request with its token counts. */
+  onUsage?(model: string, usage: import('@shared/usage').Usage, feature: string): void;
   /** Injectable for tests. */
   createClient?(apiKey: string): Pick<Anthropic, 'beta' | 'models'>;
 }
@@ -619,11 +905,23 @@ export class AnthropicProvider implements AIProvider {
       "You live inside ARC, a desktop assistant HUD on the user's own computer. Replies appear in a small console (and may be read aloud), so write plain sentences: no markdown headings, tables or code fences unless asked.",
       'Use the tools to act rather than describing what you would do. Actions may need the user to approve them; if one is cancelled or fails, say so briefly and suggest an alternative.',
       'Answer questions about the computer from get_system_status, never from guesses.',
+      "You can see the user's screen with look_at_screen: use it whenever they mention something they're looking at, instead of asking them to describe it.",
+      'You can also control ARC itself with control_arc: open its tabs and settings, start new or research chats, switch chats, scan for disk space and toggle gaming mode.',
       "Each user message is followed by a system note with the user's current local date and time, read from this computer's clock. It is accurate: answer questions about the time, date or day directly from it.",
       "You can also close apps, set the volume, control media playback, open folders, find files by name, show a file in Explorer, set, list and cancel timers/reminders, check the weather and the user's calendar, run their saved routines, keep lists and notes, remember things they ask you to, and lock the PC.",
+      "Read the user's mood from their words and adapt: brief and calm when they're stressed or frustrated, playful when they joke (match their humour; light sarcasm only when they're clearly joking around), warm when something good happens.",
+      'When you act, say briefly why you chose that action (one short clause), so your decisions are easy to follow.',
+      'When a problem gets solved, remember the fix with remember (category "solutions") so you can reuse it; check memories for earlier fixes before troubleshooting from scratch. For ongoing projects, remember details with the project name.',
+      'There is a Notes list called "Alton roadmap" with the features the user wants. If they suggest an improvement, or you notice one that would help them, add it there (add_to_list). If asked how to improve yourself, research it and add concrete ideas.',
+      'Have a point of view: when asked what you think or which option is better, give a clear recommendation and why, not a neutral list.',
+      "Own your mistakes: if an action failed or you got something wrong, say so plainly, say what you'll do differently, and try another way. Be honest about what you can't do (you can't see other monitors' content unless shown, can't hear tone of voice, can't edit your own code) and suggest the closest thing you can do.",
+      'Be curious about the user, lightly: now and then, when it fits naturally and the conversation is relaxed, ask one short question that helps you know them better (never during urgent tasks, never more than once in a while).',
+      'You remember earlier conversations: when the user refers to something discussed before, use search_past_chats rather than saying you cannot recall.',
+      "If the user reports that ARC itself is misbehaving, debug yourself: read_arc_logs for recent errors, and read_arc_source (read-only) to find the cause in your own code. Explain the problem simply and, if useful, give the exact change for them to make; you can't edit files yourself.",
+      'For multi-step jobs on the PC that your tools cannot do (clicking through apps or websites), tell the user they can say "handle this for me" to switch on Agent Mode, where you use the mouse and keyboard.',
       machine,
       memories.length
-        ? `Things the user asked you to remember (use them naturally when relevant):\n${memories.map((m) => `- ${m}`).join('\n')}`
+        ? `Things you know about the user (they told you, or you noticed in earlier chats; use them naturally when relevant):\n${memories.map((m) => `- ${m}`).join('\n')}`
         : '',
     ];
     return `${this.deps.systemPrompt()}\n\n${rules.filter(Boolean).join('\n')}`;
@@ -634,7 +932,7 @@ export class AnthropicProvider implements AIProvider {
     opts: SendOptions,
   ): AsyncIterable<ProviderChunk> {
     const key = await this.deps.getKey();
-    if (!key) throw new Error('No API key saved. Add one in Settings › Advanced.');
+    if (!key) throw new Error('No API key saved. Add one in Settings › AI.');
     const client = this.client(key);
     const research = opts.research === true;
     const model = research
@@ -668,11 +966,22 @@ export class AnthropicProvider implements AIProvider {
     this.lastSystem = current;
     // Per-turn context as a mid-conversation system message keeps the cached prefix intact.
     this.transcript.push(
-      { role: 'user', content: userText },
+      opts.attachments?.length
+        ? {
+            role: 'user',
+            content: [
+              ...(attachmentBlocks(
+                opts.attachments,
+              ) as unknown as Anthropic.Beta.BetaContentBlockParam[]),
+              { type: 'text', text: userText },
+            ],
+          }
+        : { role: 'user', content: userText },
       {
         role: 'system',
         content: [
           `Current local date and time (from this computer's clock): ${localTimeText(now)}.`,
+          this.deps.context?.() ?? '',
           research ? RESEARCH_NOTE : '',
           changed
             ? `Your instructions have been updated. From now on, follow these instead of the earlier ones:\n\n${current}`
@@ -732,6 +1041,7 @@ export class AnthropicProvider implements AIProvider {
               };
           }
           message = await stream.finalMessage();
+          this.deps.onUsage?.(model, message.usage, research ? 'research' : 'chat');
           jsonRetries = 0;
         } catch (err) {
           if (opts.signal?.aborted) throw err;
@@ -800,12 +1110,139 @@ export class AnthropicProvider implements AIProvider {
             });
             continue;
           }
+          if ('local' in plan && plan.local === 'email') {
+            const svc = this.deps.email;
+            const o = (t.input && typeof t.input === 'object' ? t.input : {}) as Record<
+              string,
+              unknown
+            >;
+            let r: unknown;
+            if (!svc || !svc.get().configured)
+              r = {
+                error:
+                  'Email is not connected. The user can add Gmail in Settings › Connections › Email.',
+              };
+            else if (t.name === 'read_email') r = await svc.read(Number(o['uid']));
+            else {
+              const st = svc.get();
+              const q = typeof o['query'] === 'string' ? o['query'].toLowerCase() : '';
+              r = st.error
+                ? { error: st.error }
+                : {
+                    unread: st.unread,
+                    emails: st.recent
+                      .filter((e) => !o['unreadOnly'] || e.unread)
+                      .filter((e) => !q || `${e.from} ${e.subject}`.toLowerCase().includes(q))
+                      .map((e) => ({
+                        uid: e.uid,
+                        from: e.from,
+                        subject: e.subject,
+                        received: new Date(e.date).toLocaleString(),
+                        unread: e.unread,
+                      })),
+                  };
+            }
+            const isErr = !!r && typeof r === 'object' && 'error' in r;
+            results.push({
+              type: 'tool_result',
+              tool_use_id: t.id,
+              ...(isErr ? { is_error: true } : {}),
+              content: JSON.stringify(r),
+            });
+            continue;
+          }
+          if ('local' in plan && plan.local === 'get_clipboard_history') {
+            const q =
+              t.input && typeof t.input === 'object'
+                ? (t.input as { query?: unknown }).query
+                : undefined;
+            results.push({
+              type: 'tool_result',
+              tool_use_id: t.id,
+              content: JSON.stringify(
+                this.deps.clipboard?.(typeof q === 'string' ? q : '') ?? {
+                  error: 'Clipboard history is off.',
+                },
+              ),
+            });
+            continue;
+          }
+          if ('local' in plan && plan.local === 'look_at_screen') {
+            yield { type: 'activity', text: 'Looking at your screen…' };
+            const shot = (await this.deps.screenshot?.()) ?? null;
+            results.push(
+              shot
+                ? {
+                    type: 'tool_result',
+                    tool_use_id: t.id,
+                    content: [
+                      {
+                        type: 'text',
+                        text: `The user's screen (${shot.frame.width}×${shot.frame.height}), captured ${shot.ageSec ? `${shot.ageSec} seconds ago` : 'just now'}${shot.arcVisible ? '; ARC may be covering part of it' : ''}.`,
+                      },
+                      {
+                        type: 'image',
+                        source: {
+                          type: 'base64',
+                          media_type: 'image/jpeg',
+                          data: shot.frame.jpeg.toString('base64'),
+                        },
+                      },
+                    ],
+                  }
+                : {
+                    type: 'tool_result',
+                    tool_use_id: t.id,
+                    is_error: true,
+                    content:
+                      'Screen awareness is off (Settings › Smart features) or the screen could not be captured.',
+                  },
+            );
+            continue;
+          }
           if ('local' in plan && plan.local === 'get_now_playing') {
             const n = this.deps.nowPlaying?.() ?? null;
             results.push({
               type: 'tool_result',
               tool_use_id: t.id,
               content: JSON.stringify(n ?? { nothingPlaying: true }),
+            });
+            continue;
+          }
+          if ('local' in plan && plan.local === 'extra') {
+            const fn = this.deps.extra?.[t.name];
+            yield { type: 'activity', text: ACTIVITY_TEXT[t.name] ?? 'Working on it…' };
+            let r: unknown;
+            try {
+              r = fn ? await fn(t.input) : { error: 'That is not available right now.' };
+            } catch (err) {
+              r = { error: err instanceof Error ? err.message : String(err) };
+            }
+            const isErr = !!r && typeof r === 'object' && 'error' in r;
+            // Tools may return pictures: { images: [{ label, jpeg (base64) }] }.
+            const images =
+              r && typeof r === 'object' && Array.isArray((r as { images?: unknown }).images)
+                ? (r as { images: Array<{ label: string; jpeg: string }> }).images
+                : null;
+            results.push({
+              type: 'tool_result',
+              tool_use_id: t.id,
+              ...(isErr ? { is_error: true } : {}),
+              content: images
+                ? images.flatMap((im) => [
+                    { type: 'text' as const, text: im.label },
+                    {
+                      type: 'image' as const,
+                      source: {
+                        type: 'base64' as const,
+                        media_type: 'image/jpeg' as const,
+                        data: im.jpeg,
+                      },
+                    },
+                  ])
+                : typeof r === 'string'
+                  ? r
+                  : JSON.stringify(r),
             });
             continue;
           }
@@ -830,7 +1267,7 @@ export class AnthropicProvider implements AIProvider {
                 : {
                     is_error: true,
                     content:
-                      'No calendar is connected. The user can add their Google Calendar in Settings › General › Calendar.',
+                      'No calendar is connected. The user can add their Google Calendar in Settings › Connections › Calendar.',
                   }),
             });
             continue;
@@ -945,7 +1382,7 @@ export function repairTranscript(msgs: Msg[]): Msg[] {
 }
 
 /** A 400 saying a replayed thinking block no longer matches this conversation. */
-function isStaleThinking(err: InstanceType<typeof Anthropic.BadRequestError>): boolean {
+export function isStaleThinking(err: InstanceType<typeof Anthropic.BadRequestError>): boolean {
   const detail = `${err.message} ${(err.error as { error?: { message?: string } } | undefined)?.error?.message ?? ''}`;
   return /`?thinking`? block/i.test(detail) && /signature|different conversation/i.test(detail);
 }
@@ -978,11 +1415,11 @@ function firstTurnStart(msgs: Msg[], i: number): number {
 /** Plain-English messages for API failures (typed checks, most specific first). */
 export function describeError(err: unknown): string {
   if (err instanceof Anthropic.AuthenticationError)
-    return 'Your Anthropic API key was rejected. Check it in Settings › Advanced.';
+    return 'Your Anthropic API key was rejected. Check it in Settings › AI.';
   if (err instanceof Anthropic.PermissionDeniedError)
     return "This API key isn't allowed to use that model. Check your Anthropic console.";
   if (err instanceof Anthropic.NotFoundError)
-    return "That model isn't available to your account. Pick another in Settings › Advanced.";
+    return "That model isn't available to your account. Pick another in Settings › AI.";
   if (err instanceof Anthropic.RateLimitError)
     return 'Anthropic is limiting requests right now. Try again in a moment.';
   if (err instanceof Anthropic.BadRequestError) {

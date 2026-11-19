@@ -1,18 +1,21 @@
 /** Pure validation for stored settings: unknown keys dropped, wrong types replaced by
  *  defaults, so a hand-edited or corrupted settings.json can't break the app. */
 import { sanitizePersonality } from './personalities';
+import { sanitizePrompts } from './prompts';
 import type { WeatherPlace } from './weather';
 import { FISH_MODELS, type FishModel } from './voice';
 import {
   AI_MODELS,
   DEFAULT_SETTINGS,
+  PERMISSION_KEYS,
   type AiModel,
+  type Permission,
   type ReduceMotion,
   type Settings,
   type ThemeId,
 } from './types';
 
-const THEMES: ThemeId[] = ['arc-cyan', 'solar-gold', 'crimson', 'mono'];
+const THEMES: ThemeId[] = ['arc-cyan', 'solar-gold', 'crimson', 'sentinel', 'violet', 'mono'];
 const MOTION: ReduceMotion[] = ['system', 'on', 'off'];
 
 function validPlace(v: unknown): WeatherPlace | null {
@@ -56,7 +59,34 @@ export function sanitizeSettings(raw: unknown): Settings {
   };
   const bool = (k: keyof Settings): boolean =>
     typeof r[k] === 'boolean' ? (r[k] as boolean) : (d[k] as boolean);
+  const hour = (k: keyof Settings): number => {
+    const v = r[k];
+    return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 23 ? v : (d[k] as number);
+  };
   const name = str('assistantName', 24).trim();
+  const profiles = (v: unknown): Settings['gamingProfiles'] => {
+    if (!v || typeof v !== 'object') return {};
+    const out: Settings['gamingProfiles'] = {};
+    for (const [k, p] of Object.entries(v as Record<string, unknown>).slice(0, 30)) {
+      if (!p || typeof p !== 'object') continue;
+      const o = p as Record<string, unknown>;
+      out[k.slice(0, 60)] = {
+        closeApps: names(o['closeApps']),
+        highPerformance: o['highPerformance'] === true,
+        ...(typeof o['note'] === 'string' && o['note'].trim()
+          ? { note: o['note'].slice(0, 200) }
+          : {}),
+      };
+    }
+    return out;
+  };
+  const perms = (v: unknown, def: Settings['permissions']): Settings['permissions'] => {
+    const o = v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+    const out = { ...def };
+    for (const k of PERMISSION_KEYS)
+      if (o[k] === 'allow' || o[k] === 'ask' || o[k] === 'block') out[k] = o[k] as Permission;
+    return out;
+  };
   return {
     assistantName: name || d.assistantName,
     userName: str('userName', 40).trim(),
@@ -106,6 +136,18 @@ export function sanitizeSettings(raw: unknown): Settings {
         : d.alarmVolume,
     globalHotkey: str('globalHotkey', 60).trim() || d.globalHotkey,
     voiceHotkey: str('voiceHotkey', 60).trim(),
+    openMicHotkey: str('openMicHotkey', 60).trim(),
+    clipboardHotkey:
+      typeof r['clipboardHotkey'] === 'string'
+        ? r['clipboardHotkey'].trim().slice(0, 60)
+        : d.clipboardHotkey,
+    prompts: sanitizePrompts(r['prompts']),
+    openMicMinutes: [2, 5, 10, 30].includes(r['openMicMinutes'] as number)
+      ? (r['openMicMinutes'] as number)
+      : d.openMicMinutes,
+    screenAware: bool('screenAware'),
+    clipboardHistory: bool('clipboardHistory'),
+    healthAlerts: bool('healthAlerts'),
     gamingMode: bool('gamingMode'),
     gamingPowerPlan: bool('gamingPowerPlan'),
     gamingQuiet: bool('gamingQuiet'),
@@ -118,5 +160,39 @@ export function sanitizeSettings(raw: unknown): Settings {
     researchModel: (AI_MODELS as readonly string[]).includes(r['researchModel'] as string)
       ? (r['researchModel'] as AiModel)
       : d.researchModel,
+    agentMode: bool('agentMode'),
+    agentModel: (AI_MODELS as readonly string[]).includes(r['agentModel'] as string)
+      ? (r['agentModel'] as AiModel)
+      : d.agentModel,
+    autoMemory: bool('autoMemory'),
+    initiative: bool('initiative'),
+    quietStart: hour('quietStart'),
+    quietEnd: hour('quietEnd'),
+    avatar: (['face', 'rings', 'code'] as const).includes(r['avatar'] as 'face')
+      ? (r['avatar'] as Settings['avatar'])
+      : d.avatar,
+    sourceDir: str('sourceDir', 400).trim(),
+    whisper: bool('whisper'),
+    phoneAccess: bool('phoneAccess'),
+    onboarded: typeof r['onboarded'] === 'boolean' ? r['onboarded'] : true,
+    monthlyBudget:
+      typeof r['monthlyBudget'] === 'number' &&
+      r['monthlyBudget'] >= 0 &&
+      r['monthlyBudget'] <= 10_000
+        ? Math.round(r['monthlyBudget'])
+        : d.monthlyBudget,
+    phoneAppUrl: /^https:\/\/[\w.-]+(\/[\w./~-]*)?$/.test(String(r['phoneAppUrl'] ?? ''))
+      ? String(r['phoneAppUrl'])
+      : d.phoneAppUrl,
+    wakeWords: names(r['wakeWords']).slice(0, 5),
+    gamingVoice: bool('gamingVoice'),
+    saveBackups: bool('saveBackups'),
+    gamingProfiles: profiles(r['gamingProfiles']),
+    permissions: perms(r['permissions'], d.permissions),
+    hiddenPanels: names(r['hiddenPanels']).slice(0, 20),
+    localModel: /^[\w.:/-]{0,80}$/.test(String(r['localModel'] ?? ''))
+      ? String(r['localModel'] ?? '')
+      : '',
+    followUp: bool('followUp'),
   };
 }

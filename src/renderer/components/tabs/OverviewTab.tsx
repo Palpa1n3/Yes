@@ -1,6 +1,8 @@
 import { motion } from 'framer-motion';
 import { ActivityLogPanel } from '@renderer/components/panels/ActivityLogPanel';
 import { AgendaPanel } from '@renderer/components/panels/AgendaPanel';
+import { ShiftsPanel } from '@renderer/components/panels/ShiftsPanel';
+import { InboxPanel } from '@renderer/components/panels/InboxPanel';
 import { NowPlayingPanel } from '@renderer/components/panels/NowPlayingPanel';
 import { TimersPanel } from '@renderer/components/panels/TimersPanel';
 import { Chip } from '@renderer/components/panels/Chip';
@@ -237,16 +239,32 @@ function DrivesPanel() {
   );
 }
 
+/** Overview panels that can be hidden (Settings › Appearance › Dashboard). */
+export const OVERVIEW_PANELS = [
+  { id: 'timers', label: 'Timers' },
+  { id: 'weather', label: 'Weather' },
+  { id: 'nowPlaying', label: 'Now playing' },
+  { id: 'vitals', label: 'Vitals' },
+  { id: 'network', label: 'Network' },
+  { id: 'drives', label: 'Drives' },
+  { id: 'agenda', label: 'Agenda' },
+  { id: 'shifts', label: 'Shifts' },
+  { id: 'inbox', label: 'Inbox' },
+  { id: 'activity', label: 'Activity log' },
+] as const;
+
 export function OverviewTab() {
-  const { assistantName } = useSettingsStore((s) => s.settings);
+  const { assistantName, hiddenPanels } = useSettingsStore((s) => s.settings);
+  const show = (id: string): boolean => !hiddenPanels.includes(id);
   return (
     <Columns
       left={
         <>
-          <TimersPanel className="shrink-0" />
-          <WeatherPanel className="shrink-0" />
-          <NowPlayingPanel className="shrink-0" />
-          <VitalsPanel />
+          {show('timers') && <TimersPanel className="shrink-0" />}
+          {show('weather') && <WeatherPanel className="shrink-0" />}
+          {show('nowPlaying') && <NowPlayingPanel className="shrink-0" />}
+          {show('vitals') && <VitalsPanel />}
+          {show('shifts') && <ShiftsPanel className="shrink-0" />}
         </>
       }
       center={
@@ -261,10 +279,11 @@ export function OverviewTab() {
       }
       right={
         <>
-          <NetworkPanel />
-          <DrivesPanel />
-          <AgendaPanel className="max-h-[260px] shrink-0" />
-          <ActivityLogPanel className="min-h-[120px] flex-1" />
+          {show('network') && <NetworkPanel />}
+          {show('drives') && <DrivesPanel />}
+          {show('agenda') && <AgendaPanel className="max-h-[260px] shrink-0" />}
+          {show('inbox') && <InboxPanel className="max-h-[220px] shrink-0" />}
+          {show('activity') && <ActivityLogPanel className="min-h-[120px] flex-1" />}
         </>
       }
     />

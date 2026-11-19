@@ -2,6 +2,11 @@ import { create } from 'zustand';
 import { toCommand, type CanonicalCommand, type CommandResult } from '@shared/commands';
 import { pickPhrase, resolveTitle, type ConfirmMode } from '@shared/personalities';
 import { findRoutine, matchRoutine } from '@shared/routines';
+import { isArcCommand, parseArcCommand, type ArcCommand } from '@shared/arcCommands';
+import { runArcCommand } from '@renderer/voice/arcActions';
+import { agentIntercept, maybeStartAgent } from './agentStore';
+import { EMERGENCY_RE, emergencyStop } from '@renderer/emergency';
+import { approvalIntercept } from '@renderer/components/hud/ApprovalCards';
 import {
   responseIdFor,
   type AssistantState,
@@ -14,7 +19,11 @@ import { playSfx } from '@renderer/voice/sfx';
 import { useAppsStore } from './appsStore';
 import { useAssistantStore, type ActivityKind } from './assistantStore';
 import { useSettingsStore } from './settingsStore';
+import type { Permission, PermissionKey } from '@shared/types';
 import { useRoutinesStore } from './routinesStore';
+import { useChatsStore } from './chatsStore';
+import { linksIn } from '@shared/preview';
+import type { Prepared } from '@renderer/lib/attachments';
 
 export type CommandInfo = CommandInfoShared;
 export type Message = StoredMessage;
@@ -42,7 +51,7 @@ interface ConversationState {
   /** Start a new chat (optionally in research mode) and switch to it. */
   newChat(research?: boolean): Promise<void>;
 
-  send(text: string): Promise<void>;
+  send(text: string, attachments?: Prepared[]): Promise<void>;
   cancel(): void;
   clear(): void;
   pushSystem(text: string, tone?: 'info' | 'error'): void;
@@ -56,6 +65,10 @@ interface ConversationState {
   perform(intent: RawIntent): Promise<void>;
   /** Replace the transcript with restored history (startup). */
   restore(messages: Message[]): void;
+  /** Ask the last question again (the old answer is removed). */
+  regenerate(): Promise<void>;
+  /** Take back the last question to edit it; returns its text. */
+  editLast(): string;
 }
 
 const ACTIVITY_KIND: Record<CanonicalCommand['action'], ActivityKind> = {
@@ -73,6 +86,7 @@ const ACTIVITY_KIND: Record<CanonicalCommand['action'], ActivityKind> = {
   find_files: 'dsk',
   reveal_file: 'dsk',
   run_routine: 'rtn',
+  arc_control: 'msg',
   unknown: 'msg',
 };
 
@@ -91,6 +105,7 @@ const VERB: Record<CanonicalCommand['action'], string> = {
   cancel_timer: 'Cancel timer',
   lock_screen: 'Locking',
   run_routine: 'Routine',
+  arc_control: 'ARC',
   unknown: 'Unknown',
 };
 
@@ -111,9 +126,33 @@ export function persona(): { phrase(list: readonly string[]): string; confirm: C
   return { phrase: (list) => pickPhrase(list, title), confirm: personality.confirmBeforeActions };
 }
 
-/** Whether a command needs Approve / Cancel first, per personality and risk. */
+const PERMISSION_OF: Partial<Record<CanonicalCommand['action'], PermissionKey>> = {
+  launch_app: 'launch_app',
+  close_app: 'close_app',
+  open_url: 'open_url',
+  search_web: 'open_url',
+  lock_screen: 'lock_screen',
+  run_routine: 'run_routine',
+  set_volume: 'set_volume',
+  media_control: 'media_control',
+  open_folder: 'files',
+  find_files: 'files',
+  reveal_file: 'files',
+};
+
+/** The user's permission for this kind of action (Settings › Privacy › Permissions). */
+export function permissionFor(cmd: CanonicalCommand): Permission | null {
+  const key = PERMISSION_OF[cmd.action];
+  return key ? (useSettingsStore.getState().settings.permissions[key] ?? null) : null;
+}
+
+/** Whether a command needs Approve / Cancel first, per permissions, personality and risk. */
 export function needsConfirmation(cmd: CanonicalCommand, mode: ConfirmMode): boolean {
+  // A personality that always confirms still does; otherwise the per-action setting decides.
   if (mode === 'always') return true;
+  const p = permissionFor(cmd);
+  if (p === 'ask') return true;
+  if (p === 'allow' && cmd.risk !== 'destructive') return false;
   if (mode === 'never') return false;
   return cmd.risk === 'destructive';
 }
@@ -158,6 +197,11 @@ export function describeCommand(cmd: CanonicalCommand): { verb: string; target: 
       };
     case 'open_folder':
       return { verb, target: cap(t) };
+    case 'arc_control':
+      return {
+        verb,
+        target: (cmd.target ?? '').replace(/_/g, ' ') + (cmd.args?.[0] ? ` · ${cmd.args[0]}` : ''),
+      };
     case 'run_routine': {
       const list = useRoutinesStore.getState().routines;
       return { verb, target: (list.find((r) => r.id === t) ?? findRoutine(t, list))?.name ?? t };
@@ -195,6 +239,7 @@ export function failureLine(cmd: CanonicalCommand, reason: string): string {
     cancel_timer: 'Your timers are listed in the Timers panel on the Overview.',
     lock_screen: 'You can always press Windows+L.',
     run_routine: 'Your routines are in the Routines tab, where you can check each step.',
+    arc_control: '',
     unknown: 'Type /help to see what I can do.',
   };
   // Terse personalities skip the coaching.
@@ -203,6 +248,26 @@ export function failureLine(cmd: CanonicalCommand, reason: string): string {
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => {
+  /** Remove the last question and everything after it; returns the question's text. */
+  const rewindLast = (): string | null => {
+    const s = get();
+    if (s.activeResponseId) return null;
+    let i = -1;
+    for (let k = s.messages.length - 1; k >= 0; k--)
+      if (s.messages[k]?.role === 'user') {
+        i = k;
+        break;
+      }
+    const u = s.messages[i];
+    if (!u || u.role !== 'user') return null;
+    const kept = s.messages.slice(0, i);
+    set({ messages: kept });
+    if (s.chatId) {
+      saveNow(s.chatId, kept);
+      window.arc.assistant.rewind(s.chatId);
+    }
+    return u.text;
+  };
   /** Push the derived state to the core, unless an error flicker is showing. */
   const sync = (): void => {
     const a = useAssistantStore.getState();
@@ -238,7 +303,22 @@ export const useConversationStore = create<ConversationState>((set, get) => {
     setCommand(messageId, { status: 'pending' });
     let result: CommandResult;
     try {
-      result = await window.arc.commands.execute(info.cmd);
+      result =
+        info.cmd.action === 'arc_control'
+          ? await (async (): Promise<CommandResult> => {
+              // ARC's own UI: handled here, not by the main-process executor.
+              const r = await runArcCommand({
+                action: (info.cmd.target ?? '') as ArcCommand['action'],
+                ...(info.cmd.args?.[0] ? { value: info.cmd.args[0] } : {}),
+              });
+              return {
+                commandId: info.cmd.id,
+                status: r.ok ? 'success' : 'failed',
+                message: r.message,
+                timestamp: now(),
+              };
+            })()
+          : await window.arc.commands.execute(info.cmd);
     } catch (err) {
       result = {
         commandId: info.cmd.id,
@@ -299,13 +379,22 @@ export const useConversationStore = create<ConversationState>((set, get) => {
       sync();
     },
 
+    async regenerate() {
+      const taken = rewindLast();
+      if (taken) await get().send(taken);
+    },
+
+    editLast() {
+      return rewindLast() ?? '';
+    },
+
     async newChat(research = false) {
       const meta = await window.arc.chats.create(research);
       await get().openChat(meta.id);
     },
 
-    async send(raw) {
-      const text = raw.trim();
+    async send(raw, attachments = []) {
+      const text = raw.trim() || (attachments.length ? 'Please take a look at this.' : '');
       if (!text) return;
       const id = uid();
       const responseId = responseIdFor(id);
@@ -320,20 +409,70 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           ...s.messages.map((m) =>
             m.role === 'assistant' && m.streaming ? { ...m, streaming: false } : m,
           ),
-          { id, role: 'user' as const, text, timestamp: now() },
+          {
+            id,
+            role: 'user' as const,
+            text,
+            timestamp: now(),
+            ...(attachments.length ? { attachments: attachments.map((x) => x.info) } : {}),
+          },
         ],
       }));
       sync();
       playSfx('send');
+      // "Stop everything": the emergency stop.
+      if (EMERGENCY_RE.test(text.replace(/[.!]+$/, '').trim())) {
+        set({ activeResponseId: null });
+        emergencyStop();
+        get().pushSystem('Stopped everything: Agent Mode, routines, speech and listening.');
+        return;
+      }
+      // Agent Mode: answers to its questions, "stop", and "handle this for me: …".
+      if (
+        !attachments.length &&
+        (approvalIntercept(text) || agentIntercept(text) || maybeStartAgent(text))
+      ) {
+        set({ activeResponseId: null });
+        return;
+      }
       // A routine's name or phrase runs it right here: instant, free, no AI round trip.
-      const routine = matchRoutine(text, useRoutinesStore.getState().routines);
+      const routine = attachments.length
+        ? undefined
+        : matchRoutine(text, useRoutinesStore.getState().routines);
       if (routine) {
         set({ activeResponseId: null });
         await get().perform({ action: 'run_routine', target: routine.id });
         return;
       }
+      // ARC's own commands ("new chat", "open notes", "pause music"…): instant, no AI.
+      const arc = attachments.length ? null : parseArcCommand(text);
+      if (arc) {
+        set({ activeResponseId: null });
+        if (!isArcCommand(arc)) {
+          await get().perform(arc);
+          return;
+        }
+        // Commands that move to another chat don't leave their own line behind.
+        if (arc.action === 'new_chat' || arc.action === 'research' || arc.action === 'switch_chat')
+          set((s) => ({ messages: s.messages.filter((m) => m.id !== id) }));
+        const r = await runArcCommand(arc);
+        if (r.ok && r.message) get().pushAssistant(r.message);
+        else get().pushSystem(r.message, 'error');
+        useAssistantStore.getState().logActivity({
+          kind: 'msg',
+          label: `${arc.action.replace(/_/g, ' ')}${arc.value ? ` · ${arc.value}` : ''}: ${r.ok ? 'done' : r.message}`,
+          status: r.ok ? 'success' : 'failed',
+        });
+        return;
+      }
       try {
-        await window.arc.assistant.send({ id, text, timestamp: now(), chatId: get().chatId });
+        await window.arc.assistant.send({
+          id,
+          text,
+          timestamp: now(),
+          chatId: get().chatId,
+          ...(attachments.length ? { attachments: attachments.map((x) => x.att) } : {}),
+        });
       } catch (err) {
         get().handleChunk({
           type: 'error',
@@ -454,6 +593,30 @@ export const useConversationStore = create<ConversationState>((set, get) => {
         }
         case 'intent': {
           const cmd = toCommand(chunk.intent, uid());
+          // Blocked in Settings › Privacy › Permissions: never runs, and Claude is told why.
+          if (permissionFor(cmd) === 'block') {
+            const message = `Not allowed: ${describeCommand(cmd).verb.toLowerCase()} is set to "Never" in Settings › Privacy › Permissions.`;
+            set({ activeBubbleId: null });
+            update((ms) => [
+              ...closeBubble(ms),
+              {
+                id: uid(),
+                role: 'command',
+                timestamp: now(),
+                command: {
+                  cmd,
+                  status: 'failed',
+                  result: { commandId: cmd.id, status: 'failed', message, timestamp: now() },
+                },
+              },
+            ]);
+            if (chunk.toolUseId)
+              window.arc.assistant.toolResult(chunk.responseId, chunk.toolUseId, {
+                status: 'failed',
+                message,
+              });
+            break;
+          }
           const confirm = needsConfirmation(cmd, persona().confirm);
           const info: CommandInfo = {
             cmd,
@@ -516,10 +679,36 @@ export const useConversationStore = create<ConversationState>((set, get) => {
           playSfx('error');
           break;
         }
-        case 'done':
+        case 'done': {
           set({ activeResponseId: null, activeBubbleId: null, activity: null });
           update(closeBubble);
+          // Research answers (or any with sources): fetch picture cards for their links.
+          const last = [...get().messages].reverse().find((m) => m.role === 'assistant');
+          const research = useChatsStore
+            .getState()
+            .chats.find((c) => c.id === get().chatId)?.research;
+          if (
+            last &&
+            last.role === 'assistant' &&
+            !last.previews &&
+            (research || last.sources?.length)
+          ) {
+            const urls = linksIn(last.text, last.sources);
+            if (urls.length)
+              void window.arc.previews
+                .get(urls)
+                .then((previews) => {
+                  if (previews.length)
+                    update((ms) =>
+                      ms.map((m) =>
+                        m.id === last.id && m.role === 'assistant' ? { ...m, previews } : m,
+                      ),
+                    );
+                })
+                .catch(() => undefined);
+          }
           break;
+        }
       }
     },
   };
@@ -536,7 +725,8 @@ export function bindAssistantStream(): () => void {
 /** Session-only lines (restore notice, greeting) are never saved. */
 const keepable = (ms: Message[]): Message[] => ms.filter((m) => !m.id.startsWith('session-'));
 let pendingSave: ReturnType<typeof setTimeout> | undefined;
-function saveNow(chatId: string, messages: Message[]): void {
+/** Save a chat right away (e.g. before the phone reloads it). */
+export function saveNow(chatId: string, messages: Message[]): void {
   clearTimeout(pendingSave);
   window.arc.chats.save(chatId, keepable(messages));
 }

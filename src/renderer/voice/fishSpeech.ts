@@ -1,3 +1,4 @@
+import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { cleanForSpeech, splitForSpeech } from '@shared/voice';
 
 export interface FishHandlers {
@@ -54,13 +55,19 @@ export class FishSpeaker {
     }
   }
 
+  private gain: GainNode | null = null;
+
   private audio(): { ctx: AudioContext; analyser: AnalyserNode } {
     if (!this.ctx || !this.analyser) {
       this.ctx = new AudioContext();
       this.analyser = this.ctx.createAnalyser();
       this.analyser.fftSize = 512;
-      this.analyser.connect(this.ctx.destination);
+      this.gain = this.ctx.createGain();
+      this.analyser.connect(this.gain);
+      this.gain.connect(this.ctx.destination);
     }
+    // Whisper mode plays Fish Audio quietly.
+    if (this.gain) this.gain.gain.value = useSettingsStore.getState().settings.whisper ? 0.35 : 1;
     return { ctx: this.ctx, analyser: this.analyser };
   }
 

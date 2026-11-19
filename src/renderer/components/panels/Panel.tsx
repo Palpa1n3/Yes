@@ -28,8 +28,12 @@ export function Panel({ code, title, chip, className = '', bodyClassName = '', c
       className={`hud-panel flex min-h-0 flex-col ${className}`}
       aria-label={title}
     >
-      <header className="flex h-10 shrink-0 items-center gap-3 border-b border-line/60 px-4">
-        <span className="panel-title shrink-0 text-accent">{code}</span>
+      <header className="flex h-10 shrink-0 items-center gap-2.5 border-b border-line/50 px-4">
+        <span
+          className="h-1.5 w-1.5 shrink-0 rotate-45 bg-accent shadow-[0_0_6px_rgb(var(--accent))]"
+          aria-hidden
+        />
+        <span className="panel-title shrink-0 text-accent/80">{code}</span>
         <h2 className="panel-title min-w-[4ch] flex-1 truncate text-ice">{title}</h2>
         {chip}
       </header>

@@ -73,8 +73,14 @@ export function registerChatsIpc(ctx: MainContext): ChatStore {
   on(
     IPC.app.openUrl,
     (_w, url) => {
-      const safe = toWebUrl(String(url));
-      if (safe && /^https?:\/\//i.test(String(url).trim())) void shell.openExternal(safe);
+      const raw = String(url).trim();
+      // A plain email address from the clipboard panel opens the mail app.
+      if (/^mailto:[\w.+-]+@[\w-]+\.[\w.-]+$/.test(raw)) {
+        void shell.openExternal(raw);
+        return;
+      }
+      const safe = toWebUrl(raw);
+      if (safe && /^https?:\/\//i.test(raw)) void shell.openExternal(safe);
     },
     ctx.getWindow,
   );

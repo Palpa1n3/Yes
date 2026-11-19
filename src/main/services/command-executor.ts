@@ -262,7 +262,13 @@ export function createExecutor(
         if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 24 * 60)
           return done('failed', 'Timers can be from a few seconds up to 24 hours.');
         const label = (cmd.args?.[0] ?? '').slice(0, 120);
-        const due = sys.setTimer(minutes, label);
+        const focus = cmd.args?.[1] === 'focus';
+        const due = sys.setTimer(minutes, focus ? label || 'Focus session' : label, focus);
+        if (focus)
+          return done(
+            'success',
+            `Focus session until ${due.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Suggestions and alerts stay quiet till then.`,
+          );
         return done(
           'success',
           `Timer set for ${due.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${label ? `: ${label}` : ''}.`,

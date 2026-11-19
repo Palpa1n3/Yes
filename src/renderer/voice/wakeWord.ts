@@ -16,6 +16,51 @@ export function nameVariants(name: string): string[] {
   return [...out];
 }
 
+/** Whisper's well-known "hallucinations" on silence, music or noise. */
+const PHANTOMS = [
+  /^thank(s| you)( so much| very much)?( for watching| for listening)?[.!]*$/i,
+  /^(please )?(like and )?subscribe[.!]*$/i,
+  /^you[.!]*$/i,
+  /^bye[.!]*$/i,
+  /^(\.|…|\s)*$/,
+  /^(music|applause|silence|laughter|inaudible)$/i,
+];
+export const isPhantom = (text: string): boolean => PHANTOMS.some((re) => re.test(text.trim()));
+
+/** Edit distance (insert/delete/substitute), small strings only. */
+export function editDistance(a: string, b: string): number {
+  const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = row[0] ?? 0;
+    row[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = row[j] ?? 0;
+      row[j] = Math.min(
+        (row[j] ?? 0) + 1,
+        (row[j - 1] ?? 0) + 1,
+        prev + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      prev = tmp;
+    }
+  }
+  return row[b.length] ?? 0;
+}
+
+/** For one-word names of 4+ letters: the first word (after an optional greeting) is
+ *  close enough to the name. Returns the rest of the sentence, or null. */
+function fuzzyName(t: string, name: string): string | null {
+  const n = name.toLowerCase().replace(/[^a-z]/g, '');
+  if (n.length < 4 || /\s/.test(name.trim())) return null;
+  const words = t.split(' ');
+  const start = /^(hey|hi|hello|ok|okay|yo)$/.test(words[0] ?? '') ? 1 : 0;
+  const w = (words[start] ?? '').replace(/'s$/, '');
+  const allowed = n.length >= 7 ? 2 : 1;
+  // Shorter names: one swapped letter only (Elton/Alten for Alton, not Walton).
+  const lengthOk = n.length >= 7 ? Math.abs(w.length - n.length) <= allowed : w.length === n.length;
+  if (!w || !lengthOk || editDistance(w, n) > allowed) return null;
+  return words.slice(start + 1).join(' ');
+}
+
 /** If the text starts with the wake phrase, what was said after it (maybe ''). */
 export function matchWake(text: string, assistantName: string): string | null {
   const t = text
@@ -28,9 +73,11 @@ export function matchWake(text: string, assistantName: string): string | null {
     .join('|');
   if (!names) return null;
   const m = new RegExp(`^${GREETING}(?:${names})(?:'s)?\\b\\s*(.*)$`).exec(t);
-  if (!m) return null;
+  // Near misses for longer names ("Alton" heard as "Elton", "Alten", "Alton's").
+  const fuzzy = m ? null : fuzzyName(t, assistantName);
+  if (!m && fuzzy === null) return null;
   // Keep the original wording (capitals, punctuation) for the request itself.
-  const rest = m[1] ?? '';
+  const rest = m ? (m[1] ?? '') : (fuzzy ?? '');
   if (!rest) return '';
   const at = text.toLowerCase().lastIndexOf(rest.split(' ')[0] ?? rest);
   return (at >= 0 ? text.slice(at) : rest).trim();

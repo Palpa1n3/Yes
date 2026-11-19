@@ -32,6 +32,7 @@
   }
   ::-webkit-scrollbar-thumb {
     background: rgb(var(--line));
+    border-radius: 4px;
   }
   ::-webkit-scrollbar-thumb:hover {
     background: rgb(var(--accent) / 0.6);
@@ -45,6 +46,11 @@
   /* The floating HUD shell — fills the transparent window. */
   .app-shell {
     @apply relative flex h-full flex-col overflow-hidden border border-line bg-void;
+    /* A faint light from above, so the HUD has depth instead of a flat black. */
+    background:
+      radial-gradient(1100px 520px at 50% -12%, rgb(var(--accent) / 0.075), transparent 62%),
+      radial-gradient(900px 600px at 50% 120%, rgb(var(--accent) / 0.035), transparent 60%),
+      rgb(var(--bg-void));
     /* clip, not just hidden: focusing something in the sliding Settings drawer must not
        scroll the whole HUD sideways (overflow: hidden still allows programmatic scroll). */
     overflow: clip;
@@ -65,36 +71,54 @@
     border-color: transparent;
   }
 
-  /* Glass panel with HUD corner brackets (top-left + bottom-right). */
-  /* No backdrop-filter: blurring live content (particles) under every panel forces a
-     re-blur per frame and was the single biggest idle-CPU cost. A denser fill reads the same. */
+  /* Glass panel: a soft vertical gradient, a lit top edge that fades out to the right,
+     and one small corner bracket. No backdrop-filter (blurring the live background under
+     every panel was the biggest idle-CPU cost); the denser fill reads the same. */
   .hud-panel {
     position: relative;
-    background: rgb(var(--bg-panel) / 0.84);
-    border: 1px solid rgb(var(--line) / 0.9);
+    background: linear-gradient(
+      180deg,
+      rgb(var(--bg-panel-raised) / 0.78) 0%,
+      rgb(var(--bg-panel) / 0.88) 38%,
+      rgb(var(--bg-panel) / 0.92) 100%
+    );
+    border: 1px solid rgb(var(--line) / 0.75);
     border-radius: var(--panel-radius);
+    box-shadow:
+      inset 0 1px 0 rgb(var(--ice) / 0.04),
+      0 10px 30px -12px rgb(0 0 0 / 0.6);
+    transition:
+      border-color 0.2s,
+      box-shadow 0.2s;
   }
-  .hud-panel::before,
+  .hud-panel:hover {
+    border-color: rgb(var(--accent) / 0.32);
+    box-shadow:
+      inset 0 1px 0 rgb(var(--ice) / 0.05),
+      0 10px 30px -12px rgb(0 0 0 / 0.6),
+      0 0 0 1px rgb(var(--accent) / 0.05);
+  }
+  .hud-panel::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 14px;
+    right: 35%;
+    height: 1px;
+    pointer-events: none;
+    background: linear-gradient(90deg, rgb(var(--accent) / 0.9), rgb(var(--accent) / 0));
+    box-shadow: 0 0 8px rgb(var(--accent) / 0.45);
+  }
   .hud-panel::after {
     content: '';
     position: absolute;
-    width: 12px;
-    height: 12px;
-    pointer-events: none;
-    border-color: rgb(var(--accent) / 0.85);
-  }
-  .hud-panel::before {
-    top: -1px;
-    left: -1px;
-    border-top: 1px solid;
-    border-left: 1px solid;
-    border-top-left-radius: var(--panel-radius);
-  }
-  .hud-panel::after {
     right: -1px;
     bottom: -1px;
-    border-right: 1px solid;
-    border-bottom: 1px solid;
+    width: 10px;
+    height: 10px;
+    pointer-events: none;
+    border-right: 1px solid rgb(var(--accent) / 0.6);
+    border-bottom: 1px solid rgb(var(--accent) / 0.6);
     border-bottom-right-radius: var(--panel-radius);
   }
 
@@ -125,10 +149,13 @@
   }
 
   .hud-button {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-[2px] border border-line px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted transition-[color,border-color,box-shadow] duration-150;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[5px] border border-line bg-panel-raised/50 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted transition-[color,border-color,box-shadow,background-color] duration-150;
   }
   .hud-button:hover:not(:disabled) {
-    @apply border-accent text-accent shadow-glow-sm;
+    @apply border-accent/80 bg-accent/10 text-accent shadow-glow-sm;
+  }
+  .hud-button:active:not(:disabled) {
+    @apply bg-accent/20;
   }
   .hud-button:disabled {
     @apply cursor-not-allowed opacity-50;
@@ -242,4 +269,24 @@
 }
 select option {
   background: rgb(var(--bg-panel-raised));
+}
+
+/* Settings search: hide cards (and whole pages) with no matching rows. */
+.settings-section[data-searching='true']:not(:has(.settings-field:not([hidden]))) {
+  display: none;
+}
+.settings-page[data-searching='true']:not(:has(.settings-field:not([hidden]))) {
+  display: none;
+}
+.settings-results:not(:has(.settings-field:not([hidden]))) .settings-empty {
+  display: block;
+}
+.settings-field[hidden] {
+  display: none !important;
+}
+#settings-body input:not([type='range']):not([type='checkbox']),
+#settings-body select,
+#settings-body textarea,
+#settings-body pre {
+  border-radius: 6px;
 }

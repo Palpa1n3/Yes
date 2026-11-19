@@ -4,10 +4,13 @@ import { dirname } from 'node:path';
 import {
   MAX_ITEMS,
   MAX_MEMORIES,
+  MEMORY_CATEGORIES,
   listName,
   matches,
   type ListItem,
   type Memory,
+  type Goal,
+  type MemoryCategory,
   type Note,
   type NoteList,
   type NotesOp,
@@ -18,7 +21,7 @@ const str = (v: unknown, n = 300): string =>
   typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
 
 export class NotesStore {
-  private s: NotesState = { lists: [], notes: [], memories: [] };
+  private s: NotesState = { lists: [], notes: [], memories: [], goals: [] };
   private readonly now: () => number;
 
   constructor(
@@ -56,6 +59,14 @@ export class NotesStore {
         memories: arr<Memory>(raw.memories)
           .filter((m) => m && typeof m.text === 'string')
           .slice(0, MAX_MEMORIES),
+        goals: arr<Goal>(raw.goals)
+          .filter((g) => g && typeof g.title === 'string')
+          .map((g) => ({
+            ...g,
+            progress: Math.max(0, Math.min(100, Number(g.progress) || 0)),
+            log: Array.isArray(g.log) ? g.log.slice(-30) : [],
+          }))
+          .slice(0, 50),
       };
     } catch {
       /* start empty */
@@ -135,7 +146,7 @@ export class NotesStore {
 
   /* ── notes ── */
   addNote(text: string): Note | null {
-    const t = typeof text === 'string' ? text.trim().slice(0, 2000) : '';
+    const t = typeof text === 'string' ? text.trim().slice(0, 8000) : '';
     if (!t) return null;
     const n = { id: this.id('n'), text: t, createdAt: this.now() };
     this.s.notes.unshift(n);
@@ -149,12 +160,24 @@ export class NotesStore {
   }
 
   /* ── memories ── */
-  remember(text: string): Memory | null {
+  remember(
+    text: string,
+    learned = false,
+    category?: MemoryCategory,
+    project?: string,
+  ): Memory | null {
     const t = str(text, 300);
     if (!t) return null;
     const dupe = this.s.memories.find((m) => m.text.toLowerCase() === t.toLowerCase());
     if (dupe) return dupe;
-    const m = { id: this.id('m'), text: t, createdAt: this.now() };
+    const m: Memory = {
+      id: this.id('m'),
+      text: t,
+      createdAt: this.now(),
+      ...(learned ? { learned: true } : {}),
+      ...(category ? { category } : {}),
+      ...(project ? { project: project.slice(0, 40) } : {}),
+    };
     this.s.memories.push(m);
     if (this.s.memories.length > MAX_MEMORIES) this.s.memories.shift();
     this.changed();
@@ -170,8 +193,60 @@ export class NotesStore {
     return gone.map((m) => m.text);
   }
 
+  /* ── goals ── */
+  addGoal(title: string, due?: string): Goal | null {
+    const t = str(title, 120);
+    if (!t) return null;
+    const existing = this.s.goals.find((g) => g.title.toLowerCase() === t.toLowerCase());
+    if (existing) return existing;
+    const now = this.now();
+    const g: Goal = {
+      id: this.id('g'),
+      title: t,
+      progress: 0,
+      createdAt: now,
+      updatedAt: now,
+      log: [],
+      ...(due && /^\d{4}-\d{2}-\d{2}$/.test(due) ? { due } : {}),
+    };
+    this.s.goals.push(g);
+    this.changed();
+    return g;
+  }
+
+  findGoal(q: string): Goal | undefined {
+    const l = q.toLowerCase();
+    return (
+      this.s.goals.find((g) => g.id === q || g.title.toLowerCase() === l) ??
+      this.s.goals.find(
+        (g) => g.title.toLowerCase().includes(l) || l.includes(g.title.toLowerCase()),
+      )
+    );
+  }
+
+  goalProgress(id: string, progress: number, note?: string): Goal | null {
+    const g = this.findGoal(id);
+    if (!g) return null;
+    if (Number.isFinite(progress)) g.progress = Math.max(0, Math.min(100, Math.round(progress)));
+    g.done = g.progress >= 100;
+    g.updatedAt = this.now();
+    const n = note ? str(note, 200) : '';
+    if (n) g.log = [...g.log, { at: g.updatedAt, text: n }].slice(-30);
+    this.changed();
+    return g;
+  }
+
+  /** The open goal that has gone longest without an update (if over 7 days). */
+  staleGoal(): { title: string; days: number } | null {
+    const open = this.s.goals.filter((g) => !g.done);
+    const oldest = open.sort((a, b) => a.updatedAt - b.updatedAt)[0];
+    if (!oldest) return null;
+    const days = Math.floor((this.now() - oldest.updatedAt) / 86_400_000);
+    return days >= 7 ? { title: oldest.title, days } : null;
+  }
+
   memoryTexts(): string[] {
-    return this.s.memories.map((m) => m.text);
+    return this.s.memories.map((m) => (m.project ? `[${m.project}] ${m.text}` : m.text));
   }
 
   /** Apply an edit from the Notes tab. */
@@ -215,6 +290,26 @@ export class NotesStore {
       case 'forget':
         this.forget(String(o.id));
         break;
+      case 'editMemory': {
+        const m = this.s.memories.find((x) => x.id === o.id);
+        const t = str(o.text, 300);
+        if (m && t) {
+          m.text = t;
+          delete m.learned; // checked by the user now
+          this.changed();
+        }
+        break;
+      }
+      case 'addGoal':
+        this.addGoal(String(o.title), o.due);
+        break;
+      case 'goalProgress':
+        this.goalProgress(String(o.id), Number(o.progress), o.note);
+        break;
+      case 'removeGoal':
+        this.s.goals = this.s.goals.filter((g) => g.id !== o.id);
+        this.changed();
+        break;
     }
     return this.state();
   }
@@ -257,8 +352,49 @@ export class NotesStore {
         return this.s.notes
           .slice(0, 50)
           .map((n) => ({ text: n.text, saved: new Date(n.createdAt).toLocaleString() }));
+      case 'manage_goal': {
+        const action = String(o['action'] ?? 'list');
+        if (action === 'list')
+          return this.s.goals.map((g) => ({
+            goal: g.title,
+            progress: `${g.progress}%`,
+            ...(g.due ? { due: g.due } : {}),
+            lastUpdate: new Date(g.updatedAt).toLocaleDateString(),
+            recent: g.log.slice(-3).map((x) => x.text),
+          }));
+        const title = str(o['goal'], 120);
+        if (!title) return { error: 'Missing "goal".' };
+        if (action === 'add') {
+          const g = this.addGoal(title, typeof o['due'] === 'string' ? o['due'] : undefined);
+          return g ? { added: g.title } : { error: 'Could not add that goal.' };
+        }
+        if (action === 'remove') {
+          const g = this.findGoal(title);
+          if (!g) return { error: `No goal like "${title}".` };
+          this.s.goals = this.s.goals.filter((x) => x !== g);
+          this.changed();
+          return { removed: g.title };
+        }
+        const g = this.findGoal(title);
+        if (!g) return { error: `No goal like "${title}". Add it first.` };
+        const p = typeof o['progress'] === 'number' ? o['progress'] : g.progress;
+        const done = this.goalProgress(
+          g.id,
+          p,
+          typeof o['note'] === 'string' ? o['note'] : undefined,
+        );
+        return { goal: done?.title, progress: `${done?.progress}%` };
+      }
       case 'remember': {
-        const m = this.remember(String(o['fact'] ?? ''));
+        const cat = String(o['category'] ?? '');
+        const m = this.remember(
+          String(o['fact'] ?? ''),
+          false,
+          (MEMORY_CATEGORIES as readonly string[]).includes(cat)
+            ? (cat as MemoryCategory)
+            : undefined,
+          typeof o['project'] === 'string' ? o['project'] : undefined,
+        );
         return m ? { remembered: m.text } : { error: 'Missing "fact".' };
       }
       case 'forget': {
@@ -291,4 +427,5 @@ export const NOTE_TOOLS = [
   'get_notes',
   'remember',
   'forget',
+  'manage_goal',
 ] as const;

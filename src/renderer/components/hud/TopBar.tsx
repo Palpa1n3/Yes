@@ -6,6 +6,8 @@ import { useUiStore } from '@renderer/stores/uiStore';
 import { Palette } from './Palette';
 import { WeatherChip } from '@renderer/components/weather/WeatherChip';
 import { GamingChip } from './GamingChip';
+import { OpenMicChip } from './OpenMicChip';
+import { UpdateChip } from './UpdateChip';
 import { TimerChip } from './TimerChip';
 import { TabBar } from './TabBar';
 import { WindowControls } from './WindowControls';
@@ -34,7 +36,7 @@ export function TopBar({ assistantName, maximized }: Props) {
 
   return (
     <header
-      className="drag relative z-10 flex h-14 shrink-0 items-stretch border-b border-line/70 bg-void/80"
+      className="drag relative z-10 flex h-14 shrink-0 items-stretch border-b border-line/60 bg-gradient-to-b from-panel-raised/70 to-void/60 after:pointer-events-none after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-gradient-to-r after:from-transparent after:via-accent/60 after:to-transparent"
       onDoubleClick={(e) => {
         if (e.target === e.currentTarget) window.arc.window.toggleMaximize();
       }}
@@ -55,6 +57,8 @@ export function TopBar({ assistantName, maximized }: Props) {
       <TabBar />
 
       <div className="ml-auto flex items-center gap-5 pl-4">
+        <UpdateChip />
+        <OpenMicChip />
         <GamingChip />
         <WeatherChip />
         <TimerChip />

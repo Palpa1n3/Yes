@@ -29,7 +29,7 @@ export interface SystemActions {
   /** Show a file in Explorer. Only inside the user's own folders; never opens/runs it. */
   revealFile(path: string): Promise<boolean>;
   /** Schedule a reminder; returns when it's due. */
-  setTimer(minutes: number, label: string): Date;
+  setTimer(minutes: number, label: string, focus?: boolean): Date;
   /** Cancel timers whose label matches (or all); returns their labels. */
   cancelTimers(query: string): string[];
 }
@@ -304,8 +304,8 @@ export function createSystemActions(d: SystemActionDeps): SystemActions {
       return true;
     },
 
-    setTimer(minutes, label) {
-      return new Date(d.timers.add(minutes, label).dueAt);
+    setTimer(minutes, label, focus) {
+      return new Date(d.timers.add(minutes, label, focus ? 'focus' : undefined).dueAt);
     },
 
     cancelTimers(query) {

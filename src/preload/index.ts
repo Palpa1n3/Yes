@@ -51,6 +51,7 @@ const api: ArcAPI = {
     cancel: () => send(IPC.assistant.cancel),
     toolResult: (r, t, o) => send(IPC.assistant.toolResult, r, t, o),
     reset: () => send(IPC.assistant.reset),
+    rewind: (id) => send(IPC.assistant.rewind, id),
     onStream: (cb) => subscribe(IPC.assistant.onStream, cb),
   },
   commands: {
@@ -75,6 +76,59 @@ const api: ArcAPI = {
     search: (q) => invoke(IPC.weather.search, q),
     onChange: (cb) => subscribe(IPC.weather.onChange, cb),
   },
+  previews: {
+    get: (urls) => invoke(IPC.previews.get, urls),
+  },
+  updates: {
+    state: () => invoke(IPC.updates.state),
+    check: () => invoke(IPC.updates.check),
+    install: () => invoke(IPC.updates.install),
+    onChange: (cb) => subscribe(IPC.updates.onChange, cb),
+  },
+  email: {
+    state: () => invoke(IPC.email.state),
+    refresh: () => invoke(IPC.email.refresh),
+    connect: (u, p) => invoke(IPC.email.connect, u, p),
+    disconnect: () => invoke(IPC.email.disconnect),
+    onChange: (cb) => subscribe(IPC.email.onChange, cb),
+  },
+  clipboard: {
+    list: () => invoke(IPC.clipboard.list),
+    read: () => invoke(IPC.clipboard.read),
+    copy: (id) => invoke(IPC.clipboard.copy, id),
+    remove: (id) => invoke(IPC.clipboard.remove, id),
+    clear: () => invoke(IPC.clipboard.clear),
+    onChange: (cb) => subscribe(IPC.clipboard.onChange, cb),
+    onHealth: (cb) => subscribe(IPC.clipboard.onHealth, cb),
+  },
+  discord: {
+    status: () => invoke(IPC.discord.status),
+    set: (u) => invoke(IPC.discord.set, u),
+    clear: () => invoke(IPC.discord.clear),
+  },
+  approval: {
+    answer: (id, ok) => send(IPC.approval.answer, id, ok),
+    onRequest: (cb) => subscribe(IPC.approval.onRequest, cb),
+    onResolved: (cb) => subscribe(IPC.approval.onResolved, cb),
+  },
+  remote: {
+    status: () => invoke(IPC.remote.status),
+    newCode: () => invoke(IPC.remote.newCode),
+    forget: () => invoke(IPC.remote.forget),
+    reply: (id, text) => send(IPC.remote.reply, id, text),
+    progress: (id, p) => send(IPC.remote.progress, id, p),
+  },
+  initiative: {
+    onSuggest: (cb) => subscribe(IPC.initiative.onSuggest, cb),
+  },
+  agent: {
+    status: () => invoke(IPC.agent.status),
+    start: (t) => invoke(IPC.agent.start, t),
+    stop: () => send(IPC.agent.stop),
+    pause: (on) => send(IPC.agent.pause, on),
+    answer: (id, a) => send(IPC.agent.answer, id, a),
+    onChange: (cb) => subscribe(IPC.agent.onChange, cb),
+  },
   gaming: {
     status: () => invoke(IPC.gaming.status),
     start: () => invoke(IPC.gaming.start),
@@ -93,6 +147,7 @@ const api: ArcAPI = {
   notes: {
     state: () => invoke(IPC.notes.state),
     apply: (o) => invoke(IPC.notes.apply, o),
+    shifts: () => invoke(IPC.notes.shifts),
     onChange: (cb) => subscribe(IPC.notes.onChange, cb),
   },
   calendar: {
@@ -127,7 +182,7 @@ const api: ArcAPI = {
   },
   timers: {
     list: () => invoke(IPC.timers.list),
-    add: (m, l) => invoke(IPC.timers.add, m, l),
+    add: (m, l, k) => invoke(IPC.timers.add, m, l, k),
     cancel: (id) => send(IPC.timers.cancel, id),
     snooze: (id, m) => send(IPC.timers.snooze, id, m),
     onChange: (cb) => subscribe(IPC.timers.onChange, cb),
@@ -138,6 +193,8 @@ const api: ArcAPI = {
     setKey: (k) => invoke(IPC.ai.setKey, k),
     clearKey: () => invoke(IPC.ai.clearKey),
     test: () => invoke(IPC.ai.test),
+    localModels: () => invoke(IPC.ai.localModels),
+    usage: () => invoke(IPC.ai.usage),
   },
   network: {
     details: () => invoke(IPC.network.details),
@@ -168,6 +225,14 @@ const api: ArcAPI = {
     openPath: (t) => send(IPC.app.openPath, t),
     openUrl: (u) => send(IPC.app.openUrl, u),
     resetSettings: () => invoke(IPC.app.resetSettings),
+    pickSourceDir: () => invoke(IPC.app.pickSourceDir),
+    logs: () => invoke(IPC.app.logs),
+    history: () => invoke(IPC.app.history),
+    clearHistory: () => invoke(IPC.app.clearHistory),
+    backups: () => invoke(IPC.app.backups),
+    backupNow: () => invoke(IPC.app.backupNow),
+    restore: (n) => invoke(IPC.app.restore, n),
+    plugins: () => invoke(IPC.app.plugins),
   },
 };
 

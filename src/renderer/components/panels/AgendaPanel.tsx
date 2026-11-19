@@ -61,7 +61,7 @@ export function AgendaPanel({ className = '' }: { className?: string }) {
         <button
           type="button"
           className="hud-button mt-2"
-          onClick={() => useUiStore.getState().openSettings('general')}
+          onClick={() => useUiStore.getState().openSettings('connections')}
         >
           <CalendarDays size={12} strokeWidth={1.5} /> Connect calendar
         </button>

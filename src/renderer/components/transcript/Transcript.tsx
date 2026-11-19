@@ -1,4 +1,19 @@
-import { ArrowDown, Check, Copy, LoaderCircle } from 'lucide-react';
+import {
+  ArrowDown,
+  Check,
+  Copy,
+  FileText,
+  Globe,
+  LoaderCircle,
+  Pencil,
+  RotateCcw,
+  Volume2,
+} from 'lucide-react';
+import { speakNow } from '@renderer/voice/useSpeechOutput';
+
+/** Put text in the message box (Edit on your last message). */
+export const PREFILL_EVENT = 'arc:prefill';
+import type { LinkPreview } from '@shared/preview';
 import type { Source } from '@shared/chats';
 import { Markdown } from './Markdown';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
@@ -22,7 +37,7 @@ function CopyButton({ text }: { text: string }) {
           setTimeout(() => setDone(false), 1200);
         });
       }}
-      className="mt-0.5 h-5 shrink-0 self-start text-text-muted opacity-0 transition-opacity hover:text-accent focus:opacity-100 group-hover/msg:opacity-100"
+      className="p-0.5 text-text-muted transition-colors hover:text-accent"
     >
       {done ? <Check size={13} /> : <Copy size={13} strokeWidth={1.5} />}
     </button>
@@ -36,6 +51,49 @@ const host = (u: string): string => {
     return u;
   }
 };
+
+/** Picture cards for the pages/products an answer links to (like a shopping carousel). */
+function LinkCards({ previews }: { previews: LinkPreview[] }) {
+  return (
+    <div
+      className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2"
+      aria-label="Links"
+    >
+      {previews.map((p) => (
+        <button
+          key={p.url}
+          type="button"
+          onClick={() => window.arc.app.openUrl(p.url)}
+          title={`${p.title}\n${p.url}`}
+          className="group flex min-w-0 flex-col overflow-hidden border border-line/70 bg-panel-raised/50 text-left transition-colors hover:border-accent"
+        >
+          <div className="grid h-24 w-full place-items-center overflow-hidden bg-void/60">
+            {p.image ? (
+              <img
+                src={p.image}
+                alt=""
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            ) : (
+              <Globe size={22} strokeWidth={1.25} className="text-text-muted/60" />
+            )}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5 p-2">
+            <span className="line-clamp-2 text-[12px] leading-snug text-text-primary group-hover:text-ice">
+              {p.title}
+            </span>
+            <span className="mt-auto flex items-center justify-between gap-2 pt-1 text-[10px]">
+              <span className="truncate font-mono uppercase tracking-[0.08em] text-text-muted">
+                {p.site}
+              </span>
+              {p.price && <span className="numeric shrink-0 text-[12px] text-ok">{p.price}</span>}
+            </span>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function Sources({ sources }: { sources: Source[] }) {
   return (
@@ -57,15 +115,93 @@ function Sources({ sources }: { sources: Source[] }) {
   );
 }
 
-function Row({ m, assistantName }: { m: Message; assistantName: string }) {
+function MsgTools({ text, last }: { text: string; last: boolean }) {
+  const regenerate = useConversationStore((s) => s.regenerate);
+  const busy = useConversationStore((s) => s.activeResponseId !== null);
+  const btn = 'p-0.5 text-text-muted transition-colors hover:text-accent disabled:opacity-40';
+  return (
+    <span className="flex shrink-0 flex-col items-center gap-1 self-start opacity-0 transition-opacity focus-within:opacity-100 group-hover/msg:opacity-100">
+      <CopyButton text={text} />
+      <button
+        type="button"
+        aria-label="Read aloud"
+        title="Read aloud"
+        onClick={() => speakNow(text)}
+        className={btn}
+      >
+        <Volume2 size={13} strokeWidth={1.5} />
+      </button>
+      {last && (
+        <button
+          type="button"
+          aria-label="Regenerate answer"
+          title="Try again (new answer)"
+          disabled={busy}
+          onClick={() => void regenerate()}
+          className={btn}
+        >
+          <RotateCcw size={13} strokeWidth={1.5} />
+        </button>
+      )}
+    </span>
+  );
+}
+
+function Row({
+  m,
+  assistantName,
+  lastUser = false,
+  lastAssistant = false,
+}: {
+  m: Message;
+  assistantName: string;
+  lastUser?: boolean;
+  lastAssistant?: boolean;
+}) {
   const markRevealed = useConversationStore((s) => s.markRevealed);
   const onDone = useCallback(() => markRevealed(m.id), [markRevealed, m.id]);
 
   switch (m.role) {
     case 'user':
       return (
-        <li className="ml-10 text-right text-text-primary/70">
+        <li className="group/user ml-10 text-right text-text-primary/70">
+          {m.attachments && m.attachments.length > 0 && (
+            <span className="mb-1 flex flex-wrap justify-end gap-1.5">
+              {m.attachments.map((a, i) =>
+                a.thumb ? (
+                  <img
+                    key={i}
+                    src={a.thumb}
+                    alt={a.name}
+                    title={a.name}
+                    className="h-16 max-w-[8rem] border border-line/70 object-cover"
+                  />
+                ) : (
+                  <span
+                    key={i}
+                    className="flex items-center gap-1 border border-line/70 bg-panel-raised/60 px-2 py-1 text-[11px]"
+                  >
+                    <FileText size={12} className="text-accent" /> {a.name}
+                  </span>
+                ),
+              )}
+            </span>
+          )}
           <span className="select-text">{m.text}</span>
+          {lastUser && (
+            <button
+              type="button"
+              aria-label="Edit your message"
+              title="Edit and resend"
+              onClick={() => {
+                const text = useConversationStore.getState().editLast();
+                if (text) window.dispatchEvent(new CustomEvent(PREFILL_EVENT, { detail: text }));
+              }}
+              className="ml-2 align-middle text-text-muted opacity-0 transition-opacity hover:text-accent focus:opacity-100 group-hover/user:opacity-100"
+            >
+              <Pencil size={12} strokeWidth={1.5} />
+            </button>
+          )}
           <span className="ml-2 font-mono text-[11px] text-text-muted">‹ you</span>
         </li>
       );
@@ -82,9 +218,14 @@ function Row({ m, assistantName }: { m: Message; assistantName: string }) {
               onDone={onDone}
               render={renderMd}
             />
-            {m.sources && m.sources.length > 0 && <Sources sources={m.sources} />}
+            {m.previews && m.previews.length > 0 && <LinkCards previews={m.previews} />}
+            {(() => {
+              const shown = new Set((m.previews ?? []).map((p) => p.url));
+              const rest = (m.sources ?? []).filter((s) => !shown.has(s.url));
+              return rest.length > 0 ? <Sources sources={rest} /> : null;
+            })()}
           </div>
-          {!m.streaming && m.text && <CopyButton text={m.text} />}
+          {!m.streaming && m.text && <MsgTools text={m.text} last={lastAssistant} />}
         </li>
       );
     case 'command':
@@ -172,9 +313,19 @@ export function Transcript({
           aria-label="Conversation"
           aria-live="polite"
         >
-          {messages.map((m) => (
-            <Row key={m.id} m={m} assistantName={assistantName} />
-          ))}
+          {(() => {
+            const lastUser = [...messages].reverse().find((x) => x.role === 'user')?.id;
+            const lastAssistant = [...messages].reverse().find((x) => x.role === 'assistant')?.id;
+            return messages.map((m) => (
+              <Row
+                key={m.id}
+                m={m}
+                assistantName={assistantName}
+                lastUser={m.id === lastUser}
+                lastAssistant={m.id === lastAssistant}
+              />
+            ));
+          })()}
           {activity && (
             <li className="flex items-center gap-2 font-mono text-[12px] text-accent" role="status">
               <LoaderCircle size={12} className="animate-spin" /> {activity}

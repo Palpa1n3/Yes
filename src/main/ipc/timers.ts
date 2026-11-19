@@ -5,8 +5,12 @@ import { handle, on } from './handle';
 export function registerTimersIpc(ctx: MainContext): void {
   const { timers } = ctx;
   handle(IPC.timers.list, () => timers.list());
-  handle(IPC.timers.add, (minutes, label) => {
-    timers.add(Number(minutes), typeof label === 'string' ? label : '');
+  handle(IPC.timers.add, (minutes, label, kind) => {
+    timers.add(
+      Number(minutes),
+      typeof label === 'string' ? label : '',
+      kind === 'focus' ? 'focus' : undefined,
+    );
     return timers.list();
   });
   on(IPC.timers.cancel, (_w, id) => typeof id === 'string' && timers.cancel(id), ctx.getWindow);

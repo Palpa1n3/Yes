@@ -15,11 +15,15 @@ export type TabId = (typeof TAB_IDS)[number];
 
 export const SETTINGS_TABS = [
   'general',
+  'ai',
+  'smart',
+  'connections',
   'personality',
   'appearance',
   'voice',
   'gaming',
   'hotkeys',
+  'privacy',
   'advanced',
 ] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];

@@ -103,7 +103,7 @@ describe('new actions through the executor', () => {
     );
     expect(await run(cmd('reveal_file', 'C:\\x.pdf'))).toMatchObject({ status: 'success' });
     expect(await run(cmd('set_timer', '10', ['stretch']))).toMatchObject({ status: 'success' });
-    expect(sys.setTimer).toHaveBeenCalledWith(10, 'stretch');
+    expect(sys.setTimer).toHaveBeenCalledWith(10, 'stretch', false);
     expect(await run(cmd('set_timer', '0'))).toMatchObject({ status: 'failed' });
     expect(await run(cmd('set_timer', '9999'))).toMatchObject({ status: 'failed' });
     expect(await run(cmd('lock_screen'))).toMatchObject({ status: 'success' });

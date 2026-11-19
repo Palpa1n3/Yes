@@ -11,7 +11,8 @@ export interface GamingSettings {
 
 export interface GamingDeps {
   listProcesses(): Promise<Array<{ name: string; path: string | null }>>;
-  settings(): GamingSettings;
+  /** Settings, with the per-game profile applied when a game is known. */
+  settings(game?: string | null): GamingSettings;
   /** Current power plan GUID, or null. */
   getPowerPlan(): Promise<string | null>;
   /** Switch to a plan GUID, or 'high' for High performance. */
@@ -73,7 +74,7 @@ export class GamingMode {
   }
 
   private async begin(game: string | null, manual: boolean): Promise<void> {
-    const s = this.d.settings();
+    const s = this.d.settings(game);
     const actions: string[] = [];
     this.missing = 0;
     this.closed = [];

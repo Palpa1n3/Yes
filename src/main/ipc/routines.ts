@@ -17,6 +17,7 @@ export function registerRoutinesIpc(
   weather: WeatherService,
   calendar: CalendarService,
   notes: NotesStore,
+  emailLine: () => string | null = () => null,
 ): { service: RoutineService; run(cmd: CanonicalCommand): Promise<CommandResult> } {
   const service = new RoutineService({
     file: join(app.getPath('userData'), 'routines.json'),
@@ -33,6 +34,7 @@ export function registerRoutinesIpc(
         stats: ctx.telemetry.snapshot(),
         calendar: calendar.state().configured ? calendar.state().events : null,
         todo: todoSentence(notes.state()),
+        email: emailLine(),
       });
     },
     onChange: (list) => emit(ctx.getWindow(), IPC.routines.onChange, list),

@@ -65,11 +65,13 @@ export class TimerService {
     this.changed();
   }
 
-  add(minutes: number, label = ''): TimerInfo {
+  add(minutes: number, label = '', kind?: 'focus'): TimerInfo {
     if (!(minutes > 0 && minutes <= MAX_MINUTES))
       throw new Error('Timers can be from a few seconds up to 24 hours.');
     if (this.timers.length >= MAX_TIMERS)
       throw new Error(`You already have ${MAX_TIMERS} timers. Cancel one first.`);
+    if (kind === 'focus')
+      for (const old of this.timers.filter((x) => x.kind === 'focus')) this.cancel(old.id);
     const now = this.now();
     const durationMs = Math.round(minutes * 60_000);
     const t: TimerInfo = {
@@ -79,11 +81,17 @@ export class TimerService {
       createdAt: now,
       dueAt: now + durationMs,
       status: 'running',
+      ...(kind ? { kind } : {}),
     };
     this.timers.push(t);
     this.schedule(t);
     this.changed();
     return t;
+  }
+
+  /** A focus session is running: keep suggestions and alerts quiet. */
+  focusing(): boolean {
+    return this.timers.some((t) => t.kind === 'focus' && t.status === 'running');
   }
 
   /** Remove a timer (running or ringing). */

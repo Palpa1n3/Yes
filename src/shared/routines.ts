@@ -385,6 +385,8 @@ export interface BriefingInput {
   calendar?: CalEvent[] | null;
   /** "On your to-do list: …" (or null). */
   todo?: string | null;
+  /** "You have 3 unread emails…" (or null). */
+  email?: string | null;
 }
 
 const GREETING: Record<ReturnType<typeof dayPart>, string> = {
@@ -437,6 +439,7 @@ export function buildBriefing(b: BriefingInput): string {
 
   if (b.calendar) parts.push(agendaSentence(b.calendar, b.now, terse));
   if (b.todo && !terse) parts.push(b.todo);
+  if (b.email) parts.push(b.email);
 
   const ringing = b.timers.filter((t) => t.status === 'ringing');
   const running = b.timers.filter((t) => t.status === 'running').sort((x, y) => x.dueAt - y.dueAt);

@@ -58,6 +58,7 @@ export class ChatStore {
           updatedAt: Number(c.updatedAt) || this.now(),
           pinned: c.pinned === true,
           research: c.research === true,
+          ...(typeof c.phoneId === 'string' ? { phoneId: c.phoneId.slice(0, 40) } : {}),
         }));
       this.activeId = typeof raw.activeId === 'string' ? raw.activeId : '';
     } catch {
@@ -144,6 +145,9 @@ export class ChatStore {
     }
   }
 
+  /** Called after a chat's messages are saved (memory learning listens). */
+  onSaved?: (id: string) => void;
+
   save(id: string, messages: StoredMessage[]): void {
     const meta = this.get(id);
     if (!meta) return;
@@ -164,6 +168,63 @@ export class ChatStore {
       changed = true;
     }
     if (changed) this.changed();
+    if (real(settled) !== real(before)) this.onSaved?.(id);
+  }
+
+  /** A chat from the phone app: new messages are added to the matching chat (or a new one).
+   *  Returns how many messages were added. The chat open on the PC doesn't change. */
+  importPhoneChat(c: {
+    id: string;
+    title: string;
+    research: boolean;
+    messages: Array<{
+      role: string;
+      text: string;
+      at: number;
+      sources?: Array<{ url: string; title: string }>;
+    }>;
+  }): number {
+    const prevActive = this.activeId;
+    let meta = this.get(c.id) ?? this.chats.find((x) => x.phoneId === c.id);
+    if (!meta) {
+      meta = this.add(c.title.slice(0, 80) || NEW_CHAT_TITLE);
+      meta.phoneId = c.id.slice(0, 40);
+      meta.research = c.research === true;
+      this.activeId = prevActive || meta.id;
+    }
+    const current = this.messages(meta.id);
+    const lastAt = current.reduce((n, m) => Math.max(n, m.timestamp), 0);
+    const fresh: StoredMessage[] = c.messages
+      .filter(
+        (m) =>
+          (m.role === 'user' || m.role === 'assistant') &&
+          typeof m.text === 'string' &&
+          Number(m.at) > lastAt,
+      )
+      .slice(-MAX_CHAT_MESSAGES)
+      .map((m, i) =>
+        m.role === 'user'
+          ? {
+              id: `ph-${m.at}-${i}`,
+              role: 'user' as const,
+              text: m.text.slice(0, 20_000),
+              timestamp: Number(m.at),
+            }
+          : {
+              id: `ph-${m.at}-${i}`,
+              role: 'assistant' as const,
+              text: m.text.slice(0, 60_000),
+              timestamp: Number(m.at),
+              streaming: false,
+              revealed: true,
+              ...(Array.isArray(m.sources) && m.sources.length
+                ? { sources: m.sources.slice(0, 20) }
+                : {}),
+            },
+      );
+    if (fresh.length) this.save(meta.id, [...current, ...fresh]);
+    else this.changed();
+    return fresh.length;
   }
 
   rename(id: string, title: string): void {
@@ -209,6 +270,68 @@ export class ChatStore {
         return words.every((w) => hay.includes(w));
       })
       .map((c) => c.id);
+  }
+
+  /** Best-matching message excerpts across all chats (for Claude's search_past_chats). */
+  excerpts(
+    query: string,
+    limit = 8,
+  ): Array<{ chat: string; date: string; who: 'user' | 'assistant'; text: string }> {
+    const STOP = new Set([
+      'the',
+      'and',
+      'that',
+      'what',
+      'was',
+      'you',
+      'about',
+      'for',
+      'with',
+      'this',
+      'did',
+      'said',
+      'told',
+      'when',
+      'how',
+      'our',
+      'were',
+      'have',
+      'from',
+    ]);
+    const words = query
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((w) => w.length >= 3 && !STOP.has(w));
+    if (!words.length) return [];
+    const hits: Array<{
+      score: number;
+      at: number;
+      chat: string;
+      who: 'user' | 'assistant';
+      text: string;
+    }> = [];
+    for (const c of this.chats) {
+      const title = c.title.toLowerCase();
+      for (const m of this.messages(c.id)) {
+        if (m.role !== 'user' && m.role !== 'assistant') continue;
+        const low = m.text.toLowerCase();
+        const score = words.filter((w) => low.includes(w) || title.includes(w)).length;
+        if (!score || !words.some((w) => low.includes(w))) continue;
+        const first = Math.min(...words.map((w) => low.indexOf(w)).filter((i) => i >= 0));
+        const start = Math.max(0, first - 200);
+        const text = `${start ? '…' : ''}${m.text.slice(start, start + 600).trim()}${start + 600 < m.text.length ? '…' : ''}`;
+        hits.push({ score, at: m.timestamp, chat: c.title, who: m.role, text });
+      }
+    }
+    return hits
+      .sort((a, b) => b.score - a.score || b.at - a.at)
+      .slice(0, limit)
+      .map((h) => ({
+        chat: h.chat,
+        date: new Date(h.at).toLocaleString(),
+        who: h.who,
+        text: h.text,
+      }));
   }
 
   /** "Remember conversations" switched off: forget everything on disk. */

@@ -1,6 +1,7 @@
 import { vi } from 'vitest';
 import type { ArcAPI } from '@shared/ipc';
 import { DEFAULT_SETTINGS } from '@shared/types';
+import { IDLE_AGENT } from '@shared/agent';
 
 /** A fake window.arc for renderer tests. */
 export function installArcMock(): ArcAPI {
@@ -36,6 +37,7 @@ export function installArcMock(): ArcAPI {
       cancel: vi.fn(),
       toolResult: vi.fn(),
       reset: vi.fn(),
+      rewind: vi.fn(),
       onStream: vi.fn(() => () => undefined),
     },
     timers: {
@@ -45,6 +47,113 @@ export function installArcMock(): ArcAPI {
       snooze: vi.fn(),
       onChange: vi.fn(() => () => undefined),
       onRing: vi.fn(() => () => undefined),
+    },
+    previews: { get: vi.fn(async () => []) },
+    updates: {
+      state: vi.fn(async () => ({
+        status: 'dev' as const,
+        current: '0.2.0',
+        version: null,
+        percent: null,
+        error: null,
+        checkedAt: null,
+      })),
+      check: vi.fn(async () => ({
+        status: 'dev' as const,
+        current: '0.2.0',
+        version: null,
+        percent: null,
+        error: null,
+        checkedAt: null,
+      })),
+      install: vi.fn(async () => false),
+      onChange: vi.fn(() => () => undefined),
+    },
+    email: {
+      state: vi.fn(async () => ({
+        configured: false,
+        address: null,
+        unread: 0,
+        recent: [],
+        fetchedAt: null,
+        error: null,
+      })),
+      refresh: vi.fn(async () => ({
+        configured: false,
+        address: null,
+        unread: 0,
+        recent: [],
+        fetchedAt: null,
+        error: null,
+      })),
+      connect: vi.fn(async () => ({ ok: true, message: '' })),
+      disconnect: vi.fn(async () => ({
+        configured: false,
+        address: null,
+        unread: 0,
+        recent: [],
+        fetchedAt: null,
+        error: null,
+      })),
+      onChange: vi.fn(() => () => undefined),
+    },
+    clipboard: {
+      read: vi.fn(async () => ''),
+      list: vi.fn(async () => []),
+      copy: vi.fn(async () => true),
+      remove: vi.fn(async () => []),
+      clear: vi.fn(async () => []),
+      onChange: vi.fn(() => () => undefined),
+      onHealth: vi.fn(() => () => undefined),
+    },
+    discord: {
+      status: vi.fn(async () => false),
+      set: vi.fn(async () => ({ ok: true, message: 'Saved' })),
+      clear: vi.fn(async () => false),
+    },
+    approval: {
+      answer: vi.fn(),
+      onRequest: vi.fn(() => () => undefined),
+      onResolved: vi.fn(() => () => undefined),
+    },
+    remote: {
+      status: vi.fn(async () => ({
+        running: false,
+        urls: [],
+        code: '',
+        paired: 0,
+        error: null,
+        macs: [],
+      })),
+      newCode: vi.fn(async () => ({
+        running: true,
+        urls: [],
+        code: '123456',
+        paired: 0,
+        error: null,
+        macs: [],
+      })),
+      forget: vi.fn(async () => ({
+        running: false,
+        urls: [],
+        code: '',
+        paired: 0,
+        error: null,
+        macs: [],
+      })),
+      reply: vi.fn(),
+      progress: vi.fn(),
+    },
+    initiative: {
+      onSuggest: vi.fn(() => () => undefined),
+    },
+    agent: {
+      status: vi.fn(async () => ({ ...IDLE_AGENT })),
+      start: vi.fn(async (task: string) => ({ ...IDLE_AGENT, state: 'running' as const, task })),
+      stop: vi.fn(),
+      pause: vi.fn(),
+      answer: vi.fn(),
+      onChange: vi.fn(() => () => undefined),
     },
     gaming: {
       status: vi.fn(async () => ({
@@ -74,8 +183,9 @@ export function installArcMock(): ArcAPI {
       onChange: vi.fn(() => () => undefined),
     },
     notes: {
-      state: vi.fn(async () => ({ lists: [], notes: [], memories: [] })),
-      apply: vi.fn(async () => ({ lists: [], notes: [], memories: [] })),
+      state: vi.fn(async () => ({ lists: [], notes: [], memories: [], goals: [] })),
+      apply: vi.fn(async () => ({ lists: [], notes: [], memories: [], goals: [] })),
+      shifts: vi.fn(async () => []),
       onChange: vi.fn(() => () => undefined),
     },
     calendar: {
@@ -130,6 +240,8 @@ export function installArcMock(): ArcAPI {
       setKey: vi.fn(async () => ({ ok: true, message: 'ok' })),
       clearKey: vi.fn(async () => ({ hasKey: false, encryptionAvailable: true })),
       test: vi.fn(async () => ({ ok: true, message: 'ok' })),
+      localModels: vi.fn(async () => null),
+      usage: vi.fn(async () => ({ today: 0, month: 0, budget: 0, days: [], byFeature: {} })),
     },
     commands: { execute: vi.fn() },
     settings: {
@@ -209,10 +321,20 @@ export function installArcMock(): ArcAPI {
         userDataPath: 'C:/x',
         activeHotkey: 'CommandOrControl+Space',
         activeVoiceHotkey: 'CommandOrControl+Alt+Space',
+        activeOpenMicHotkey: 'CommandOrControl+Alt+M',
+        activeClipboardHotkey: 'CommandOrControl+Alt+C',
       })),
       openPath: vi.fn(),
       openUrl: vi.fn(),
       resetSettings: vi.fn(async () => DEFAULT_SETTINGS),
+      pickSourceDir: vi.fn(async () => ''),
+      logs: vi.fn(async () => []),
+      history: vi.fn(async () => []),
+      clearHistory: vi.fn(async () => []),
+      backups: vi.fn(async () => []),
+      backupNow: vi.fn(async () => []),
+      restore: vi.fn(async () => true),
+      plugins: vi.fn(async () => []),
     },
   };
   window.arc = api;

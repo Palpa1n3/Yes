@@ -75,7 +75,9 @@ export function AiSection() {
         label="AI"
         hint={
           s.provider === 'mock'
-            ? 'Offline mock: free canned replies, a few fixed commands.'
+            ? s.localModel
+              ? `Offline: a local AI (${s.localModel}) on this PC. Free and private; no web or PC actions.`
+              : 'Offline: free simple replies and fixed commands. Add a local AI below for real conversation.'
             : 'Claude: real conversation and actions, billed to your Anthropic credit.'
         }
       >
@@ -89,6 +91,8 @@ export function AiSection() {
           ]}
         />
       </Field>
+
+      <LocalModelField />
 
       {s.provider === 'anthropic' && (
         <Field label="Model" hint={model?.hint} stacked>
@@ -110,6 +114,20 @@ export function AiSection() {
             label="Research model"
             value={s.researchModel}
             onChange={(v) => void update({ researchModel: v })}
+            options={MODELS}
+          />
+        </Field>
+      )}
+      {s.provider === 'anthropic' && (
+        <Field
+          label="Agent Mode model"
+          hint={`Used when ${s.assistantName} operates your PC (“handle this for me”). Sonnet is the best balance; each task can take 10–40 steps, each with a screenshot, so expect a few pence to tens of pence per task.`}
+          stacked
+        >
+          <Select<AiModel>
+            label="Agent Mode model"
+            value={s.agentModel}
+            onChange={(v) => void update({ agentModel: v })}
             options={MODELS}
           />
         </Field>
@@ -193,5 +211,47 @@ export function AiSection() {
         )}
       </Field>
     </>
+  );
+}
+
+/** Ollama: a free AI model that runs on this PC (used offline, and when Claude can't be reached). */
+function LocalModelField() {
+  const { settings: s, update } = useSettingsStore();
+  const [models, setModels] = useState<string[] | null | undefined>(undefined);
+  const check = (): void => void window.arc.ai.localModels().then(setModels);
+  useEffect(check, []);
+  const options = [
+    { value: '', label: 'Not used' },
+    ...(models ?? []).map((m) => ({ value: m, label: m })),
+    ...(s.localModel && !models?.includes(s.localModel)
+      ? [{ value: s.localModel, label: `${s.localModel} (not found)` }]
+      : []),
+  ];
+  return (
+    <Field
+      label="Local AI (offline)"
+      hint={
+        models === undefined
+          ? 'Looking for Ollama…'
+          : models === null
+            ? 'Install the free Ollama app from ollama.com, then in a terminal run: ollama pull llama3.2 (about 2 GB). Then press Check. It runs on your PC, so it works without internet and nothing is sent anywhere.'
+            : models.length
+              ? 'Used when AI is set to Offline, and automatically when Claude can’t be reached. Bigger models are smarter but slower.'
+              : 'Ollama is running but has no models. In a terminal run: ollama pull llama3.2'
+      }
+      stacked
+    >
+      <span className="flex gap-1.5">
+        <Select<string>
+          label="Local AI model"
+          value={s.localModel}
+          onChange={(v) => void update({ localModel: v })}
+          options={options}
+        />
+        <button type="button" className="hud-button" onClick={check}>
+          Check
+        </button>
+      </span>
+    </Field>
   );
 }

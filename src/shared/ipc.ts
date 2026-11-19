@@ -35,10 +35,47 @@ import type { NotesOp, NotesState } from './notes';
 import type { NowPlaying } from './media';
 import type { CleanupId, CleanupResult, CleanupScan } from './cleanup';
 import type { GamingStatus } from './gaming';
+import type { LinkPreview } from './preview';
+import type { ClipItem } from './clipboard';
+import type { HealthAlert } from './health';
+import type { EmailConnectResult, EmailState } from './email';
+import type { UpdateState } from './updates';
+import type { AgentStatus } from './agent';
+import type { UsageSummary } from './usage';
+import type { Suggestion } from './initiative';
+import type { ActionRecord } from './audit';
 import type { EndTaskResult, TaskList } from './tasks';
 import type { CalEvent, CalendarState, CalendarUrlResult } from './calendar';
 
 export const IPC = {
+  discord: {
+    status: 'discord:status',
+    set: 'discord:set',
+    clear: 'discord:clear',
+  },
+  approval: {
+    answer: 'approval:answer',
+    onRequest: 'approval:request',
+    onResolved: 'approval:resolved',
+  },
+  remote: {
+    status: 'remote:status',
+    newCode: 'remote:new-code',
+    forget: 'remote:forget',
+    reply: 'remote:reply',
+    progress: 'remote:progress',
+  },
+  initiative: {
+    onSuggest: 'initiative:suggest',
+  },
+  agent: {
+    status: 'agent:status',
+    start: 'agent:start',
+    stop: 'agent:stop',
+    pause: 'agent:pause',
+    answer: 'agent:answer',
+    onChange: 'agent:changed',
+  },
   window: {
     minimize: 'window:minimize',
     toggleMaximize: 'window:toggle-maximize',
@@ -60,6 +97,7 @@ export const IPC = {
     cancel: 'assistant:cancel',
     toolResult: 'assistant:tool-result',
     reset: 'assistant:reset',
+    rewind: 'assistant:rewind',
     onStream: 'assistant:stream',
   },
   commands: {
@@ -84,6 +122,31 @@ export const IPC = {
     search: 'weather:search',
     onChange: 'weather:changed',
   },
+  previews: {
+    get: 'previews:get',
+  },
+  updates: {
+    state: 'updates:state',
+    check: 'updates:check',
+    install: 'updates:install',
+    onChange: 'updates:changed',
+  },
+  email: {
+    state: 'email:state',
+    refresh: 'email:refresh',
+    connect: 'email:connect',
+    disconnect: 'email:disconnect',
+    onChange: 'email:changed',
+  },
+  clipboard: {
+    list: 'clipboard:list',
+    copy: 'clipboard:copy',
+    remove: 'clipboard:remove',
+    clear: 'clipboard:clear',
+    read: 'clipboard:read',
+    onChange: 'clipboard:changed',
+    onHealth: 'clipboard:health-alert',
+  },
   gaming: {
     status: 'gaming:status',
     start: 'gaming:start',
@@ -102,6 +165,7 @@ export const IPC = {
   notes: {
     state: 'notes:state',
     apply: 'notes:apply',
+    shifts: 'notes:shifts',
     onChange: 'notes:changed',
   },
   calendar: {
@@ -147,6 +211,8 @@ export const IPC = {
     setKey: 'ai:set-key',
     clearKey: 'ai:clear-key',
     test: 'ai:test',
+    localModels: 'ai:local-models',
+    usage: 'ai:usage',
   },
   network: {
     details: 'network:details',
@@ -177,6 +243,14 @@ export const IPC = {
     getInfo: 'app:get-info',
     openPath: 'app:open-path',
     resetSettings: 'app:reset-settings',
+    pickSourceDir: 'app:pick-source-dir',
+    logs: 'app:logs',
+    history: 'app:history',
+    clearHistory: 'app:clear-history',
+    backups: 'app:backups',
+    backupNow: 'app:backup-now',
+    restore: 'app:restore',
+    plugins: 'app:plugins',
   },
 } as const;
 
@@ -205,9 +279,31 @@ export interface InvokeMap {
   [IPC.tasks.list]: { args: []; result: TaskList };
   [IPC.calendar.get]: { args: []; result: CalendarState };
   [IPC.notes.state]: { args: []; result: NotesState };
+  [IPC.notes.shifts]: { args: []; result: import('./shifts').Shift[] };
   [IPC.media.get]: { args: []; result: NowPlaying | null };
   [IPC.cleanup.scan]: { args: []; result: CleanupScan };
   [IPC.gaming.status]: { args: []; result: GamingStatus };
+  [IPC.previews.get]: { args: [urls: string[]]; result: LinkPreview[] };
+  [IPC.clipboard.list]: { args: []; result: ClipItem[] };
+  [IPC.clipboard.read]: { args: []; result: string };
+  [IPC.email.state]: { args: []; result: EmailState };
+  [IPC.updates.state]: { args: []; result: UpdateState };
+  [IPC.agent.status]: { args: []; result: AgentStatus };
+  [IPC.discord.status]: { args: []; result: boolean };
+  [IPC.discord.set]: { args: [url: string]; result: { ok: boolean; message: string } };
+  [IPC.discord.clear]: { args: []; result: boolean };
+  [IPC.remote.status]: { args: []; result: RemoteInfo };
+  [IPC.remote.newCode]: { args: []; result: RemoteInfo };
+  [IPC.remote.forget]: { args: []; result: RemoteInfo };
+  [IPC.agent.start]: { args: [task: string]; result: AgentStatus };
+  [IPC.updates.check]: { args: []; result: UpdateState };
+  [IPC.updates.install]: { args: []; result: boolean };
+  [IPC.email.refresh]: { args: []; result: EmailState };
+  [IPC.email.connect]: { args: [user: string, appPassword: string]; result: EmailConnectResult };
+  [IPC.email.disconnect]: { args: []; result: EmailState };
+  [IPC.clipboard.copy]: { args: [id: string]; result: boolean };
+  [IPC.clipboard.remove]: { args: [id: string]; result: ClipItem[] };
+  [IPC.clipboard.clear]: { args: []; result: ClipItem[] };
   [IPC.gaming.start]: { args: []; result: GamingStatus };
   [IPC.gaming.stop]: { args: []; result: GamingStatus };
   [IPC.cleanup.run]: { args: [ids: CleanupId[], downloads: string[]]; result: CleanupResult };
@@ -226,10 +322,15 @@ export interface InvokeMap {
   [IPC.weather.get]: { args: []; result: WeatherState };
   [IPC.weather.refresh]: { args: []; result: WeatherState };
   [IPC.weather.search]: { args: [query: string]; result: WeatherPlace[] };
-  [IPC.timers.add]: { args: [minutes: number, label: string]; result: TimerInfo[] };
+  [IPC.timers.add]: {
+    args: [minutes: number, label: string, kind?: 'focus'];
+    result: TimerInfo[];
+  };
   [IPC.ai.setKey]: { args: [key: string]; result: AiTestResult };
   [IPC.ai.clearKey]: { args: []; result: AiStatus };
   [IPC.ai.test]: { args: []; result: AiTestResult };
+  [IPC.ai.localModels]: { args: []; result: string[] | null };
+  [IPC.ai.usage]: { args: []; result: UsageSummary };
   [IPC.network.details]: { args: []; result: NetworkDetails };
   [IPC.network.latency]: { args: []; result: LatencyResult[] };
   [IPC.storage.downloads]: { args: []; result: DownloadItem[] };
@@ -241,6 +342,14 @@ export interface InvokeMap {
   [IPC.apps.folders]: { args: []; result: FolderInfo[] };
   [IPC.app.getInfo]: { args: []; result: AppInfo };
   [IPC.app.resetSettings]: { args: []; result: Settings };
+  [IPC.app.pickSourceDir]: { args: []; result: string };
+  [IPC.app.logs]: { args: []; result: string[] };
+  [IPC.app.history]: { args: []; result: ActionRecord[] };
+  [IPC.app.clearHistory]: { args: []; result: ActionRecord[] };
+  [IPC.app.backups]: { args: []; result: BackupInfo[] };
+  [IPC.app.backupNow]: { args: []; result: BackupInfo[] };
+  [IPC.app.restore]: { args: [name: string]; result: boolean };
+  [IPC.app.plugins]: { args: []; result: PluginInfo[] };
 }
 
 /** Fire-and-forget channels (ipcRenderer.send -> ipcMain.on). */
@@ -254,6 +363,12 @@ export interface SendMap {
   [IPC.system.setDetail]: [detail: TelemetryDetail];
   [IPC.chats.save]: [id: string, messages: StoredMessage[]];
   [IPC.cleanup.openWindowsTool]: [];
+  [IPC.agent.stop]: [];
+  [IPC.approval.answer]: [id: string, ok: boolean];
+  [IPC.remote.reply]: [id: string, text: string];
+  [IPC.remote.progress]: [id: string, progress: RemoteProgress];
+  [IPC.agent.pause]: [on: boolean];
+  [IPC.agent.answer]: [id: string, answer: string | boolean];
   [IPC.app.openUrl]: [url: string];
   [IPC.timers.cancel]: [id: string];
   [IPC.routines.stop]: [];
@@ -266,6 +381,7 @@ export interface SendMap {
   [IPC.assistant.cancel]: [];
   [IPC.assistant.toolResult]: [responseId: string, toolUseId: string, outcome: ToolOutcome];
   [IPC.assistant.reset]: [];
+  [IPC.assistant.rewind]: [chatId: string];
 }
 
 /** Push channels (webContents.send -> ipcRenderer.on). */
@@ -286,6 +402,14 @@ export interface EventMap {
   [IPC.notes.onChange]: NotesState;
   [IPC.media.onChange]: NowPlaying | null;
   [IPC.gaming.onChange]: GamingStatus;
+  [IPC.clipboard.onChange]: ClipItem[];
+  [IPC.email.onChange]: EmailState;
+  [IPC.updates.onChange]: UpdateState;
+  [IPC.agent.onChange]: AgentStatus;
+  [IPC.approval.onRequest]: ApprovalRequest;
+  [IPC.approval.onResolved]: string;
+  [IPC.initiative.onSuggest]: Suggestion;
+  [IPC.clipboard.onHealth]: HealthAlert;
   [IPC.calendar.onReminder]: { event: CalEvent; minutes: number };
 }
 
@@ -325,6 +449,8 @@ export interface ArcAPI {
     toolResult(responseId: string, toolUseId: string, outcome: ToolOutcome): void;
     /** Cancel and forget the conversation history held for the provider. */
     reset(): void;
+    /** The chat's messages were changed (regenerate / edit): rebuild Claude's context from them. */
+    rewind(chatId: string): void;
     onStream(cb: (chunk: StreamChunk) => void): Unsubscribe;
   };
   commands: { execute(cmd: CanonicalCommand): Promise<CommandResult> };
@@ -351,6 +477,76 @@ export interface ArcAPI {
     search(query: string): Promise<WeatherPlace[]>;
     onChange(cb: (s: WeatherState) => void): Unsubscribe;
   };
+  discord: {
+    /** Is a webhook saved (the link itself never comes back)? */
+    status(): Promise<boolean>;
+    set(url: string): Promise<{ ok: boolean; message: string }>;
+    clear(): Promise<boolean>;
+  };
+  approval: {
+    answer(id: string, ok: boolean): void;
+    /** Alton asking before a risky step (moving files, posting…). */
+    onRequest(cb: (r: ApprovalRequest) => void): Unsubscribe;
+    onResolved(cb: (id: string) => void): Unsubscribe;
+  };
+  remote: {
+    /** Phone companion: on/off, its addresses, the pairing code and paired phones. */
+    status(): Promise<RemoteInfo>;
+    newCode(): Promise<RemoteInfo>;
+    /** Unpair every phone. */
+    forget(): Promise<RemoteInfo>;
+    /** The reply to a message that came from the phone. */
+    reply(id: string, text: string): void;
+    /** A phone message's reply so far (streams to the phone app). */
+    progress(id: string, p: RemoteProgress): void;
+  };
+  initiative: {
+    /** Alton offering help unprompted (see Settings › Smart features). */
+    onSuggest(cb: (s: Suggestion) => void): Unsubscribe;
+  };
+  agent: {
+    status(): Promise<AgentStatus>;
+    /** Agent Mode: Alton uses the mouse and keyboard to do the task (Esc stops it). */
+    start(task: string): Promise<AgentStatus>;
+    stop(): void;
+    /** Pause after the current step (true) or carry on (false). */
+    pause(on: boolean): void;
+    /** Answer the agent's question (text) or risky-step check (true = approve). */
+    answer(id: string, answer: string | boolean): void;
+    onChange(cb: (s: AgentStatus) => void): Unsubscribe;
+  };
+  updates: {
+    state(): Promise<UpdateState>;
+    check(): Promise<UpdateState>;
+    /** Restart now and install the downloaded update. */
+    install(): Promise<boolean>;
+    onChange(cb: (s: UpdateState) => void): Unsubscribe;
+  };
+  email: {
+    state(): Promise<EmailState>;
+    refresh(): Promise<EmailState>;
+    /** Check a Gmail address + app password (logs in once), then store them encrypted. */
+    connect(user: string, appPassword: string): Promise<EmailConnectResult>;
+    disconnect(): Promise<EmailState>;
+    onChange(cb: (s: EmailState) => void): Unsubscribe;
+  };
+  clipboard: {
+    /** Recent copied text, newest first (memory only). */
+    list(): Promise<ClipItem[]>;
+    /** The text on the clipboard now ('' if none). */
+    read(): Promise<string>;
+    /** Put an earlier copy back on the clipboard. */
+    copy(id: string): Promise<boolean>;
+    remove(id: string): Promise<ClipItem[]>;
+    clear(): Promise<ClipItem[]>;
+    onChange(cb: (list: ClipItem[]) => void): Unsubscribe;
+    /** PC health heads-ups (heat, full drives…). */
+    onHealth(cb: (a: HealthAlert) => void): Unsubscribe;
+  };
+  previews: {
+    /** Picture cards (title, image, site, price) for links in an answer. */
+    get(urls: string[]): Promise<LinkPreview[]>;
+  };
   gaming: {
     status(): Promise<GamingStatus>;
     /** Turn gaming mode on/off by hand. */
@@ -374,6 +570,8 @@ export interface ArcAPI {
   notes: {
     state(): Promise<NotesState>;
     apply(op: NotesOp): Promise<NotesState>;
+    /** Upcoming work shifts synced from the phone app. */
+    shifts(): Promise<import('./shifts').Shift[]>;
     onChange(cb: (s: NotesState) => void): Unsubscribe;
   };
   calendar: {
@@ -418,7 +616,8 @@ export interface ArcAPI {
   };
   timers: {
     list(): Promise<TimerInfo[]>;
-    add(minutes: number, label: string): Promise<TimerInfo[]>;
+    /** kind 'focus': a focus session (quiet suggestions and alerts). */
+    add(minutes: number, label: string, kind?: 'focus'): Promise<TimerInfo[]>;
     /** Cancel a running timer, or dismiss a ringing one. */
     cancel(id: string): void;
     snooze(id: string, minutes: number): void;
@@ -432,6 +631,10 @@ export interface ArcAPI {
     clearKey(): Promise<AiStatus>;
     /** Check the stored key and model without spending credit. */
     test(): Promise<AiTestResult>;
+    /** Models installed in Ollama on this PC; null if Ollama isn't running. */
+    localModels(): Promise<string[] | null>;
+    /** Estimated Claude spending: today, this month, by feature. */
+    usage(): Promise<UsageSummary>;
   };
   network: {
     details(): Promise<NetworkDetails>;
@@ -470,6 +673,20 @@ export interface ArcAPI {
     /** Open an http(s) link (e.g. a research source) in the default browser. */
     openUrl(url: string): void;
     resetSettings(): Promise<Settings>;
+    /** Choose ARC's project folder (read-only access for self-debugging); '' if cancelled. */
+    pickSourceDir(): Promise<string>;
+    /** Recent errors and warnings. */
+    logs(): Promise<string[]>;
+    /** What Alton has done, newest first. */
+    history(): Promise<ActionRecord[]>;
+    clearHistory(): Promise<ActionRecord[]>;
+    /** Daily copies of Alton's data (settings, notes, routines, chats), newest first. */
+    backups(): Promise<BackupInfo[]>;
+    backupNow(): Promise<BackupInfo[]>;
+    /** Put a backup back and restart (current data is backed up first). */
+    restore(name: string): Promise<boolean>;
+    /** Installed plugins (JSON files in the plugins folder); also adds their routines. */
+    plugins(): Promise<PluginInfo[]>;
   };
 }
 
@@ -479,4 +696,45 @@ export interface WeatherState {
   error: string | null;
 }
 
-export type OpenTarget = 'userData' | 'appsJson' | 'settingsJson';
+export interface PluginInfo {
+  file: string;
+  name: string;
+  description: string;
+  routines: number;
+  error: string | null;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  title: string;
+  detail: string;
+}
+
+export interface RemoteProgress {
+  text: string;
+  activity: string;
+  done: boolean;
+  error?: string;
+  sources?: import('./chats').Source[];
+}
+
+export interface RemoteInfo {
+  running: boolean;
+  /** e.g. http://192.168.1.20:47615 */
+  urls: string[];
+  code: string;
+  paired: number;
+  error: string | null;
+  /** Network adapters' MAC addresses (for a Wake-on-LAN app). */
+  macs: string[];
+}
+
+/** A copy of Alton's data in userData/backups. */
+export interface BackupInfo {
+  name: string;
+  at: number;
+  size: number;
+}
+
+export type OpenTarget =
+  'userData' | 'appsJson' | 'settingsJson' | 'logs' | 'backups' | 'saveBackups' | 'plugins';

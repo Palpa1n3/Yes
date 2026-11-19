@@ -1,4 +1,13 @@
-import { app, BrowserWindow, nativeImage, Notification, shell } from 'electron';
+import { ShiftStore } from './services/shift-store';
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  nativeImage,
+  Notification,
+  shell,
+  clipboard,
+} from 'electron';
 import os from 'node:os';
 import { join } from 'node:path';
 import si from 'systeminformation';
@@ -8,6 +17,8 @@ import { CompactController } from './compact';
 import type { MainContext } from './context';
 import { Hotkey, prettyAccelerator } from './hotkey';
 import { registerIpc } from './ipc';
+import { AuditLog, ErrorLog } from './services/diagnostics';
+import { UsageTracker } from './services/usage-tracker';
 import { emit } from './ipc/handle';
 import { SettingsStore } from './services/settings-store';
 import { TelemetryService } from './services/telemetry';
@@ -30,9 +41,32 @@ const getWindow = (): BrowserWindow | null =>
   mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
 const isShown = (w: BrowserWindow): boolean => w.isVisible() && !w.isMinimized();
 
+// Many services tidy up on will-quit.
+app.setMaxListeners(40);
+/** Recent notifications for the phone companion (newest first). */
+const notices: Array<{ at: number; text: string }> = [];
+const errors = new ErrorLog(join(app.getPath('userData'), 'logs', 'arc.log'));
+errors.capture();
+
 const ctx: MainContext = {
   getWindow,
   settings,
+  errors,
+  recentNotices: () => notices,
+  notify: (text) => {
+    notices.unshift({ at: Date.now(), text: text.slice(0, 300) });
+    notices.length = Math.min(notices.length, 20);
+  },
+  shifts: new ShiftStore(join(app.getPath('userData'), 'shifts.json')),
+  usage: new UsageTracker({
+    file: join(app.getPath('userData'), 'usage.json'),
+    budget: () => settings.get().monthlyBudget,
+    warn: (text) => {
+      ctx.notify(text);
+      ctx.command({ type: 'notice', text });
+    },
+  }),
+  audit: new AuditLog(join(app.getPath('userData'), 'logs', 'actions.jsonl')),
   telemetry: new TelemetryService(
     si,
     (s) => emit(getWindow(), IPC.system.onStats, s),
@@ -52,6 +86,16 @@ const ctx: MainContext = {
     ctx.peekWindow();
     ctx.command({ type: 'voice-toggle' });
   }, ['CommandOrControl+Alt+V']),
+  openMicHotkey: new Hotkey(() => {
+    ctx.peekWindow();
+    ctx.command({ type: 'open-mic-toggle' });
+  }, ['CommandOrControl+Shift+M']),
+  clipboardHotkey: new Hotkey(() => {
+    void Promise.resolve(clipboard.readText()).then((t) => {
+      ctx.showWindow(true);
+      ctx.command({ type: 'clipboard-actions', text: String(t ?? '').slice(0, 20_000) });
+    });
+  }, ['CommandOrControl+Alt+Shift+C']),
   timers: new TimerService({
     file: join(app.getPath('userData'), 'timers.json'),
     onChange: (list) => emit(getWindow(), IPC.timers.onChange, list),
@@ -73,8 +117,14 @@ const ctx: MainContext = {
   peekWindow: () => {
     const w = getWindow();
     if (!w || isShown(w)) return;
-    if (w.isMinimized()) w.restore();
-    w.showInactive();
+    const show = (): void => {
+      if (w.isDestroyed()) return;
+      if (w.isMinimized()) w.restore();
+      w.showInactive();
+    };
+    // Screen awareness: picture the screen first, so ARC isn't covering it.
+    if (ctx.captureScreen) void ctx.captureScreen().finally(show);
+    else show();
   },
   toggleWindow: () => {
     const w = getWindow();
@@ -108,10 +158,14 @@ const tray = new ArcTray(ctx);
  *  (which plays the alarm and shows Dismiss / Snooze). */
 function ringTimer(t: TimerInfo): void {
   const name = settings.get().assistantName;
-  const body = t.label || `${describeDuration(t.durationMs / 60_000)} timer finished`;
+  const focus = t.kind === 'focus';
+  const body = focus
+    ? `Focus session done (${Math.round(t.durationMs / 60_000)} min). Time for a short break.`
+    : t.label || `${describeDuration(t.durationMs / 60_000)} timer finished`;
+  if (focus) ctx.audit.add('routine', body);
   if (Notification.isSupported()) {
     const n = new Notification({
-      title: `⏰ ${name} · Time's up`,
+      title: focus ? `🎯 ${name} · Focus done` : `⏰ ${name} · Time's up`,
       body,
       silent: false,
       urgency: 'critical',
@@ -148,9 +202,32 @@ function applyVoiceHotkey(accel: string): void {
     });
 }
 
-/** The wake word needs the hidden window to keep processing the mic. */
+function applyOpenMicHotkey(accel: string): void {
+  const { active, fellBack } = ctx.openMicHotkey.register(accel);
+  if (fellBack)
+    ctx.command({
+      type: 'notice',
+      text: active
+        ? `${prettyAccelerator(accel)} is in use by another app, so ${prettyAccelerator(active)} turns the open mic on and off.`
+        : `I couldn't register ${prettyAccelerator(accel)} for the open mic; another app may be using it.`,
+    });
+}
+
+function applyClipboardHotkey(accel: string): void {
+  const { active, fellBack } = ctx.clipboardHotkey.register(accel);
+  if (fellBack)
+    ctx.command({
+      type: 'notice',
+      text: active
+        ? `${prettyAccelerator(accel)} is in use by another app, so ${prettyAccelerator(active)} opens the clipboard actions.`
+        : `I couldn't register ${prettyAccelerator(accel)} for clipboard actions; another app may be using it.`,
+    });
+}
+
+/** The wake word and open mic need the hidden window to keep processing the mic. */
 function applyBackgroundThrottling(): void {
-  getWindow()?.webContents.setBackgroundThrottling(!settings.get().wakeWord);
+  const s = settings.get();
+  getWindow()?.webContents.setBackgroundThrottling(!(s.wakeWord || s.openMicHotkey));
 }
 
 function applyLoginItem(on: boolean): void {
@@ -170,7 +247,10 @@ function onSettingsChanged(next: Settings, prev: Settings): void {
   emit(getWindow(), IPC.settings.onChange, next);
   if (next.globalHotkey !== prev.globalHotkey) applyHotkey(next.globalHotkey);
   if (next.voiceHotkey !== prev.voiceHotkey) applyVoiceHotkey(next.voiceHotkey);
-  if (next.wakeWord !== prev.wakeWord) applyBackgroundThrottling();
+  if (next.openMicHotkey !== prev.openMicHotkey) applyOpenMicHotkey(next.openMicHotkey);
+  if (next.clipboardHotkey !== prev.clipboardHotkey) applyClipboardHotkey(next.clipboardHotkey);
+  if (next.wakeWord !== prev.wakeWord || next.openMicHotkey !== prev.openMicHotkey)
+    applyBackgroundThrottling();
   if (next.alwaysOnTop !== prev.alwaysOnTop && !ctx.compact.isCompact)
     getWindow()?.setAlwaysOnTop(next.alwaysOnTop);
   if (next.launchAtLogin !== prev.launchAtLogin) applyLoginItem(next.launchAtLogin);
@@ -228,6 +308,19 @@ function createWindow(): BrowserWindow {
   win.webContents.on('did-start-loading', () => {
     rendererReady = false;
   });
+  // Problems in the UI go in the same log as main's.
+  win.webContents.on('console-message', (e) => {
+    const { level, message, sourceId, lineNumber } = e;
+    if (level === 'error' || level === 'warning')
+      errors.add(
+        level === 'error' ? 'error' : 'warn',
+        'ui',
+        `${message}${sourceId ? ` (${sourceId.split('/').pop()}:${lineNumber})` : ''}`,
+      );
+  });
+  win.webContents.on('render-process-gone', (_e, d) =>
+    errors.add('error', 'ui', `The window's renderer stopped: ${d.reason} (code ${d.exitCode})`),
+  );
 
   // Telemetry only runs while the window is actually on screen.
   const syncTelemetry = (): void => {
@@ -294,7 +387,14 @@ if (!app.requestSingleInstanceLock()) {
     tray.create();
     applyHotkey(settings.get().globalHotkey);
     applyVoiceHotkey(settings.get().voiceHotkey);
+    applyOpenMicHotkey(settings.get().openMicHotkey);
+    applyClipboardHotkey(settings.get().clipboardHotkey);
     applyBackgroundThrottling();
+    // Emergency stop from anywhere: Agent Mode, routines, speech and listening.
+    globalShortcut.register('CommandOrControl+Alt+Backspace', () => {
+      ctx.stopAgent?.();
+      ctx.command({ type: 'emergency-stop' });
+    });
 
     app.on('activate', () => {
       if (!getWindow()) mainWindow = createWindow();
@@ -309,6 +409,8 @@ if (!app.requestSingleInstanceLock()) {
     settings.saveNow();
     ctx.hotkey.unregister();
     ctx.voiceHotkey.unregister();
+    ctx.openMicHotkey.unregister();
+    ctx.clipboardHotkey.unregister();
     ctx.telemetry.stop();
     ctx.timers.dispose();
     tray.destroy();

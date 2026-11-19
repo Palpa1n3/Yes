@@ -9,6 +9,8 @@ export interface ChatMeta {
   pinned: boolean;
   /** Research mode: web search, a smarter model, fuller answers with sources. */
   research: boolean;
+  /** Started in the phone app (its id there), so later syncs add to the same chat. */
+  phoneId?: string;
 }
 
 export interface ChatsState {

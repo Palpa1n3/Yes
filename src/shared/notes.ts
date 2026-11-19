@@ -24,12 +24,52 @@ export interface Memory {
   id: string;
   text: string;
   createdAt: number;
+  /** Noticed automatically from a chat (rather than asked for). */
+  learned?: boolean;
+  category?: MemoryCategory;
+  /** A project this belongs to (project-specific memory). */
+  project?: string;
 }
+
+/** A long-term goal with progress. */
+export interface Goal {
+  id: string;
+  title: string;
+  /** 0–100. */
+  progress: number;
+  /** Optional target date, YYYY-MM-DD. */
+  due?: string;
+  createdAt: number;
+  updatedAt: number;
+  log: Array<{ at: number; text: string }>;
+  done?: boolean;
+}
+
+export const MEMORY_CATEGORIES = [
+  'about',
+  'people',
+  'preferences',
+  'work',
+  'solutions',
+  'apps',
+  'other',
+] as const;
+export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
+export const CATEGORY_LABEL: Record<MemoryCategory, string> = {
+  about: 'About you',
+  people: 'People & pets',
+  preferences: 'Likes & preferences',
+  work: 'Work, study & projects',
+  solutions: 'Problems solved before',
+  apps: 'How your apps work',
+  other: 'Other',
+};
 
 export interface NotesState {
   lists: NoteList[];
   notes: Note[];
   memories: Memory[];
+  goals: Goal[];
 }
 
 export const MAX_ITEMS = 200;
@@ -70,9 +110,17 @@ export function matches(text: string, query: string): boolean {
 export function todoSentence(s: NotesState): string | null {
   const todo = s.lists.find((l) => l.name === 'To-do');
   const open = todo?.items.filter((i) => !i.done) ?? [];
-  if (!open.length) return null;
+  if (!open.length) return goalsSentence(s);
   const first = open.slice(0, 3).map((i) => i.text);
-  return `On your to-do list: ${first.join(', ')}${open.length > 3 ? `, and ${open.length - 3} more` : ''}.`;
+  const list = `On your to-do list: ${first.join(', ')}${open.length > 3 ? `, and ${open.length - 3} more` : ''}.`;
+  return [list, goalsSentence(s)].filter(Boolean).join(' ') || null;
+}
+
+/** "Goals: Learn Spanish is 40% done, Run a 5k is 10% done." (open goals, max 3). */
+export function goalsSentence(s: NotesState): string | null {
+  const open = (s.goals ?? []).filter((g) => !g.done).slice(0, 3);
+  if (!open.length) return null;
+  return `Goals: ${open.map((g) => `${g.title} is ${g.progress}% done`).join(', ')}.`;
 }
 
 /** Edits from the Notes tab (one IPC channel, typed by `op`). */
@@ -86,4 +134,8 @@ export type NotesOp =
   | { op: 'addNote'; text: string }
   | { op: 'removeNote'; id: string }
   | { op: 'remember'; text: string }
-  | { op: 'forget'; id: string };
+  | { op: 'forget'; id: string }
+  | { op: 'editMemory'; id: string; text: string }
+  | { op: 'addGoal'; title: string; due?: string }
+  | { op: 'goalProgress'; id: string; progress: number; note?: string }
+  | { op: 'removeGoal'; id: string };

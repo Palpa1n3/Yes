@@ -32,7 +32,11 @@ export interface CommandsIpc {
   setRoutineRunner(run: (cmd: CanonicalCommand) => Promise<CommandResult>): void;
 }
 
-export function registerCommandsIpc(skills: SkillRegistry, timers: TimerService): CommandsIpc {
+export function registerCommandsIpc(
+  skills: SkillRegistry,
+  timers: TimerService,
+  record?: (cmd: CanonicalCommand, r: CommandResult) => void,
+): CommandsIpc {
   const registry = new AppRegistry(join(app.getPath('userData'), 'apps.json'));
   registry.load();
   const system = createSystemActions({
@@ -52,8 +56,10 @@ export function registerCommandsIpc(skills: SkillRegistry, timers: TimerService)
 
   handle(IPC.commands.execute, async (cmd) => {
     registry.load(); // pick up edits to apps.json without restarting
-    if (cmd.action === 'run_routine' && runRoutine) return runRoutine(cmd);
-    return executeAny(cmd);
+    const r =
+      cmd.action === 'run_routine' && runRoutine ? await runRoutine(cmd) : await executeAny(cmd);
+    record?.(cmd, r);
+    return r;
   });
 
   // Task Manager tab.
