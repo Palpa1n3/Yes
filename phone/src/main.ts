@@ -1283,11 +1283,40 @@ const newer = (a: string, b: string): boolean => {
   for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0);
   return false;
 };
-async function checkUpdate(manual = false): Promise<void> {
+/** The Android app: newest release that already has its APK (GitHub's API allows this). */
+let apkUrl = __APK_URL__;
+async function checkAppUpdate(manual: boolean): Promise<void> {
   try {
-    // The app carries its own copy of the web app, so it asks the website what's newest.
-    const src = isApp ? `${__PAGES_URL__}version.json` : './version.json';
-    const r = await fetch(`${src}?t=${Date.now()}`, { cache: 'no-store' });
+    const r = await fetch(`https://api.github.com/repos/${__REPO__}/releases/latest`, {
+      cache: 'no-store',
+      headers: { accept: 'application/vnd.github+json' },
+    });
+    const j = (await r.json()) as {
+      tag_name?: string;
+      assets?: Array<{ name: string; browser_download_url: string }>;
+    };
+    const v = (j.tag_name ?? '').replace(/^v/, '');
+    const apk = j.assets?.find((a) => a.name === 'Alton.apk');
+    if (v && apk && newer(v, __APP_VERSION__)) {
+      newVersion = v;
+      apkUrl = apk.browser_download_url;
+      $('updVer').textContent = v;
+      $('updateBar').hidden = false;
+      if (manual) $('updMsg').textContent = `Version ${v} is ready: tap the banner at the top.`;
+    } else if (manual)
+      $('updMsg').textContent =
+        v && newer(v, __APP_VERSION__)
+          ? `Version ${v} is still being built. Try again in a few minutes.`
+          : 'You’re on the latest version. ✓';
+  } catch {
+    if (manual) $('updMsg').textContent = 'Couldn’t check (no signal?).';
+  }
+  renderAbout();
+}
+async function checkUpdate(manual = false): Promise<void> {
+  if (isApp) return checkAppUpdate(manual);
+  try {
+    const r = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' });
     const j = (await r.json()) as { version?: string };
     if (j.version && newer(j.version, __APP_VERSION__)) {
       newVersion = j.version;
@@ -1305,7 +1334,7 @@ async function applyUpdate(): Promise<void> {
   if (isApp) {
     // A new app version is a new APK: download it, then tap it to install over this one.
     toast('Downloading the new version: open it from your notifications to install.');
-    location.href = __APK_URL__;
+    location.href = apkUrl;
     return;
   }
   $('updateBar').textContent = 'Updating…';

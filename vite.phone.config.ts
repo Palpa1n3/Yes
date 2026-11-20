@@ -22,6 +22,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(version),
     __PAGES_URL__: JSON.stringify(pagesUrl),
     __APK_URL__: JSON.stringify(apkUrl),
+    __REPO__: JSON.stringify(`${owner}/${repo}`),
   },
   plugins: [
     {
