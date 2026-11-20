@@ -3051,24 +3051,68 @@ function toggleMic(): void {
   r.start();
 }
 
+/* ── Android app: search your contacts and tap one to save it ── */
+let allContacts: Array<{ name: string; phone: string }> = [];
+async function openContactSheet(forName?: string): Promise<void> {
+  try {
+    const st = await powerStatus();
+    if (!st?.contacts) {
+      const r = await Native.requestAccess({ which: 'contacts' });
+      if (!r.granted)
+        return toast(
+          'Allow Contacts for Alton (Settings › Phone powers) to add from your contacts.',
+        );
+    }
+    allContacts = (await Native.findContacts({ name: '' })).contacts.filter((c) => c.phone);
+  } catch (e) {
+    return toast(`Couldn’t open your contacts: ${(e as Error).message}`);
+  }
+  if (!allContacts.length) return toast('No contacts with phone numbers found on this phone.');
+  const sheet = $('contactSheet');
+  const input = $<HTMLInputElement>('csSearch');
+  const list = $('csList');
+  const draw = (): void => {
+    const q = input.value.trim().toLowerCase();
+    list.textContent = '';
+    const seen = new Set<string>();
+    for (const c of allContacts) {
+      if (q && !c.name.toLowerCase().includes(q) && !c.phone.replace(/\s/g, '').includes(q))
+        continue;
+      const key = `${c.name}|${c.phone.replace(/\D/g, '')}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const b = el('button', 'li');
+      b.appendChild(el('b', undefined, c.name));
+      b.appendChild(el('small', 'muted', ` ${c.phone}`));
+      b.onclick = () => {
+        const name = forName ?? c.name;
+        S.people = [
+          ...S.people.filter((x) => x.name.toLowerCase() !== name.toLowerCase()),
+          { name, phone: c.phone },
+        ];
+        save();
+        sheet.hidden = true;
+        renderPeople();
+        toast(
+          forName ? `Saved ${forName} (${c.name}). Ask again and it’ll work.` : `Saved ${c.name}.`,
+        );
+      };
+      list.appendChild(b);
+      if (list.childElementCount >= 200) break;
+    }
+    if (!list.childElementCount) list.appendChild(el('p', 'muted', 'No match.'));
+  };
+  input.value = forName ?? '';
+  input.oninput = draw;
+  $('csClose').onclick = () => (sheet.hidden = true);
+  sheet.hidden = false;
+  draw();
+  setTimeout(() => input.focus(), 50);
+}
+
 /* ── People, lists, memories ── */
 async function pickContact(forName?: string): Promise<void> {
-  if (isApp) {
-    try {
-      const c = await Native.pickContact();
-      const name = forName ?? (c.name || 'Contact');
-      S.people = [
-        ...S.people.filter((x) => x.name.toLowerCase() !== name.toLowerCase()),
-        { name, ...(c.phone ? { phone: c.phone } : {}) },
-      ];
-      save();
-      renderPeople();
-      toast(forName ? `Saved ${forName}. Ask again and it’ll work.` : `Saved ${name}.`);
-    } catch (e) {
-      if (!/No contact chosen/.test((e as Error).message)) toast((e as Error).message);
-    }
-    return;
-  }
+  if (isApp) return openContactSheet(forName);
   const nav = navigator as unknown as {
     contacts?: {
       select(

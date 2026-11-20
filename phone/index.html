@@ -1061,6 +1061,37 @@
         pointer-events: none;
         z-index: 41;
       }
+      /* ── Contact search sheet ── */
+      .sheet {
+        position: fixed;
+        inset: 0;
+        z-index: 96;
+        background: rgba(0, 0, 0, 0.55);
+        display: flex;
+        align-items: flex-end;
+      }
+      .sheet[hidden] {
+        display: none;
+      }
+      .sheet-box {
+        width: 100%;
+        max-height: 82vh;
+        background: var(--panel);
+        border-top: 1px solid var(--line);
+        border-radius: 18px 18px 0 0;
+        padding: 14px 14px calc(14px + env(safe-area-inset-bottom));
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .cs-list {
+        overflow-y: auto;
+        flex: 1;
+      }
+      .cs-list button {
+        width: 100%;
+        text-align: left;
+      }
       /* ── Backgrounds ── */
       body[data-bg='grid'] {
         background:
@@ -1552,6 +1583,15 @@
         <button class="dv-btn" data-dm="play_pause" aria-label="Play or pause">⏯</button>
         <button class="dv-btn" data-dm="next" aria-label="Next song">⏭</button>
         <button class="dv-btn big" id="dvTalk" aria-label="Talk now">🎤</button>
+      </div>
+    </div>
+    <div id="contactSheet" class="sheet" hidden>
+      <div class="sheet-box">
+        <div class="row">
+          <input class="input" id="csSearch" placeholder="Search your contacts" style="flex: 1" />
+          <button class="btn" id="csClose">Close</button>
+        </div>
+        <div id="csList" class="cs-list"></div>
       </div>
     </div>
     <div id="tint" class="tint" aria-hidden="true"></div>

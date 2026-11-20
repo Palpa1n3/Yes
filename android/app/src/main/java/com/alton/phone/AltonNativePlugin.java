@@ -410,10 +410,7 @@ public class AltonNativePlugin extends Plugin {
             return;
         }
         String q = call.getString("name", "").trim();
-        if (q.isEmpty()) {
-            call.resolve(new JSObject().put("contacts", new JSArray()));
-            return;
-        }
+        int limit = q.isEmpty() ? 3000 : 15;
         String[] cols = {
             ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
             ContactsContract.CommonDataKinds.Phone.NUMBER,
@@ -422,11 +419,11 @@ public class AltonNativePlugin extends Plugin {
         try (Cursor c = getContext().getContentResolver().query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
             cols,
-            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIKE ?",
-            new String[] { "%" + q + "%" },
+            q.isEmpty() ? null : ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIKE ?",
+            q.isEmpty() ? null : new String[] { "%" + q + "%" },
             ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
         )) {
-            while (c != null && c.moveToNext() && out.length() < 15) {
+            while (c != null && c.moveToNext() && out.length() < limit) {
                 JSObject o = new JSObject();
                 o.put("name", c.getString(0) == null ? "" : c.getString(0));
                 o.put("phone", c.getString(1) == null ? "" : c.getString(1));
