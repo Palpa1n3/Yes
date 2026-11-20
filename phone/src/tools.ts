@@ -301,6 +301,20 @@ export const APP_TOOLS: Anthropic.Tool[] = [
     input_schema: obj({ name: { type: 'string' } }, ['name']),
   },
   {
+    name: 'media_control',
+    description:
+      'Control whatever is playing on the phone (Spotify, YouTube Music…): next or previous song, pause, play, volume up or down.',
+    input_schema: obj(
+      {
+        action: {
+          type: 'string',
+          enum: ['next', 'previous', 'pause', 'play', 'play_pause', 'volume_up', 'volume_down'],
+        },
+      },
+      ['action'],
+    ),
+  },
+  {
     name: 'read_shift_app',
     description:
       'Open the user\'s shift/rota app on the phone and read the rota off the screen (no screenshot needed). Then call add_shifts with the shifts you find. Use for "add my shifts", "check my rota", "have my shifts changed?".',

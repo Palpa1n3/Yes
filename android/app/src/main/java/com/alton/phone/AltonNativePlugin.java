@@ -1,6 +1,15 @@
 package com.alton.phone;
 
 import android.Manifest;
+import android.app.Activity;
+import android.media.AudioManager;
+import android.os.Build;
+import android.telephony.SmsManager;
+import android.view.KeyEvent;
+import android.view.WindowManager;
+import androidx.activity.result.ActivityResult;
+import com.getcapacitor.annotation.ActivityCallback;
+import java.util.ArrayList;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.ContentValues;
@@ -37,11 +46,159 @@ import org.json.JSONObject;
     permissions = {
         @Permission(alias = "calendar", strings = { Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR }),
         @Permission(alias = "contacts", strings = { Manifest.permission.READ_CONTACTS }),
+        @Permission(alias = "sms", strings = { Manifest.permission.SEND_SMS }),
     }
 )
 public class AltonNativePlugin extends Plugin {
 
     private final Handler main = new Handler(Looper.getMainLooper());
+    private static AltonNativePlugin instance;
+    /** Opened as the phone's assistant (long-press / side key): start listening straight away. */
+    static volatile boolean assistPending = false;
+
+    @Override
+    public void load() {
+        instance = this;
+    }
+
+    /** Called by MainActivity when Alton is opened as the assistant while already running. */
+    static void assistOpened() {
+        assistPending = true;
+        final AltonNativePlugin p = instance;
+        if (p != null) p.main.post(() -> p.notifyListeners("assist", new JSObject()));
+    }
+
+    /** Called by MessageListener when a new message notification arrives. */
+    static void newMessage(final JSObject m) {
+        final AltonNativePlugin p = instance;
+        if (p != null) p.main.post(() -> p.notifyListeners("message", m));
+    }
+
+    @PluginMethod
+    public void takeAssist(PluginCall call) {
+        boolean was = assistPending;
+        assistPending = false;
+        call.resolve(new JSObject().put("assist", was));
+    }
+
+    /* ── Hands-free helpers: screen on while driving, music keys, volume ── */
+
+    @PluginMethod
+    public void keepScreenOn(PluginCall call) {
+        final boolean on = Boolean.TRUE.equals(call.getBoolean("on", false));
+        final Activity a = getActivity();
+        if (a == null) {
+            call.reject("No screen");
+            return;
+        }
+        a.runOnUiThread(() -> {
+            if (on) a.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            else a.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        });
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void media(PluginCall call) {
+        String action = call.getString("action", "");
+        AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) {
+            call.reject("No audio");
+            return;
+        }
+        int code;
+        switch (action) {
+            case "next": code = KeyEvent.KEYCODE_MEDIA_NEXT; break;
+            case "previous": code = KeyEvent.KEYCODE_MEDIA_PREVIOUS; break;
+            case "pause": code = KeyEvent.KEYCODE_MEDIA_PAUSE; break;
+            case "play": code = KeyEvent.KEYCODE_MEDIA_PLAY; break;
+            case "play_pause": code = KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE; break;
+            case "volume_up":
+                am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI);
+                call.resolve();
+                return;
+            case "volume_down":
+                am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI);
+                call.resolve();
+                return;
+            default:
+                call.reject("Unknown action");
+                return;
+        }
+        am.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, code));
+        am.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, code));
+        call.resolve();
+    }
+
+    /* ── Texts: send an SMS (only after the user said or tapped yes) ── */
+
+    @PluginMethod
+    public void sendSms(PluginCall call) {
+        if (getPermissionState("sms") != PermissionState.GRANTED) {
+            requestPermissionForAlias("sms", call, "smsCallback");
+            return;
+        }
+        doSendSms(call);
+    }
+
+    @PermissionCallback
+    private void smsCallback(PluginCall call) {
+        if (getPermissionState("sms") != PermissionState.GRANTED) {
+            call.reject("Permission to send texts was not given.");
+            return;
+        }
+        doSendSms(call);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void doSendSms(PluginCall call) {
+        String to = call.getString("to", "");
+        String text = call.getString("text", "");
+        if (to == null || to.trim().isEmpty() || text == null || text.trim().isEmpty()) {
+            call.reject("Need a number and a message.");
+            return;
+        }
+        try {
+            SmsManager sm = Build.VERSION.SDK_INT >= 31 ? getContext().getSystemService(SmsManager.class) : SmsManager.getDefault();
+            ArrayList<String> parts = sm.divideMessage(text);
+            sm.sendMultipartTextMessage(to.trim(), null, parts, null, null);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("The text couldn't be sent.");
+        }
+    }
+
+    /* ── Contact picker (the phone's own; no permission needed) ── */
+
+    @PluginMethod
+    public void pickContact(PluginCall call) {
+        Intent i = new Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI);
+        startActivityForResult(call, i, "contactPicked");
+    }
+
+    @ActivityCallback
+    private void contactPicked(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        Intent data = result.getData();
+        if (result.getResultCode() != Activity.RESULT_OK || data == null || data.getData() == null) {
+            call.reject("No contact chosen.");
+            return;
+        }
+        String[] cols = {
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+            ContactsContract.CommonDataKinds.Phone.NUMBER,
+        };
+        try (Cursor c = getContext().getContentResolver().query(data.getData(), cols, null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                JSObject o = new JSObject();
+                o.put("name", c.getString(0) == null ? "" : c.getString(0));
+                o.put("phone", c.getString(1) == null ? "" : c.getString(1));
+                call.resolve(o);
+                return;
+            }
+        } catch (Exception ignored) {}
+        call.reject("Couldn't read that contact.");
+    }
 
     private static long num(PluginCall call, String key) {
         Object v = call.getData().opt(key);
@@ -66,6 +223,7 @@ public class AltonNativePlugin extends Plugin {
         Intent i;
         if ("messages".equals(which)) i = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
         else if ("screenReader".equals(which)) i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+        else if ("assistant".equals(which)) i = new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS);
         else i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getContext().getPackageName()));
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {

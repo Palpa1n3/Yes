@@ -24,7 +24,10 @@ Read this first in a new chat, then README.md for the feature list.
   (`AltonNativePlugin.java`, `MessageListener.java`, `ScreenReader.java`): read message
   notifications and reply through them (only on a tapped button), read/add calendar events,
   look up contacts, set tomorrow's shift alarm silently (AlarmClock SKIP_UI), and read the chosen
-  shift app's screen (accessibility, only when asked). Claude gets them as `APP_TOOLS`. The app's origin is
+  shift app's screen (accessibility, only when asked), native contact picker, media keys, SMS
+  (only after a spoken "send it" or a tap), keep-screen-on, and opening as the phone's assistant
+  app (ACTION_ASSIST → Driving mode). Driving mode (phone/src/main.ts) listens for the wake word
+  while on screen; a true background wake word is not built (Android limits it). Claude gets them as `APP_TOOLS`. The app's origin is
   `https://localhost`, which the PC's CORS also allows. The release workflow's `android` job
   builds a signed `Alton.apk` (secrets `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD`)
   and adds it to the release; the app's "Update ready" downloads it. Android tools can't be

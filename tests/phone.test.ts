@@ -193,6 +193,7 @@ describe('Android app tools', () => {
       'reply_message',
       'read_calendar',
       'find_contact',
+      'media_control',
       'read_shift_app',
     ]);
   });

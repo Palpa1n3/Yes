@@ -167,6 +167,17 @@ interface State {
   snow: boolean;
   /** This phone's own personality (used when not following the PC). */
   personality: Personality | null;
+  /** Background style, picture darkness (%), and interface options. */
+  bg: 'aurora' | 'grid' | 'stars' | 'circuit' | 'plain' | 'photo';
+  bgDim: number;
+  uiText: 's' | 'm' | 'l' | 'xl';
+  uiCorners: 'round' | 'soft' | 'sharp';
+  uiPanels: 'glass' | 'solid' | 'outline';
+  uiChat: 'bubbles' | 'minimal';
+  uiCompact: boolean;
+  uiScan: boolean;
+  /** Driving mode reads new messages out. */
+  readOut: boolean;
   /** Android app: the shift app to read, setting shift alarms by themselves, and which are set. */
   shiftApp: string;
   shiftAppName: string;
@@ -247,6 +258,15 @@ const DEFAULTS: State = {
   snow: true,
   personality: null,
   promptsMine: false,
+  bg: 'aurora',
+  bgDim: 60,
+  uiText: 'm',
+  uiCorners: 'round',
+  uiPanels: 'glass',
+  uiChat: 'bubbles',
+  uiCompact: false,
+  uiScan: false,
+  readOut: true,
   shiftApp: '',
   shiftAppName: '',
   autoAlarms: true,
@@ -395,6 +415,9 @@ function systemText(): string {
     `You are running in ${S.name}'s phone app. The user's PC may be off, so you cannot control the PC, its files or apps here (when the PC is on and connected, the user's messages go to the PC's Alton instead, which can).`,
     "Messages are often spoken and turned into text by the phone, so words can be misheard (the user has a UK, possibly Welsh, accent). Work out what they most likely meant; if it could mean different things, ask a short question. Don't comment on the mistakes.",
     'Ideas for improving Alton: when the user wishes you could do something, a request fails because you lack a feature, or they suggest an improvement, add a short specific idea to the list "Alton roadmap" with add_to_list (it syncs to the PC roadmap) and mention it briefly.',
+    driving
+      ? 'DRIVING MODE: the user is driving and hears your reply read aloud. Answer in one or two short spoken sentences, no lists, links or formatting. For texts and replies, get them ready (send_message / reply_message): the user confirms by saying "send it". Never ask them to look at or tap the screen unless unavoidable.'
+      : '',
     isApp
       ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a Send button the user taps), read_calendar for what's on, find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar). Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone powers)."
       : '',
@@ -596,7 +619,8 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
     chat.updatedAt = Date.now();
     save();
     renderMsgs();
-    if (handsFree) say(reply.text, true, () => handsFree && !busy && toggleMic());
+    if (driving) driveAfterReply(reply);
+    else if (handsFree) say(reply.text, true, () => handsFree && !busy && toggleMic());
     else say(reply.text);
   }
 }
@@ -809,7 +833,8 @@ function send(text?: string, expanded = false, typed?: string): void {
   }
   save();
   renderMsgs('Thinking…');
-  if (usePcNow()) void askPc(c, imgs);
+  // While driving, the phone answers itself so texts can be confirmed by voice.
+  if (usePcNow() && !driving) void askPc(c, imgs);
   else
     void ask(
       c,
@@ -1297,6 +1322,7 @@ async function askPc(chat: PhoneChat, imgs: Array<{ data: string; thumb: string 
   chat.updatedAt = Date.now();
   save();
   renderMsgs();
+  if (driving) return driveAfterReply(reply);
   if (handsFree) say(reply.text, true, () => handsFree && !busy && toggleMic());
   else say(reply.text);
 }
@@ -1383,6 +1409,264 @@ function renderAbout(): void {
     `${isApp ? 'Android app' : 'Phone app'} ${__APP_VERSION__}${newVersion ? ` (update ${newVersion} ready)` : ''}${
       S.pcVersion ? ` · PC Alton ${S.pcVersion}` : ''
     }`;
+}
+
+/* ── Background style and interface options (this phone only) ── */
+const BG_KEY = 'alton-bg-photo';
+function applyUi(): void {
+  const b = document.body;
+  if (S.bg === 'aurora' || (S.bg === 'photo' && !ls.get(BG_KEY))) delete b.dataset.bg;
+  else b.dataset.bg = S.bg;
+  const photo = ls.get(BG_KEY);
+  b.style.setProperty('--bg-photo', photo ? `url("${photo}")` : 'none');
+  b.style.setProperty('--bg-dim', String((S.bgDim || 60) / 100));
+  const h = document.documentElement;
+  h.dataset.text = S.uiText;
+  h.dataset.corners = S.uiCorners;
+  h.dataset.panels = S.uiPanels;
+  h.dataset.chat = S.uiChat;
+  h.classList.toggle('compact', S.uiCompact);
+  h.classList.toggle('scan', S.uiScan);
+}
+function renderUiSettings(): void {
+  $<HTMLSelectElement>('bgPick').value = S.bg;
+  $('bgDimRow').hidden = S.bg !== 'photo';
+  $<HTMLInputElement>('bgDim').value = String(S.bgDim);
+  $<HTMLSelectElement>('uiText').value = S.uiText;
+  $<HTMLSelectElement>('uiCorners').value = S.uiCorners;
+  $<HTMLSelectElement>('uiPanels').value = S.uiPanels;
+  $<HTMLSelectElement>('uiChat').value = S.uiChat;
+  for (const [id, on] of [
+    ['uiCompact', S.uiCompact],
+    ['uiScan', S.uiScan],
+  ] as const) {
+    $(id).classList.toggle('on', on);
+    $(id).textContent = on ? '✓' : '';
+  }
+}
+function wireUi(): void {
+  const set = (ch: Partial<State>): void => {
+    S = { ...S, ...ch };
+    save();
+    applyUi();
+    renderUiSettings();
+  };
+  $<HTMLSelectElement>('bgPick').onchange = (e) => {
+    const v = (e.target as HTMLSelectElement).value as State['bg'];
+    if (v === 'photo') $('bgFile').click();
+    set({ bg: v });
+  };
+  $<HTMLInputElement>('bgFile').onchange = async (e) => {
+    const f = (e.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    try {
+      const data = await shrink(f, 1400, 0.8);
+      ls.set(BG_KEY, `data:image/jpeg;base64,${data}`);
+      set({ bg: 'photo' });
+      toast('Background set.');
+    } catch {
+      toast('Couldn’t use that picture.');
+    }
+  };
+  $<HTMLInputElement>('bgDim').onchange = (e) =>
+    set({ bgDim: Number((e.target as HTMLInputElement).value) });
+  $<HTMLSelectElement>('uiText').onchange = (e) =>
+    set({ uiText: (e.target as HTMLSelectElement).value as State['uiText'] });
+  $<HTMLSelectElement>('uiCorners').onchange = (e) =>
+    set({ uiCorners: (e.target as HTMLSelectElement).value as State['uiCorners'] });
+  $<HTMLSelectElement>('uiPanels').onchange = (e) =>
+    set({ uiPanels: (e.target as HTMLSelectElement).value as State['uiPanels'] });
+  $<HTMLSelectElement>('uiChat').onchange = (e) =>
+    set({ uiChat: (e.target as HTMLSelectElement).value as State['uiChat'] });
+  $('uiCompact').onclick = () => set({ uiCompact: !S.uiCompact });
+  $('uiScan').onclick = () => set({ uiScan: !S.uiScan });
+}
+
+/* ── Driving mode: hands-free while Alton is on screen ── */
+let driving = false;
+let drvRecog: Recog | null = null;
+let drvStopAvatar: () => void = () => undefined;
+let drvPending: { run: () => Promise<string> } | null = null;
+const WAKE = ['alton', 'halton', 'alden', 'elton', 'olton', 'walton', 'all ten', 'alt on'];
+function wakeMatch(t: string): string | null {
+  const names = [...new Set([S.name.toLowerCase(), ...WAKE])].map((n) =>
+    n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+  );
+  const m = new RegExp(`^(?:hey |ok |okay )?(?:${names.join('|')})\\b[\\s,.!?]*`, 'i').exec(
+    t.trim(),
+  );
+  return m ? t.trim().slice(m[0].length).trim() : null;
+}
+const dvStatus = (t: string): void => {
+  $('dvStatus').textContent = t;
+};
+function dvSay(text: string, then: () => void): void {
+  drvRecog?.stop();
+  dvStatus('Speaking…');
+  stopSpeaking();
+  speak(plain(text).slice(0, 1500), { rate: S.voiceRate || 1, voice: S.voiceName, onend: then });
+}
+function driveListen(needWake: boolean): void {
+  if (!driving) return;
+  if (busy || isSpeaking()) {
+    setTimeout(() => driveListen(needWake), 700);
+    return;
+  }
+  const W = window as unknown as {
+    SpeechRecognition?: new () => Recog;
+    webkitSpeechRecognition?: new () => Recog;
+  };
+  const R = W.SpeechRecognition ?? W.webkitSpeechRecognition;
+  if (!R) return dvStatus('Voice isn’t available on this phone.');
+  const r = new R();
+  drvRecog = r;
+  r.lang = 'en-GB';
+  r.interimResults = false;
+  let heard = '';
+  dvStatus(needWake ? `Say “${S.name}…”` : 'Listening…');
+  $('dvTalk').classList.toggle('live', !needWake);
+  r.onresult = (e) => {
+    heard = e.results[0]?.[0]?.transcript ?? '';
+  };
+  r.onerror = () => undefined;
+  r.onend = () => {
+    drvRecog = null;
+    $('dvTalk').classList.remove('live');
+    if (driving) void driveHeard(applyFixes(heard, S.voiceFixes), needWake);
+  };
+  r.start();
+}
+const MUSIC: Array<[RegExp, Parameters<typeof Native.media>[0]['action'], string]> = [
+  [/^(next|skip)( (song|track|one))?\b/i, 'next', 'Next song'],
+  [/^(previous|last|go back)( (song|track))?\b/i, 'previous', 'Previous song'],
+  [/^(pause|stop)( (the )?(music|song))?$/i, 'pause', 'Paused'],
+  [/^(play|resume)( (the )?(music|song))?$/i, 'play', 'Playing'],
+  [/^(turn (it )?up|volume up|louder)\b/i, 'volume_up', 'Louder'],
+  [/^(turn (it )?down|volume down|quieter)\b/i, 'volume_down', 'Quieter'],
+];
+async function driveHeard(t: string, needWake: boolean): Promise<void> {
+  let cmd = t.trim();
+  if (!cmd) return driveListen(true);
+  if (needWake) {
+    const rest = wakeMatch(cmd);
+    if (rest === null) return driveListen(true);
+    if (!rest) return dvSay('Yes?', () => driveListen(false));
+    cmd = rest;
+  }
+  $('dvHeard').textContent = `“${cmd}”`;
+  if (drvPending) {
+    const p = drvPending;
+    drvPending = null;
+    if (/^(yes|yeah|yep|send( it)?|go( ahead)?|do it|ok(ay)?|sure)\b/i.test(cmd)) {
+      const msg = await p.run();
+      return dvSay(msg, () => driveListen(true));
+    }
+    if (/^(no|nope|cancel|don'?t|never ?mind)\b/i.test(cmd))
+      return dvSay('Cancelled.', () => driveListen(true));
+  }
+  if (/^(stop|exit|end|close) driving( mode)?/i.test(cmd)) return exitDriving();
+  for (const [re, action, label] of MUSIC)
+    if (re.test(cmd)) {
+      await Native.media({ action }).catch(() => undefined);
+      dvStatus(label);
+      setTimeout(() => driveListen(true), 400);
+      return;
+    }
+  dvStatus('Thinking…');
+  $('dvReply').textContent = '';
+  send(cmd);
+}
+/** After Alton answers in Driving mode: say it, and offer to send anything it got ready. */
+function driveAfterReply(reply: PhoneMessage): void {
+  const text = plain(reply.text || '');
+  $('dvReply').textContent = text;
+  drvPending = null;
+  let extra = '';
+  for (const a of reply.actions ?? []) {
+    if (a.reply) {
+      const r = a.reply;
+      drvPending = {
+        run: () =>
+          Native.replyMessage(r).then(
+            () => 'Sent.',
+            (e: Error) => `Couldn’t send it: ${e.message}`,
+          ),
+      };
+      break;
+    }
+    const m = a.href ? /^sms:([+\d]+)\?&?body=(.*)$/i.exec(a.href) : null;
+    if (m?.[1]) {
+      const to = m[1];
+      const body = decodeURIComponent(m[2] ?? '');
+      drvPending = {
+        run: () =>
+          Native.sendSms({ to, text: body }).then(
+            () => 'Text sent.',
+            (e: Error) => `Couldn’t send it: ${e.message}`,
+          ),
+      };
+      break;
+    }
+    if (a.href && /wa\.me|whatsapp/i.test(a.href))
+      extra = ' WhatsApp only sends when you tap it, so it’s ready on the screen.';
+  }
+  const ask = drvPending ? ' Say “send it” to send, or “cancel”.' : '';
+  dvSay(`${text}${extra}${ask}`, () => driveListen(!drvPending));
+}
+function enterDriving(listenNow: boolean): void {
+  if (!isApp) return;
+  driving = true;
+  $('drive').hidden = false;
+  void Native.keepScreenOn({ on: true }).catch(() => undefined);
+  setView('chat');
+  if (!chat() || chat()?.title !== 'Driving') {
+    const c = newChat(false);
+    c.title = 'Driving';
+  }
+  $('dvHeard').textContent = '';
+  $('dvReply').textContent =
+    `Say “${S.name}” then what you need: “text Sam I’m on my way”, “next song”, “any messages?”`;
+  drvStopAvatar();
+  const cv = $<HTMLCanvasElement>('dvAvatar');
+  requestAnimationFrame(() => (drvStopAvatar = mountAvatar(cv)));
+  driveListen(!listenNow);
+}
+function exitDriving(): void {
+  driving = false;
+  drvPending = null;
+  drvRecog?.stop();
+  drvRecog = null;
+  stopSpeaking();
+  drvStopAvatar();
+  $('drive').hidden = true;
+  void Native.keepScreenOn({ on: false }).catch(() => undefined);
+}
+function wireDriving(): void {
+  if (!isApp) return;
+  $('tdDrive').hidden = false;
+  $('tdDrive').onclick = () => enterDriving(false);
+  $('dvExit').onclick = exitDriving;
+  $('dvTalk').onclick = () => {
+    drvRecog?.stop();
+    setTimeout(() => driveListen(false), 300);
+  };
+  document.querySelectorAll<HTMLButtonElement>('#drive [data-dm]').forEach((b) => {
+    b.onclick = () =>
+      void Native.media({ action: b.dataset.dm as Parameters<typeof Native.media>[0]['action'] });
+  });
+  // New messages are read out while driving.
+  void Native.addListener('message', (m) => {
+    if (!driving || !S.readOut || busy) return;
+    dvSay(
+      `New ${m.app} message from ${m.from}: ${m.text.slice(0, 300)}.${m.canReply ? ` Say “${S.name}, reply” to answer.` : ''}`,
+      () => driveListen(true),
+    );
+  });
+  // Opened with the assistant button: straight into Driving mode, already listening.
+  void Native.addListener('assist', () => enterDriving(true));
+  void Native.takeAssist().then((r) => {
+    if (r.assist) enterDriving(true);
+  });
 }
 
 /* ── Background: edge glow by time of day, and snow in December ── */
@@ -1735,6 +2019,11 @@ async function appTool(
           : `No contact called ${o.name}. Ask the user for the number.`,
       };
     }
+    if (name === 'media_control') {
+      const action = String(o.action ?? '') as Parameters<typeof Native.media>[0]['action'];
+      await Native.media({ action });
+      return { result: 'Done.' };
+    }
     if (name === 'read_shift_app') {
       const text = await readShiftApp();
       return text.ok
@@ -1851,12 +2140,23 @@ async function renderPowers(): Promise<void> {
   $('pwAlarms').classList.toggle('on', S.autoAlarms);
   $('pwAlarms').textContent = S.autoAlarms ? '✓' : '';
   $('pwApp').textContent = S.shiftAppName || 'Choose…';
+  $('pwReadOut').classList.toggle('on', S.readOut);
+  $('pwReadOut').textContent = S.readOut ? '✓' : '';
 }
 function wirePowers(): void {
   if (!isApp) return;
   $('pwMsgs').onclick = () => void Native.openSettings({ which: 'messages' });
   $('pwScreen').onclick = () => void Native.openSettings({ which: 'screenReader' });
   $('pwRestricted').onclick = () => void Native.openSettings({ which: 'app' });
+  $('pwAssist').onclick = () => {
+    toast('Choose “Digital assistant app”, then pick Alton.');
+    void Native.openSettings({ which: 'assistant' });
+  };
+  $('pwReadOut').onclick = () => {
+    S.readOut = !S.readOut;
+    save();
+    void renderPowers();
+  };
   $('pwCal').onclick = async () => {
     await Native.requestAccess({ which: 'calendar' }).catch(() => undefined);
     void renderPowers();
@@ -2029,6 +2329,7 @@ function applyLook(): void {
   const k = AVATAR_STEPS.size[S.avatarSize - 1] ?? 1;
   document.documentElement.style.setProperty('--av-size', `${Math.round(190 * k)}px`);
   applyAmbient();
+  applyUi();
   stopHeader();
   const c = $<HTMLCanvasElement>('hdrAvatar');
   c.hidden = S.avatar === 'none';
@@ -2752,6 +3053,22 @@ function toggleMic(): void {
 
 /* ── People, lists, memories ── */
 async function pickContact(forName?: string): Promise<void> {
+  if (isApp) {
+    try {
+      const c = await Native.pickContact();
+      const name = forName ?? (c.name || 'Contact');
+      S.people = [
+        ...S.people.filter((x) => x.name.toLowerCase() !== name.toLowerCase()),
+        { name, ...(c.phone ? { phone: c.phone } : {}) },
+      ];
+      save();
+      renderPeople();
+      toast(forName ? `Saved ${forName}. Ask again and it’ll work.` : `Saved ${name}.`);
+    } catch (e) {
+      if (!/No contact chosen/.test((e as Error).message)) toast((e as Error).message);
+    }
+    return;
+  }
   const nav = navigator as unknown as {
     contacts?: {
       select(
@@ -3443,6 +3760,7 @@ function setView(v: string): void {
     renderSettings();
     renderAbout();
     renderLook();
+    renderUiSettings();
     renderPersonality();
     renderPrompts();
     void renderPowers();
@@ -3742,7 +4060,9 @@ function wire(): void {
   };
   wirePc();
   wireLook();
+  wireUi();
   wirePowers();
+  wireDriving();
   // The background follows the time of day.
   setInterval(applyAmbient, 10 * 60_000);
   // People & lists: one section at a time (remembered).

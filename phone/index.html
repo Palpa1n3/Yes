@@ -1061,6 +1061,201 @@
         pointer-events: none;
         z-index: 41;
       }
+      /* ── Backgrounds ── */
+      body[data-bg='grid'] {
+        background:
+          linear-gradient(rgba(63, 208, 255, 0.07) 1px, transparent 1px) 0 0 / 28px 28px,
+          linear-gradient(90deg, rgba(63, 208, 255, 0.07) 1px, transparent 1px) 0 0 / 28px 28px,
+          radial-gradient(900px 500px at 50% -10%, rgba(63, 208, 255, 0.12), transparent 60%),
+          var(--bg);
+      }
+      body[data-bg='stars'] {
+        background:
+          radial-gradient(1px 1px at 20% 30%, #fff8, transparent),
+          radial-gradient(1px 1px at 70% 20%, #fff6, transparent),
+          radial-gradient(1.5px 1.5px at 40% 70%, #fff7, transparent),
+          radial-gradient(1px 1px at 85% 60%, #fff5, transparent),
+          radial-gradient(1px 1px at 10% 85%, #fff6, transparent),
+          radial-gradient(1px 1px at 55% 45%, #fff4, transparent),
+          radial-gradient(1.5px 1.5px at 90% 90%, #fff6, transparent),
+          radial-gradient(1200px 700px at 50% 120%, rgba(90, 60, 180, 0.18), transparent 60%),
+          #03060c;
+        background-size:
+          240px 240px,
+          300px 300px,
+          260px 260px,
+          320px 320px,
+          280px 280px,
+          200px 200px,
+          340px 340px,
+          100% 100%,
+          100% 100%;
+      }
+      body[data-bg='circuit'] {
+        background:
+          repeating-linear-gradient(90deg, transparent 0 46px, rgba(63, 208, 255, 0.06) 46px 47px),
+          repeating-linear-gradient(0deg, transparent 0 62px, rgba(63, 208, 255, 0.05) 62px 63px),
+          radial-gradient(700px 500px at 100% 0%, rgba(63, 208, 255, 0.1), transparent 60%),
+          var(--bg);
+      }
+      body[data-bg='plain'] {
+        background: var(--bg);
+      }
+      body[data-bg='photo'] {
+        background:
+          linear-gradient(rgba(3, 7, 12, var(--bg-dim, 0.6)), rgba(3, 7, 12, var(--bg-dim, 0.6))),
+          var(--bg-photo) center / cover no-repeat fixed,
+          var(--bg);
+      }
+      /* ── Interface options ── */
+      html[data-text='s'] body {
+        font-size: 13.5px;
+      }
+      html[data-text='l'] body {
+        font-size: 17px;
+      }
+      html[data-text='xl'] body {
+        font-size: 19px;
+      }
+      html[data-corners='soft'] {
+        --r: 10px;
+      }
+      html[data-corners='soft'] .card,
+      html[data-corners='soft'] details.grp,
+      html[data-corners='soft'] .btn,
+      html[data-corners='soft'] .input {
+        border-radius: 10px;
+      }
+      html[data-corners='sharp'] .card,
+      html[data-corners='sharp'] details.grp,
+      html[data-corners='sharp'] .btn,
+      html[data-corners='sharp'] .input,
+      html[data-corners='sharp'] .me,
+      html[data-corners='sharp'] .composer .box {
+        border-radius: 3px;
+      }
+      html[data-panels='solid'] .card,
+      html[data-panels='solid'] details.grp {
+        background: var(--panel);
+        box-shadow: none;
+      }
+      html[data-panels='outline'] .card,
+      html[data-panels='outline'] details.grp {
+        background: transparent;
+        box-shadow: none;
+        border-color: rgba(63, 208, 255, 0.35);
+      }
+      html[data-chat='minimal'] .me {
+        background: none;
+        border: 0;
+        border-left: 2px solid var(--accent);
+        border-radius: 0;
+        align-self: stretch;
+        padding-left: 10px;
+      }
+      html.compact .card {
+        padding: 10px 12px;
+        margin-bottom: 8px;
+      }
+      html.compact .view {
+        padding: 8px 10px 14px;
+      }
+      html.compact .li {
+        padding: 6px 0;
+      }
+      html.scan body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 42;
+        background: repeating-linear-gradient(
+          0deg,
+          rgba(255, 255, 255, 0.025) 0 1px,
+          transparent 1px 3px
+        );
+      }
+      .steps.two {
+        grid-template-columns: 1fr 1fr;
+      }
+      .steps select {
+        margin-top: 4px;
+        padding: 8px 10px;
+      }
+      /* ── Driving mode ── */
+      .drive {
+        position: fixed;
+        inset: 0;
+        z-index: 95;
+        background:
+          radial-gradient(800px 600px at 50% 30%, rgba(63, 208, 255, 0.12), transparent 60%),
+          #02060b;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: calc(14px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
+        gap: 14px;
+      }
+      .drive[hidden] {
+        display: none;
+      }
+      .dv-top {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 18px;
+        color: var(--ice);
+      }
+      .dv-avatar {
+        width: min(62vw, 300px);
+        height: min(62vw, 300px);
+      }
+      .dv-heard {
+        font-size: 18px;
+        color: var(--muted);
+        text-align: center;
+        min-height: 1.5em;
+      }
+      .dv-reply {
+        flex: 1;
+        overflow-y: auto;
+        font-size: 24px;
+        line-height: 1.35;
+        text-align: center;
+        color: var(--text);
+        width: 100%;
+      }
+      .dv-bar {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+      }
+      .dv-btn {
+        width: 68px;
+        height: 68px;
+        border-radius: 50%;
+        border: 1px solid var(--line);
+        background: var(--raised);
+        font-size: 26px;
+      }
+      .dv-btn.big {
+        width: 92px;
+        height: 92px;
+        font-size: 36px;
+        background: rgba(63, 208, 255, 0.2);
+        border-color: var(--accent);
+        box-shadow: 0 0 22px rgba(63, 208, 255, 0.35);
+      }
+      .dv-btn.live {
+        background: rgba(255, 77, 94, 0.25);
+        border-color: var(--alert);
+      }
+      .drive-go {
+        margin-bottom: 14px;
+        padding: 14px;
+        font-size: 16px;
+      }
       /* ══ 0.25 overhaul ══ */
       body {
         font-size: 15px;
@@ -1344,6 +1539,21 @@
     </style>
   </head>
   <body>
+    <div id="drive" class="drive" hidden>
+      <div class="dv-top">
+        <span id="dvStatus">Say “Alton…”</span>
+        <button class="btn" id="dvExit">Exit</button>
+      </div>
+      <canvas id="dvAvatar" class="dv-avatar" aria-hidden="true"></canvas>
+      <div id="dvHeard" class="dv-heard"></div>
+      <div id="dvReply" class="dv-reply"></div>
+      <div class="dv-bar">
+        <button class="dv-btn" data-dm="previous" aria-label="Previous song">⏮</button>
+        <button class="dv-btn" data-dm="play_pause" aria-label="Play or pause">⏯</button>
+        <button class="dv-btn" data-dm="next" aria-label="Next song">⏭</button>
+        <button class="dv-btn big" id="dvTalk" aria-label="Talk now">🎤</button>
+      </div>
+    </div>
     <div id="tint" class="tint" aria-hidden="true"></div>
     <canvas id="snow" class="snow" aria-hidden="true"></canvas>
     <div id="cam" class="cam" hidden>
@@ -1513,6 +1723,9 @@
           </div>
           <div class="shiftcard" id="shiftCard" hidden></div>
           <div class="nudge" id="backupNudge" hidden></div>
+          <button class="btn acc full drive-go" id="tdDrive" hidden>
+            🚗 Driving mode: hands-free
+          </button>
           <div class="card" id="tdWork">
             <div class="lbl"><span class="dot"></span>Work</div>
             <div id="tdShifts"></div>
@@ -1874,6 +2087,27 @@
                 ><button class="btn" id="pwApp" style="padding: 6px 10px"></button>
               </div>
               <div id="pwAppList" hidden style="max-height: 260px; overflow-y: auto"></div>
+              <h3 class="sub">Hands-free &amp; driving</h3>
+              <p class="muted small">
+                Driving mode keeps listening while Alton is on screen (phone in a car mount): say
+                “Alton, text Sam I’m on my way” or “Alton, next song”. It reads new messages out and
+                sends only after you say “send it”.
+              </p>
+              <div class="li">
+                <span style="flex: 1"
+                  >Open Alton with the assistant button<br /><small class="muted"
+                    >Choose Alton as the “Digital assistant app”; then long-press the home button
+                    (or swipe up from a bottom corner) to open it already listening</small
+                  ></span
+                ><button class="btn" id="pwAssist" style="padding: 6px 10px">Set up</button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Read new messages out in Driving mode<br /><small class="muted"
+                    >Needs “Read &amp; reply to messages”</small
+                  ></span
+                ><button class="check" id="pwReadOut"></button>
+              </div>
               <button class="btn acc full" id="pwRead" style="margin-top: 8px">
                 Read my rota now
               </button>
@@ -1964,6 +2198,63 @@
                 <label class="muted"
                   >Motion <input type="range" id="avMotion" min="1" max="5" step="1"
                 /></label>
+              </div>
+              <h3 class="sub">Background</h3>
+              <select id="bgPick" class="input" style="margin-top: 4px">
+                <option value="aurora">Aurora glow</option>
+                <option value="grid">Holo grid</option>
+                <option value="stars">Starfield</option>
+                <option value="circuit">Circuit lines</option>
+                <option value="plain">Plain dark</option>
+                <option value="photo">My own picture…</option>
+              </select>
+              <input type="file" id="bgFile" accept="image/*" hidden />
+              <label class="muted" id="bgDimRow" style="display: block; margin-top: 8px"
+                >Picture darkness
+                <input type="range" id="bgDim" min="20" max="90" step="5" style="width: 100%"
+              /></label>
+              <h3 class="sub">Interface</h3>
+              <div class="steps two">
+                <label class="muted"
+                  >Text size
+                  <select id="uiText" class="input">
+                    <option value="s">Small</option>
+                    <option value="m">Normal</option>
+                    <option value="l">Large</option>
+                    <option value="xl">Extra large</option>
+                  </select></label
+                >
+                <label class="muted"
+                  >Corners
+                  <select id="uiCorners" class="input">
+                    <option value="round">Round</option>
+                    <option value="soft">Soft</option>
+                    <option value="sharp">Sharp</option>
+                  </select></label
+                >
+                <label class="muted"
+                  >Panels
+                  <select id="uiPanels" class="input">
+                    <option value="glass">Glass</option>
+                    <option value="solid">Solid</option>
+                    <option value="outline">Outline</option>
+                  </select></label
+                >
+                <label class="muted"
+                  >Chat style
+                  <select id="uiChat" class="input">
+                    <option value="bubbles">Bubbles</option>
+                    <option value="minimal">Minimal</option>
+                  </select></label
+                >
+              </div>
+              <div class="li">
+                <span style="flex: 1">Compact spacing</span
+                ><button class="check" id="uiCompact"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1">Holo scanlines</span
+                ><button class="check" id="uiScan"></button>
               </div>
               <div class="li">
                 <span style="flex: 1"

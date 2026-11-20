@@ -1,6 +1,6 @@
 /** The Android app's native features, with the browser's own as the fallback, so the same
  *  phone app works both as a web page and inside the app (Capacitor). */
-import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
 import { LocalNotifications } from '@capacitor/local-notifications';
@@ -233,7 +233,7 @@ export interface PowerStatus {
 }
 interface AltonNativePlugin {
   status(): Promise<PowerStatus>;
-  openSettings(o: { which: 'messages' | 'screenReader' | 'app' }): Promise<void>;
+  openSettings(o: { which: 'messages' | 'screenReader' | 'app' | 'assistant' }): Promise<void>;
   requestAccess(o: { which: 'calendar' | 'contacts' }): Promise<{ granted: boolean }>;
   getMessages(): Promise<{ messages: AppMessage[] }>;
   replyMessage(o: { id: string; text: string }): Promise<void>;
@@ -252,6 +252,15 @@ interface AltonNativePlugin {
   findContacts(o: { name: string }): Promise<{ contacts: Array<{ name: string; phone: string }> }>;
   listApps(): Promise<{ apps: Array<{ name: string; package: string }> }>;
   readApp(o: { package: string }): Promise<{ text: string }>;
+  takeAssist(): Promise<{ assist: boolean }>;
+  keepScreenOn(o: { on: boolean }): Promise<void>;
+  media(o: {
+    action: 'next' | 'previous' | 'pause' | 'play' | 'play_pause' | 'volume_up' | 'volume_down';
+  }): Promise<void>;
+  sendSms(o: { to: string; text: string }): Promise<void>;
+  pickContact(): Promise<{ name: string; phone: string }>;
+  addListener(event: 'assist', fn: () => void): Promise<PluginListenerHandle>;
+  addListener(event: 'message', fn: (m: AppMessage) => void): Promise<PluginListenerHandle>;
 }
 /** The app's own native code (android/app/src/main/java/com/alton/phone/AltonNativePlugin.java). */
 export const Native = registerPlugin<AltonNativePlugin>('AltonNative');

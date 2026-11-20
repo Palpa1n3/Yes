@@ -63,23 +63,33 @@ public class MessageListener extends NotificationListenerService {
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
-        take(sbn);
+        Entry e = take(sbn);
+        if (e != null) {
+            JSObject o = new JSObject();
+            o.put("id", e.key);
+            o.put("app", e.app);
+            o.put("from", e.from);
+            o.put("text", e.text);
+            o.put("at", e.at);
+            o.put("canReply", e.reply != null);
+            AltonNativePlugin.newMessage(o);
+        }
     }
 
-    private void take(StatusBarNotification sbn) {
-        if (sbn == null || getPackageName().equals(sbn.getPackageName())) return;
+    private Entry take(StatusBarNotification sbn) {
+        if (sbn == null || getPackageName().equals(sbn.getPackageName())) return null;
         Notification n = sbn.getNotification();
-        if (n == null) return;
+        if (n == null) return null;
         Notification.Action reply = replyAction(n);
         boolean isMessage = Notification.CATEGORY_MESSAGE.equals(n.category) || reply != null;
-        if (!isMessage) return;
-        if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return;
+        if (!isMessage) return null;
+        if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) return null;
         Bundle ex = n.extras;
-        if (ex == null) return;
+        if (ex == null) return null;
         CharSequence title = ex.getCharSequence(Notification.EXTRA_TITLE);
         CharSequence text = ex.getCharSequence(Notification.EXTRA_BIG_TEXT);
         if (text == null) text = ex.getCharSequence(Notification.EXTRA_TEXT);
-        if (title == null || text == null) return;
+        if (title == null || text == null) return null;
         Entry e = new Entry();
         e.key = sbn.getKey();
         e.pkg = sbn.getPackageName();
@@ -96,6 +106,7 @@ public class MessageListener extends NotificationListenerService {
                 recent.remove(first);
             }
         }
+        return e;
     }
 
     private static Notification.Action replyAction(Notification n) {
