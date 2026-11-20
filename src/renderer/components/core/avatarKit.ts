@@ -52,3 +52,28 @@ export const soundsConfused = (text: string): boolean =>
   /\b(not sure what you mean|didn'?t (quite )?catch|did you mean|could you (say|repeat)|sorry,? (i )?(didn'?t|don'?t) (understand|follow)|what do you mean)\b/i.test(
     text,
   );
+
+/** What a drawing loop reads every frame (kept current by its host). */
+export interface LiveAvatar {
+  state: import('@shared/types').AssistantState;
+  reducedMotion: boolean;
+  getLevel: () => number;
+  center: { x: number; y: number };
+  radius: number;
+  /** The latest reply and when it came (the face reacts to it). */
+  lastReply?: () => { text: string; at: number } | null;
+}
+
+/** How a reply sounds: pleased, apologetic, a question, or neutral. */
+export function replyMood(text: string): 'excited' | 'sorry' | 'question' | 'neutral' {
+  const t = text.slice(0, 400);
+  if (/\b(sorry|unfortunately|apologi[sz]e|my mistake|couldn['’]?t|failed)\b/i.test(t))
+    return 'sorry';
+  if (
+    (t.match(/!/g) ?? []).length >= 1 ||
+    /\b(great|brilliant|awesome|congrat|done!|nice)\b/i.test(t)
+  )
+    return 'excited';
+  if (/\?\s*$/.test(t.trim())) return 'question';
+  return 'neutral';
+}

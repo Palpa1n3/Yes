@@ -42,8 +42,30 @@ import {
 } from './pc';
 import { hoursSvg, mondayOf, weekSvg, weeksSummary } from '@shared/shiftChart';
 import { runAvatar } from '../../src/renderer/components/core/engines';
-import { hexToChannels } from '../../src/renderer/components/core/avatarKit';
-import type { PhoneAvatar } from '@shared/looks';
+import {
+  hexToChannels,
+  setAvatarMotion,
+  type LiveAvatar,
+} from '../../src/renderer/components/core/avatarKit';
+import { runCodeRing } from '../../src/renderer/components/core/codeRing';
+import { runSphere } from '../../src/renderer/components/core/sphere';
+import { runFace } from '../../src/renderer/components/core/face';
+import { runRings } from '../../src/renderer/components/core/rings';
+import {
+  PHONE_AVATARS,
+  THEME_ACCENT,
+  THEME_NAMES,
+  isPhoneAvatar,
+  type PhoneAvatar,
+} from '@shared/looks';
+import { AVATAR_STEPS, type AssistantState, type ThemeId } from '@shared/types';
+import {
+  PRESETS,
+  buildSystemPrompt,
+  sanitizePersonality,
+  type Personality,
+} from '@shared/personalities';
+import { dayPhase, isFestive, tintFor } from '@shared/ambient';
 import { addFix, applyFixes, learnFix, type VoiceFix } from '@shared/vocab';
 import {
   alarmFor,
@@ -79,6 +101,7 @@ import {
   expandPrompt,
   matchPromptCommand,
   needsText,
+  promptName,
   sanitizePrompts,
   type SavedPrompt,
 } from '@shared/prompts';
@@ -130,6 +153,20 @@ interface State {
   reminders: Array<{ what: string; at: number }>;
   /** The PC's HTTPS address over Tailscale (tailscale serve), for automatic switching. */
   pcHttps: string;
+  /** Follow the PC's look / personality when connected (off: this phone's own). */
+  matchLook: boolean;
+  matchPersonality: boolean;
+  theme: ThemeId;
+  /** Avatar size, glow and motion, steps 1–5 (like the PC). */
+  avatarSize: number;
+  avatarGlow: number;
+  avatarMotion: number;
+  timeTint: boolean;
+  snow: boolean;
+  /** This phone's own personality (used when not following the PC). */
+  personality: Personality | null;
+  /** Saved prompts were changed on the phone: keep them rather than the PC's. */
+  promptsMine: boolean;
   /** Send chats to the PC's Alton (full tools) when connected. */
   usePc: boolean;
   /** The connected PC's name and Alton version. */
@@ -193,6 +230,16 @@ const DEFAULTS: State = {
   voiceFixes: [],
   reminders: [],
   pcHttps: '',
+  matchLook: true,
+  matchPersonality: true,
+  theme: 'arc-cyan',
+  avatarSize: 3,
+  avatarGlow: 3,
+  avatarMotion: 3,
+  timeTint: true,
+  snow: true,
+  personality: null,
+  promptsMine: false,
   usePc: true,
   pcName: '',
   pcVersion: '',
@@ -269,12 +316,28 @@ const android = /android/i.test(navigator.userAgent);
 const cleanTitle = (t: string): string => t.replace(/[*_`#]+/g, '').trim() || 'Chat';
 
 /* ── What the PC knows (from live sync, or an old #sync= link) ── */
+const step = (n: unknown, d: number): number =>
+  typeof n === 'number' && n >= 1 && n <= 5 ? Math.round(n) : d;
+function lookFromPc(l: SyncFromPc['look']): Partial<State> {
+  if (!l) return {};
+  return {
+    accent: /^#[0-9a-f]{6}$/i.test(l.accent) ? l.accent : S.accent,
+    avatar: isPhoneAvatar(l.avatar) ? l.avatar : S.avatar,
+    theme: l.theme && l.theme in THEME_ACCENT ? (l.theme as ThemeId) : S.theme,
+    avatarSize: step(l.size, S.avatarSize),
+    avatarGlow: step(l.glow, S.avatarGlow),
+    avatarMotion: step(l.motion, S.avatarMotion),
+    timeTint: typeof l.timeTint === 'boolean' ? l.timeTint : S.timeTint,
+  };
+}
 function applyFromPc(d: SyncFromPc): void {
   S = {
     ...S,
     name: d.name || S.name,
     userName: d.userName || S.userName,
     systemPrompt: d.systemPrompt || S.systemPrompt,
+    personality:
+      S.matchPersonality && d.personality ? sanitizePersonality(d.personality) : S.personality,
     model: d.model || S.model,
     memories: [...new Set([...d.memories, ...S.newMemories])],
     // Keep the phone's not-yet-sent additions, ticks and deletions on top of the PC's lists.
@@ -284,14 +347,9 @@ function applyFromPc(d: SyncFromPc): void {
     macs: d.macs?.length ? d.macs : S.macs,
     goals: d.goals ?? S.goals,
     notes: [...S.newNotes, ...(d.notes ?? S.notes)],
-    prompts: d.prompts ? sanitizePrompts(d.prompts) : S.prompts,
+    prompts: d.prompts && !S.promptsMine ? sanitizePrompts(d.prompts) : S.prompts,
     voiceFixes: (d.voiceFixes ?? []).reduce((acc, f) => addFix(acc, f), S.voiceFixes),
-    accent: /^#[0-9a-f]{6}$/i.test(d.look?.accent ?? '') ? (d.look?.accent ?? '') : S.accent,
-    avatar: (['orb', 'swarm', 'wave', 'head', 'none'] as const).includes(
-      d.look?.avatar as PhoneAvatar,
-    )
-      ? (d.look?.avatar as PhoneAvatar)
-      : S.avatar,
+    ...(S.matchLook ? lookFromPc(d.look) : {}),
     lastPcSync: Date.now(),
     pcHttps: isPcAddress(d.pcUrl.replace(/\/+$/, '')) ? d.pcUrl.replace(/\/+$/, '') : S.pcHttps,
   };
@@ -311,7 +369,14 @@ function takeHash(): void {
 /* ── Claude ── */
 function systemText(): string {
   const now = new Date();
+  const own =
+    !S.matchPersonality && S.personality
+      ? buildSystemPrompt({ ...S.personality, assistantName: S.name }, S.userName)
+          .replace("a desktop assistant running on the user's computer", 'a personal assistant')
+          .replace('To act on the computer, call a tool rather than describing the action.', '')
+      : '';
   const base =
+    own ||
     S.systemPrompt ||
     `You are ${S.name}, a friendly, capable personal assistant${S.userName ? ` for ${S.userName}` : ''}.`;
   return [
@@ -1265,6 +1330,268 @@ function renderAbout(): void {
     }`;
 }
 
+/* ── Background: edge glow by time of day, and snow in December ── */
+let stopSnow: () => void = () => undefined;
+function applyAmbient(): void {
+  const tint = tintFor(dayPhase(new Date().getHours()));
+  $('tint').style.background =
+    S.timeTint && tint.alpha > 0
+      ? `radial-gradient(ellipse at center, transparent 55%, rgb(${tint.color} / ${tint.alpha}) 100%)`
+      : 'none';
+  stopSnow();
+  stopSnow = () => undefined;
+  const c = $<HTMLCanvasElement>('snow');
+  const on =
+    S.snow && isFestive(new Date()) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  c.hidden = !on;
+  if (!on) return;
+  const ctx = c.getContext('2d');
+  if (!ctx) return;
+  const flakes = Array.from({ length: 36 }, () => ({
+    x: Math.random(),
+    y: Math.random(),
+    r: 0.6 + Math.random() * 1.8,
+    v: 0.02 + Math.random() * 0.04,
+    w: Math.random() * Math.PI * 2,
+  }));
+  let raf = 0;
+  let last = performance.now();
+  const frame = (now: number): void => {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    const px = window.devicePixelRatio || 1;
+    if (c.width !== innerWidth * px) {
+      c.width = innerWidth * px;
+      c.height = innerHeight * px;
+    }
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.fillStyle = 'rgba(220, 240, 255, 0.55)';
+    for (const f of flakes) {
+      f.y += f.v * dt;
+      f.w += dt;
+      if (f.y > 1.02) {
+        f.y = -0.02;
+        f.x = Math.random();
+      }
+      ctx.beginPath();
+      ctx.arc((f.x + Math.sin(f.w) * 0.01) * c.width, f.y * c.height, f.r * px, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (!document.hidden) raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+  const vis = (): void => {
+    cancelAnimationFrame(raf);
+    if (!document.hidden) raf = requestAnimationFrame(frame);
+  };
+  document.addEventListener('visibilitychange', vis);
+  stopSnow = () => {
+    cancelAnimationFrame(raf);
+    document.removeEventListener('visibilitychange', vis);
+    ctx.clearRect(0, 0, c.width, c.height);
+  };
+}
+
+/* ── Look, personality and saved prompts (Settings) ── */
+let stopPreview: () => void = () => undefined;
+function renderLook(): void {
+  const tick = (id: string, on: boolean): void => {
+    $(id).classList.toggle('on', on);
+    $(id).textContent = on ? '✓' : '';
+  };
+  tick('matchLookToggle', S.matchLook);
+  tick('tintToggle', S.timeTint);
+  tick('snowToggle', S.snow);
+  const sel = $<HTMLSelectElement>('avatarPick');
+  if (!sel.options.length)
+    for (const a of PHONE_AVATARS) {
+      const o = el('option', undefined, a.label) as HTMLOptionElement;
+      o.value = a.id;
+      sel.appendChild(o);
+    }
+  sel.value = S.avatar;
+  const sw = $('themePick');
+  sw.textContent = '';
+  for (const id of Object.keys(THEME_ACCENT) as ThemeId[]) {
+    const b = el('button');
+    b.style.background = THEME_ACCENT[id];
+    b.setAttribute('aria-label', THEME_NAMES[id]);
+    b.title = THEME_NAMES[id];
+    b.classList.toggle('on', S.theme === id && !S.accent);
+    b.onclick = () => setLook({ theme: id, accent: '' });
+    sw.appendChild(b);
+  }
+  $<HTMLInputElement>('accentPick').value = accentNow().slice(0, 7);
+  $<HTMLInputElement>('avSize').value = String(S.avatarSize);
+  $<HTMLInputElement>('avGlow').value = String(S.avatarGlow);
+  $<HTMLInputElement>('avMotion').value = String(S.avatarMotion);
+  stopPreview();
+  const pv = $<HTMLCanvasElement>('lookPreview');
+  requestAnimationFrame(() => (stopPreview = mountAvatar(pv)));
+}
+/** A change on the phone: it now has its own look (no longer following the PC). */
+function setLook(ch: Partial<State>): void {
+  const wasMatching = S.matchLook;
+  S = { ...S, ...ch, matchLook: false };
+  save();
+  applyLook();
+  renderLook();
+  if (wasMatching) toast('This phone now has its own look (Same look as my PC is off).');
+}
+function renderPersonality(): void {
+  $('matchPersToggle').classList.toggle('on', S.matchPersonality);
+  $('matchPersToggle').textContent = S.matchPersonality ? '✓' : '';
+  const p = S.personality ?? PRESETS[0];
+  if (!p) return;
+  $<HTMLInputElement>('asstName').value = S.name;
+  const pre = $<HTMLSelectElement>('persPreset');
+  if (!pre.options.length) {
+    for (const x of PRESETS) {
+      const o = el('option', undefined, x.name) as HTMLOptionElement;
+      o.value = x.id;
+      pre.appendChild(o);
+    }
+    const o = el('option', undefined, 'Custom') as HTMLOptionElement;
+    o.value = 'custom';
+    pre.appendChild(o);
+  }
+  pre.value = PRESETS.some((x) => x.id === p.id) ? p.id : 'custom';
+  $<HTMLSelectElement>('persTone').value = p.tone;
+  $<HTMLInputElement>('persTitle').value = p.userTitle;
+  $<HTMLInputElement>('persVerb').value = String(p.verbosity);
+  $<HTMLInputElement>('persHumour').value = String(p.humour);
+  $<HTMLInputElement>('persPro').value = String(p.proactivity);
+}
+function setPersonality(ch: Partial<Personality>): void {
+  const base = S.personality ?? PRESETS[0];
+  if (!base) return;
+  S.personality = sanitizePersonality({ ...base, ...ch });
+  if (S.matchPersonality) toast('This phone now has its own personality.');
+  S.matchPersonality = false;
+  save();
+  renderPersonality();
+}
+function renderPrompts(): void {
+  const box = $('promptList');
+  box.textContent = '';
+  for (const p of S.prompts) {
+    const row = el('div', 'li');
+    const t = el('span');
+    t.style.flex = '1';
+    t.appendChild(el('b', undefined, `/${p.name}`));
+    t.appendChild(el('small', 'muted', ` ${p.text.slice(0, 60)}${p.text.length > 60 ? '…' : ''}`));
+    const edit = el('button', 'x', '✎');
+    edit.setAttribute('aria-label', `Change /${p.name}`);
+    edit.onclick = () => {
+      $<HTMLInputElement>('prName').value = p.name;
+      $<HTMLTextAreaElement>('prText').value = p.text;
+      $('prText').focus();
+    };
+    const x = el('button', 'x', '✕');
+    x.setAttribute('aria-label', `Delete /${p.name}`);
+    x.onclick = () => {
+      S.prompts = S.prompts.filter((y) => y !== p);
+      S.promptsMine = true;
+      save();
+      renderPrompts();
+    };
+    row.append(t, edit, x);
+    box.appendChild(row);
+  }
+}
+function wireLook(): void {
+  const tog = (id: string, key: 'matchLook' | 'timeTint' | 'snow'): void => {
+    $(id).onclick = () => {
+      S[key] = !S[key];
+      save();
+      if (key === 'matchLook' && S.matchLook) {
+        toast('Following your PC’s look: it updates at the next sync.');
+        void syncWithPc();
+      }
+      applyLook();
+      renderLook();
+    };
+  };
+  tog('matchLookToggle', 'matchLook');
+  tog('tintToggle', 'timeTint');
+  tog('snowToggle', 'snow');
+  $<HTMLSelectElement>('avatarPick').onchange = (e) => {
+    const v = (e.target as HTMLSelectElement).value;
+    if (isPhoneAvatar(v)) setLook({ avatar: v });
+  };
+  $<HTMLInputElement>('accentPick').onchange = (e) =>
+    setLook({ accent: (e.target as HTMLInputElement).value });
+  $('accentReset').onclick = () => setLook({ accent: '' });
+  for (const [id, key] of [
+    ['avSize', 'avatarSize'],
+    ['avGlow', 'avatarGlow'],
+    ['avMotion', 'avatarMotion'],
+  ] as const)
+    $<HTMLInputElement>(id).onchange = (e) =>
+      setLook({ [key]: Number((e.target as HTMLInputElement).value) });
+  // Personality
+  $('matchPersToggle').onclick = () => {
+    S.matchPersonality = !S.matchPersonality;
+    save();
+    renderPersonality();
+    if (S.matchPersonality) void syncWithPc();
+  };
+  $<HTMLInputElement>('asstName').onchange = (e) => {
+    const v = (e.target as HTMLInputElement).value.trim().slice(0, 30);
+    if (!v) return;
+    S.name = v;
+    S.matchPersonality = false;
+    save();
+    renderPersonality();
+    toast(`Call me ${v}.`);
+  };
+  $<HTMLSelectElement>('persPreset').onchange = (e) => {
+    const p = PRESETS.find((x) => x.id === (e.target as HTMLSelectElement).value);
+    if (p) setPersonality({ ...p });
+  };
+  $<HTMLSelectElement>('persTone').onchange = (e) =>
+    setPersonality({
+      tone: (e.target as HTMLSelectElement).value as Personality['tone'],
+      id: 'custom',
+    });
+  $<HTMLInputElement>('persTitle').onchange = (e) =>
+    setPersonality({
+      userTitle: (e.target as HTMLInputElement).value.trim().slice(0, 30),
+      id: 'custom',
+    });
+  $<HTMLInputElement>('persVerb').onchange = (e) =>
+    setPersonality({
+      verbosity: Number((e.target as HTMLInputElement).value) as Personality['verbosity'],
+      id: 'custom',
+    });
+  $<HTMLInputElement>('persHumour').onchange = (e) =>
+    setPersonality({
+      humour: Number((e.target as HTMLInputElement).value) as Personality['humour'],
+      id: 'custom',
+    });
+  $<HTMLInputElement>('persPro').onchange = (e) =>
+    setPersonality({
+      proactivity: Number((e.target as HTMLInputElement).value) as Personality['proactivity'],
+      id: 'custom',
+    });
+  // Saved prompts
+  $('prSave').onclick = () => {
+    const name = promptName($<HTMLInputElement>('prName').value);
+    const text = $<HTMLTextAreaElement>('prText').value.trim();
+    if (!name || !text) return toast('Give it a name and what it should ask.');
+    const next = sanitizePrompts([...S.prompts.filter((p) => p.name !== name), { name, text }]);
+    if (!next.some((p) => p.name === name))
+      return toast(`/${name} can’t be used (it’s a built-in command). Pick another name.`);
+    S.prompts = next;
+    S.promptsMine = true;
+    save();
+    $<HTMLInputElement>('prName').value = '';
+    $<HTMLTextAreaElement>('prText').value = '';
+    renderPrompts();
+    toast(`Saved /${name}`);
+  };
+}
+
 /* ── App lock (PIN) ── */
 async function pinHashOf(pin: string, salt: string): Promise<string> {
   const data = new TextEncoder().encode(`${salt}:${pin}`);
@@ -1310,24 +1637,73 @@ async function setPin(): Promise<void> {
 /* ── Look: the PC's accent colour and an animated avatar (header and welcome screen) ── */
 const phoneState = (): string =>
   busy ? 'thinking' : recog ? 'listening' : isSpeaking() ? 'speaking' : 'idle';
-function mountAvatar(canvas: HTMLCanvasElement): () => void {
-  const ch = hexToChannels(S.accent || '#3fd0ff');
+const accentNow = (): string => S.accent || THEME_ACCENT[S.theme] || '#3fd0ff';
+function mountAvatar(canvas: HTMLCanvasElement, style: PhoneAvatar = S.avatar): () => void {
+  const ch = hexToChannels(accentNow());
   canvas.style.setProperty('--accent', ch);
   canvas.style.setProperty('--amber', '255 181 71');
   canvas.style.setProperty('--alert', '255 77 94');
-  if (S.avatar === 'none') return () => undefined;
-  return runAvatar(canvas, S.avatar, {
-    state: phoneState,
-    level: () => (isSpeaking() ? 0.35 : 0),
-    center: () => ({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }),
-    radius: () => Math.max(4, Math.min(canvas.clientWidth, canvas.clientHeight) / 2 - 2),
-    reduced: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
+  canvas.style.setProperty('--ice', '220 244 255');
+  const glow = AVATAR_STEPS.glow[S.avatarGlow - 1] ?? 1;
+  canvas.style.filter =
+    glow === 1 ? '' : `brightness(${0.7 + glow * 0.3}) saturate(${0.8 + glow * 0.2})`;
+  setAvatarMotion(AVATAR_STEPS.motion[S.avatarMotion - 1] ?? 1);
+  if (style === 'none') return () => undefined;
+  const reduced = (): boolean => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const level = (): number => (isSpeaking() ? 0.35 : 0);
+  const center = (): { x: number; y: number } => ({
+    x: canvas.clientWidth / 2,
+    y: canvas.clientHeight / 2,
+  });
+  const radius = (): number =>
+    Math.max(4, Math.min(canvas.clientWidth, canvas.clientHeight) / 2 - 2);
+  if (style === 'wave' || style === 'swarm' || style === 'orb' || style === 'head')
+    return runAvatar(canvas, style, { state: phoneState, level, center, radius, reduced });
+  // The PC's own avatars, drawn by the same code as on the PC.
+  const size = { w: canvas.clientWidth || 40, h: canvas.clientHeight || 40 };
+  const st = (): AssistantState => phoneState() as AssistantState;
+  const live = {
+    get current(): LiveAvatar {
+      return {
+        state: st(),
+        reducedMotion: reduced(),
+        getLevel: level,
+        center: center(),
+        radius: radius(),
+        lastReply: () => {
+          const m = chat()
+            ?.messages.filter((x) => x.role === 'assistant')
+            .pop();
+          return m ? { text: m.text, at: m.at } : null;
+        },
+      };
+    },
+  };
+  if (style === 'code') return runCodeRing(canvas, size, live);
+  if (style === 'sphere' || style === 'cloud') return runSphere(canvas, size, live, style);
+  if (style === 'face') return runFace(canvas, size, live);
+  return runRings(canvas, size, {
+    center: center(),
+    radius: radius(),
+    ringText: `${S.name.toUpperCase()} · ONLINE · `,
+    reducedMotion: reduced(),
+    getLevel: level,
+    stateRef: {
+      get current(): AssistantState {
+        return st();
+      },
+    },
+    sinceRef: { current: performance.now() },
+    draw: { current: null },
   });
 }
 let stopHeader: () => void = () => undefined;
 let stopWelcome: () => void = () => undefined;
 function applyLook(): void {
-  if (S.accent) document.documentElement.style.setProperty('--accent', S.accent);
+  document.documentElement.style.setProperty('--accent', accentNow());
+  const k = AVATAR_STEPS.size[S.avatarSize - 1] ?? 1;
+  document.documentElement.style.setProperty('--av-size', `${Math.round(190 * k)}px`);
+  applyAmbient();
   stopHeader();
   const c = $<HTMLCanvasElement>('hdrAvatar');
   c.hidden = S.avatar === 'none';
@@ -2442,12 +2818,69 @@ function renderPcStatus(): void {
     ag.appendChild(row2);
   }
 }
+/* Routines (tap to run) and the PC's timers. */
+let routinesLoaded = false;
+async function refreshRoutinesTimers(c: PcConn): Promise<void> {
+  if (!routinesLoaded) {
+    try {
+      const rs = await pcApi<Array<{ id: string; name: string; icon?: string }>>(
+        c,
+        'GET',
+        '/api/routines',
+      );
+      const box = $('pcRoutines');
+      box.textContent = '';
+      for (const r of rs) {
+        const b = el('button', 'btn', `${r.icon ? `${r.icon} ` : ''}${r.name}`);
+        b.onclick = () => void pcAct('run_routine', r.id);
+        box.appendChild(b);
+      }
+      if (!rs.length)
+        box.appendChild(el('p', 'muted small', 'No routines yet (make them on the PC).'));
+      routinesLoaded = true;
+    } catch {
+      /* older PC */
+    }
+  }
+  try {
+    renderTimers(await pcApi<TimerRow[]>(c, 'GET', '/api/timers'));
+  } catch {
+    /* ignore */
+  }
+}
+type TimerRow = { id: string; label: string; dueAt: number; status: string };
+function renderTimers(list: TimerRow[]): void {
+  const box = $('pcTimers');
+  box.textContent = '';
+  for (const t of list) {
+    const row = el('div', 'li');
+    const mins = Math.max(0, Math.ceil((t.dueAt - Date.now()) / 60_000));
+    const txt = el(
+      'span',
+      undefined,
+      `${t.status === 'ringing' ? '🔔 ' : '⏱ '}${t.label || 'Timer'} · ${t.status === 'ringing' ? 'ringing' : `${mins} min left`}`,
+    );
+    txt.style.flex = '1';
+    const x = el('button', 'x', '✕');
+    x.setAttribute('aria-label', 'Cancel this timer');
+    x.onclick = async () => {
+      const c = conn();
+      if (c)
+        renderTimers(
+          await pcApi<TimerRow[]>(c, 'POST', `/api/timers/${encodeURIComponent(t.id)}/cancel`, {}),
+        );
+    };
+    row.append(txt, x);
+    box.appendChild(row);
+  }
+}
 async function refreshPcStatus(): Promise<void> {
   const c = conn();
   if (!c) return;
   try {
     pcStatus = await pcApi<PcStatus>(c, 'GET', '/api/status', undefined, 6000);
     renderPcStatus();
+    void refreshRoutinesTimers(c);
   } catch {
     void checkPc();
   }
@@ -2514,6 +2947,23 @@ function wirePc(): void {
     save();
     renderPc();
   };
+  document.querySelectorAll<HTMLButtonElement>('#pcLive [data-tm]').forEach((b) => {
+    b.onclick = async () => {
+      const c = conn();
+      if (!c) return;
+      try {
+        renderTimers(
+          await pcApi<TimerRow[]>(c, 'POST', '/api/timers', {
+            minutes: Number(b.dataset.tm),
+            label: 'From my phone',
+          }),
+        );
+        toast(`Timer set on the PC for ${b.textContent?.trim()}.`);
+      } catch (e) {
+        toast((e as Error).message);
+      }
+    };
+  });
   document.querySelectorAll<HTMLButtonElement>('#pcLive [data-m]').forEach((b) => {
     b.onclick = () => void pcAct('media_control', b.dataset.m);
   });
@@ -2599,7 +3049,6 @@ function renderSettings(): void {
   tick('autoToggle', S.autoSend);
   tick('saverToggle', S.saver);
   renderVoiceSettings();
-  $<HTMLSelectElement>('avatarPick').value = S.avatar;
   $('pinBtn').textContent = S.pinHash ? 'Remove PIN lock' : 'Set a PIN lock';
   $('setInitial').textContent = (S.userName || S.name).slice(0, 1).toUpperCase();
   $('setName').textContent = S.userName || 'You';
@@ -2654,6 +3103,9 @@ function setView(v: string): void {
   if (v === 'set') {
     renderSettings();
     renderAbout();
+    renderLook();
+    renderPersonality();
+    renderPrompts();
   }
   if (v === 'chat') renderMsgs();
 }
@@ -2758,11 +3210,6 @@ function wire(): void {
   installSpeechShim();
   void loadVoices().then(() => renderVoiceSettings());
   scheduleReminderPings();
-  $<HTMLSelectElement>('avatarPick').onchange = (e) => {
-    S.avatar = (e.target as HTMLSelectElement).value as PhoneAvatar;
-    save();
-    applyLook();
-  };
   // PC on/off checks while the app is open, and the lock after 5 minutes away.
   setInterval(() => {
     if (!document.hidden) void checkPc();
@@ -2954,6 +3401,9 @@ function wire(): void {
     renderPeople();
   };
   wirePc();
+  wireLook();
+  // The background follows the time of day.
+  setInterval(applyAmbient, 10 * 60_000);
   // People & lists: one section at a time (remembered).
   const seg = (k: string): void => {
     $('peopleView').dataset.seg = k;

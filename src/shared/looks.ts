@@ -11,12 +11,32 @@ export const THEME_ACCENT: Record<ThemeId, string> = {
   mono: '#FFFFFF',
 };
 
-export type PhoneAvatar = 'orb' | 'swarm' | 'wave' | 'head' | 'none';
+/** Every PC avatar runs on the phone too (plus "none"). */
+export type PhoneAvatar = AvatarStyle | 'none';
+export const PHONE_AVATARS: Array<{ id: PhoneAvatar; label: string }> = [
+  { id: 'rings', label: 'Holo rings' },
+  { id: 'face', label: 'Face' },
+  { id: 'code', label: 'Code ring' },
+  { id: 'sphere', label: 'Data sphere (gold)' },
+  { id: 'cloud', label: 'Data cloud (blue)' },
+  { id: 'orb', label: 'Liquid orb' },
+  { id: 'swarm', label: 'Particle swarm' },
+  { id: 'wave', label: 'Sound wave' },
+  { id: 'head', label: 'Wireframe head' },
+  { id: 'none', label: 'None' },
+];
+export const isPhoneAvatar = (a: unknown): a is PhoneAvatar =>
+  PHONE_AVATARS.some((x) => x.id === a);
 
-/** The phone draws the four canvas avatars; the PC-only ones map to the closest. */
 export function phoneAvatarFor(a: AvatarStyle): PhoneAvatar {
-  if (a === 'wave' || a === 'swarm' || a === 'orb' || a === 'head') return a;
-  if (a === 'sphere' || a === 'cloud') return 'orb';
-  if (a === 'face') return 'head';
-  return 'swarm';
+  return a;
 }
+
+export const THEME_NAMES: Record<ThemeId, string> = {
+  'arc-cyan': 'Arc cyan',
+  'solar-gold': 'Solar gold',
+  crimson: 'Crimson',
+  sentinel: 'Sentinel',
+  violet: 'Violet',
+  mono: 'Mono',
+};

@@ -38,7 +38,9 @@ Read this first in a new chat, then README.md for the feature list.
 - Agent Mode: `agent-runner.ts` (safety rules in its system prompt; per-task `AgentOptions`
   for shopping), `ipc/agent.ts` (queue, overlay, Esc to stop).
 - Renderer: `src/renderer/` (HUD, settings pages, avatars in `components/core/`: React ones plus
-  framework-free `engines.ts` shared with the phone; moods/motion in `avatarKit.ts`). The same
+  framework-free `engines.ts` shared with the phone; moods/motion in `avatarKit.ts`). Every avatar's drawing loop is framework-free (`rings.ts`,
+  `face.ts`, `codeRing.ts`, `sphere.ts`, `engines.ts`); the React components are thin wrappers,
+  and the phone app draws the same ones. The same
   bundle renders the desktop widget (`#widget`). Holographic notifications: `src/main/holo.ts`
   (`notifyUser`). Ambient look: `shared/ambient.ts` + `hud/Ambient.tsx`.
 

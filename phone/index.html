@@ -909,8 +909,8 @@
         transform: scale(0.97);
       }
       .welcome-avatar {
-        width: 190px;
-        height: 190px;
+        width: var(--av-size, 190px);
+        height: var(--av-size, 190px);
       }
       .welcome h2 {
         text-shadow: 0 0 18px rgba(63, 208, 255, 0.35);
@@ -1001,6 +1001,65 @@
         color: #fff;
         border: 0;
         font-size: 20px;
+      }
+      /* ── Look settings and background ── */
+      .look-preview {
+        display: block;
+        width: 120px;
+        height: 120px;
+        margin: 4px auto 12px;
+      }
+      .swatches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 6px;
+      }
+      .swatches button {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+      }
+      .swatches button.on {
+        border-color: #fff;
+      }
+      .colorpick {
+        width: 40px;
+        height: 28px;
+        border: 0;
+        background: none;
+        vertical-align: middle;
+      }
+      .steps {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px;
+        margin: 12px 0 6px;
+      }
+      .steps input {
+        width: 100%;
+        accent-color: var(--accent);
+      }
+      .chiprow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .tint {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 40;
+      }
+      .snow {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 41;
       }
       /* ══ 0.25 overhaul ══ */
       body {
@@ -1285,6 +1344,8 @@
     </style>
   </head>
   <body>
+    <div id="tint" class="tint" aria-hidden="true"></div>
+    <canvas id="snow" class="snow" aria-hidden="true"></canvas>
     <div id="cam" class="cam" hidden>
       <video id="camVideo" autoplay playsinline muted></video>
       <div class="frame"></div>
@@ -1664,6 +1725,17 @@
               </div>
             </div>
             <div class="card">
+              <div class="lbl"><span class="dot"></span>Routines &amp; timers</div>
+              <div id="pcRoutines" class="chiprow"></div>
+              <div id="pcTimers"></div>
+              <div class="row" style="margin-top: 8px">
+                <button class="btn" data-tm="5" style="flex: 1">5 min</button>
+                <button class="btn" data-tm="10" style="flex: 1">10 min</button>
+                <button class="btn" data-tm="25" style="flex: 1">25 min</button>
+                <button class="btn" data-tm="60" style="flex: 1">1 hour</button>
+              </div>
+            </div>
+            <div class="card">
               <div class="lbl"><span class="dot"></span>Power</div>
               <div class="row">
                 <button class="btn" id="sleepBtn" style="flex: 1">Sleep</button>
@@ -1796,18 +1868,127 @@
                   <path
                     d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.2-1-1.4-1-2.4 0-.8.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.1-4-7.5-9-7.5z"
                   /></svg></span
-              ><span class="gt"><b>Look</b><small>Avatar</small></span>
+              ><span class="gt"><b>Look</b><small>Avatar, colours, background</small></span>
             </summary>
             <div class="gb">
+              <div class="li">
+                <span style="flex: 1"
+                  >Same look as my PC<br /><small class="muted"
+                    >Theme, avatar and its size, glow and motion follow the PC when connected</small
+                  ></span
+                ><button class="check" id="matchLookToggle"></button>
+              </div>
+              <canvas id="lookPreview" class="look-preview" aria-hidden="true"></canvas>
               <label class="muted">Avatar</label>
-              <select id="avatarPick" class="input" style="margin-top: 4px">
-                <option value="orb">Liquid orb</option>
-                <option value="swarm">Particle swarm</option>
-                <option value="wave">Sound wave</option>
-                <option value="head">Wireframe head</option>
-                <option value="none">None</option>
-              </select>
-              <p class="muted small">The colour follows your PC's accent once connected.</p>
+              <select id="avatarPick" class="input" style="margin: 4px 0 10px"></select>
+              <label class="muted">Theme</label>
+              <div class="swatches" id="themePick"></div>
+              <label class="muted" style="display: block; margin-top: 10px"
+                >Own colour <input type="color" id="accentPick" class="colorpick" />
+                <button class="btn" id="accentReset" style="padding: 4px 10px; margin-left: 6px">
+                  Use the theme's
+                </button></label
+              >
+              <div class="steps">
+                <label class="muted"
+                  >Size <input type="range" id="avSize" min="1" max="5" step="1"
+                /></label>
+                <label class="muted"
+                  >Glow <input type="range" id="avGlow" min="1" max="5" step="1"
+                /></label>
+                <label class="muted"
+                  >Motion <input type="range" id="avMotion" min="1" max="5" step="1"
+                /></label>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Colours follow the time of day<br /><small class="muted"
+                    >A faint glow at the edges: morning, dusk, night</small
+                  ></span
+                ><button class="check" id="tintToggle"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1">Snow in December</span
+                ><button class="check" id="snowToggle"></button>
+              </div>
+            </div>
+          </details>
+          <details class="grp">
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24">
+                  <path d="M4 5h16v11H8l-4 4zM8 10h.01M12 10h.01M16 10h.01" /></svg></span
+              ><span class="gt"
+                ><b>Personality</b><small>Name, tone, humour, how it talks to you</small></span
+              >
+            </summary>
+            <div class="gb">
+              <div class="li">
+                <span style="flex: 1"
+                  >Same personality as my PC<br /><small class="muted"
+                    >Off: set it up differently on this phone</small
+                  ></span
+                ><button class="check" id="matchPersToggle"></button>
+              </div>
+              <div id="persBox">
+                <label class="muted">Assistant's name</label>
+                <input id="asstName" class="input" style="margin: 4px 0 10px" />
+                <label class="muted">Style</label>
+                <select id="persPreset" class="input" style="margin: 4px 0 10px"></select>
+                <label class="muted">Tone</label>
+                <select id="persTone" class="input" style="margin: 4px 0 10px">
+                  <option value="warm">Warm</option>
+                  <option value="formal">Formal</option>
+                  <option value="dry-wit">Dry wit</option>
+                  <option value="concise">Concise</option>
+                  <option value="playful">Playful</option>
+                </select>
+                <label class="muted"
+                  >How it addresses you (e.g. sir, boss, your name; blank = nothing)</label
+                >
+                <input id="persTitle" class="input" style="margin: 4px 0 10px" />
+                <div class="steps">
+                  <label class="muted"
+                    >Detail <input type="range" id="persVerb" min="1" max="5" step="1"
+                  /></label>
+                  <label class="muted"
+                    >Humour <input type="range" id="persHumour" min="0" max="3" step="1"
+                  /></label>
+                  <label class="muted"
+                    >Suggestions <input type="range" id="persPro" min="0" max="2" step="1"
+                  /></label>
+                </div>
+              </div>
+            </div>
+          </details>
+          <details class="grp">
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24">
+                  <path d="M7 4l-3 16M17 4l-3 16M5 9h15M4 15h15" /></svg></span
+              ><span class="gt"
+                ><b>Saved prompts</b><small>Your /shortcuts, like /fix and /summarize</small></span
+              >
+            </summary>
+            <div class="gb">
+              <div id="promptList"></div>
+              <h3 class="sub">Add or change one</h3>
+              <input
+                id="prName"
+                class="input"
+                placeholder="Name, e.g. email-reply"
+                style="margin-bottom: 8px"
+              />
+              <textarea
+                id="prText"
+                class="input"
+                rows="3"
+                placeholder="What it asks, e.g. Write a friendly reply to this email: {text}"
+              ></textarea>
+              <p class="muted small">
+                {text} is replaced by whatever you type after it (or what you copied).
+              </p>
+              <button class="btn acc full" id="prSave">Save prompt</button>
             </div>
           </details>
           <details class="grp">

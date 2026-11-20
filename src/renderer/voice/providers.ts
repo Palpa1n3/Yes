@@ -1,3 +1,4 @@
+import { replyMood } from '@renderer/components/core/avatarKit';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 /** The Windows (Web Speech) voice. Fish Audio speech is in fishSpeech.ts and the
  *  microphone (local Whisper) in mic.ts / useSpeechInput.ts. */
@@ -67,15 +68,4 @@ export const webSpeechOutput: SpeechOutputProvider = {
 };
 
 /** Rough tone of a reply, for pitch and pace (and the face). */
-export function voiceMood(text: string): 'excited' | 'sorry' | 'question' | 'neutral' {
-  const t = text.slice(0, 400);
-  if (/\b(sorry|unfortunately|apologi[sz]e|my mistake|couldn['’]?t|failed)\b/i.test(t))
-    return 'sorry';
-  if (
-    (t.match(/!/g) ?? []).length >= 1 ||
-    /\b(great|brilliant|awesome|congrat|done!|nice)\b/i.test(t)
-  )
-    return 'excited';
-  if (/\?\s*$/.test(t.trim())) return 'question';
-  return 'neutral';
-}
+export const voiceMood = replyMood;

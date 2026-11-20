@@ -65,7 +65,18 @@ export interface SyncFromPc {
   /** Saved prompts (/fix, /summarize...). */
   prompts?: Array<{ name: string; text: string }>;
   /** The PC's look: accent colour (#rrggbb) and avatar. */
-  look?: { accent: string; avatar: string };
+  look?: {
+    accent: string;
+    avatar: string;
+    theme?: string;
+    /** Avatar size, glow and motion, steps 1–5. */
+    size?: number;
+    glow?: number;
+    motion?: number;
+    timeTint?: boolean;
+  };
+  /** The PC's personality (tone, humour, how it addresses you…). */
+  personality?: import('./personalities').Personality;
   /** Voice corrections learnt on the PC. */
   voiceFixes?: Array<{ heard: string; meant: string }>;
   at: number;

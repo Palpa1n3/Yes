@@ -29,9 +29,9 @@ describe('shift charts', () => {
 });
 
 describe('phone look', () => {
-  it('maps PC avatars to ones the phone can draw', () => {
-    expect(phoneAvatarFor('sphere')).toBe('orb');
-    expect(phoneAvatarFor('face')).toBe('head');
+  it('uses the PC avatar itself on the phone (the phone draws them all now)', () => {
+    expect(phoneAvatarFor('sphere')).toBe('sphere');
+    expect(phoneAvatarFor('face')).toBe('face');
     expect(phoneAvatarFor('wave')).toBe('wave');
     expect(THEME_ACCENT['arc-cyan']).toBe('#3FD0FF');
     expect(mergeLists([], [], [])).toEqual([]);

@@ -278,7 +278,13 @@ export function makePhoneRoutes(
         look: {
           accent: st.avatarColor || THEME_ACCENT[st.theme],
           avatar: phoneAvatarFor(st.avatar),
+          theme: st.theme,
+          size: st.avatarSize,
+          glow: st.avatarGlow,
+          motion: st.avatarMotion,
+          timeTint: st.timeTint,
         },
+        personality: st.personality,
         at: Date.now(),
       };
       return ok({ payload, appUrl: st.phoneAppUrl });
