@@ -6,7 +6,17 @@ import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 
 export default tseslint.config(
-  { ignores: ['out/**', 'dist/**', 'docs/**', 'node_modules/**', '*.cjs', 'phone/public/**'] },
+  {
+    ignores: [
+      'out/**',
+      'dist/**',
+      'docs/**',
+      'node_modules/**',
+      '*.cjs',
+      'phone/public/**',
+      'android/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {

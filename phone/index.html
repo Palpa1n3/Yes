@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://*.ts.net; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; worker-src 'self'"
+      content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://*.ts.net https://*.github.io; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; worker-src 'self'"
     />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon-192.png" />
@@ -1875,6 +1875,9 @@
             <div class="gb">
               <p id="aboutVer" style="margin-top: 0"></p>
               <button class="btn full" id="updCheck">Check for updates</button>
+              <a class="btn acc full" id="getApk" hidden style="margin-top: 8px"
+                >Get the Android app</a
+              >
               <p class="muted small" id="updMsg"></p>
               <p class="muted small">
                 Tip: browser menu › Add to Home Screen to use Alton like an app.

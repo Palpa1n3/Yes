@@ -41,6 +41,9 @@ export interface RemoteStatus {
   history: Array<{ who: 'you' | 'alton'; text: string }>;
 }
 
+/** Where the Android app's pages come from (Capacitor's https scheme). Calls still need pairing. */
+export const ANDROID_APP_ORIGIN = 'https://localhost';
+
 export interface RemoteDeps {
   /** The phone-only app's site (e.g. https://name.github.io), allowed to ping. */
   pingOrigin?(): string;
@@ -230,10 +233,12 @@ export class RemoteServer {
         return send(403, { error: 'Home network only.' });
       const url = new URL(req.url ?? '/', 'http://local');
       // The phone app (GitHub Pages) talks to the API directly: allow exactly its origin.
-      const allowed = this.d.pingOrigin?.() ?? '';
-      const fromApp = !!allowed && req.headers.origin === allowed;
+      // Also the Android app, whose pages live at https://localhost on the phone itself.
+      const origin = String(req.headers.origin ?? '');
+      const site = this.d.pingOrigin?.() ?? '';
+      const fromApp = !!origin && (origin === site || origin === ANDROID_APP_ORIGIN);
       if (fromApp && url.pathname.startsWith('/api/')) {
-        res.setHeader('access-control-allow-origin', allowed);
+        res.setHeader('access-control-allow-origin', origin);
         res.setHeader('access-control-allow-private-network', 'true');
         res.setHeader('access-control-expose-headers', 'content-type');
         res.setHeader('vary', 'Origin');

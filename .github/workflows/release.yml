@@ -61,3 +61,62 @@ jobs:
             gh release create "v$V" "${files[@]}" --target "$GITHUB_SHA" --title "Alton $V" --notes "Automatic build of version $V." --latest
           fi
           gh release view "v$V" --json assets --jq '.assets[].name'
+
+  # The Android app: the phone app inside a native shell, added to the same release as
+  # Alton.apk (the phone app's "Update ready" downloads it from there).
+  android:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install
+        run: npm ci
+
+      - name: Build the phone app and copy it into the Android project
+        run: |
+          npm run build:phone
+          npx cap sync android
+
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::error::Add the ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD secrets (repo Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/alton.p12"
+
+      - name: Build the APK
+        working-directory: android
+        env:
+          ALTON_KEYSTORE: ${{ runner.temp }}/alton.p12
+          ALTON_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          V=$(node -p "require('../package.json').version")
+          CODE=$(node -p "const [a,b,c]=require('../package.json').version.split('.').map(Number); a*10000+b*100+c")
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon -PappVersion="$V" -PappCode="$CODE"
+
+      - name: Add it to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          test -f "$APK" || { ls -R android/app/build/outputs; echo "No signed APK"; exit 1; }
+          cp "$APK" Alton.apk
+          cp "$APK" "Alton-$V.apk"
+          gh release upload "v$V" Alton.apk "Alton-$V.apk" --clobber
+          gh release view "v$V" --json assets --jq '.assets[].name'

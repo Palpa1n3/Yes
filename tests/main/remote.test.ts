@@ -100,6 +100,12 @@ describe('RemoteServer', () => {
     expect(pre.headers.get('access-control-allow-origin')).toBe('https://palpa1n3.github.io');
     expect(pre.headers.get('access-control-allow-headers')).toMatch(/authorization/);
     expect(pre.headers.get('access-control-allow-private-network')).toBe('true');
+    const app = await fetch(`${base}/api/status`, {
+      method: 'OPTIONS',
+      headers: { origin: 'https://localhost', 'access-control-request-method': 'GET' },
+    });
+    expect(app.status).toBe(204);
+    expect(app.headers.get('access-control-allow-origin')).toBe('https://localhost');
     const evil = await fetch(`${base}/api/status`, {
       method: 'OPTIONS',
       headers: { origin: 'https://evil.example', 'access-control-request-method': 'GET' },

@@ -17,6 +17,19 @@ import {
 } from '@shared/phone';
 import { md, plain } from './md';
 import {
+  canSpeak,
+  installSpeechShim,
+  isApp,
+  isSpeaking,
+  loadVoices,
+  scheduleReminders,
+  shareFile,
+  shareText,
+  speak,
+  stopSpeaking,
+  voiceList,
+} from './native';
+import {
   PcError,
   isPcAddress,
   pairWithPc,
@@ -721,17 +734,13 @@ const money = (n: number): string =>
 
 /* ── Alexa: the phone says the command out loud for a nearby Echo ── */
 function tellAlexa(command: string): void {
-  if (!('speechSynthesis' in window)) return toast('This phone can’t speak out loud.');
-  speechSynthesis.cancel();
-  const wake = new SpeechSynthesisUtterance('Alexa.');
-  wake.rate = 0.95;
-  wake.volume = 1;
-  const rest = new SpeechSynthesisUtterance(command);
-  rest.rate = 0.95;
-  rest.volume = 1;
+  if (!canSpeak()) return toast('This phone can’t speak out loud.');
+  stopSpeaking();
   // A short gap after the wake word so the Echo is listening before the command.
-  wake.onend = () => setTimeout(() => speechSynthesis.speak(rest), 900);
-  speechSynthesis.speak(wake);
+  speak('Alexa.', {
+    rate: 0.95,
+    onend: () => setTimeout(() => speak(command, { rate: 0.95 }), 900),
+  });
   toast('Speaking to Alexa… keep the phone near your Echo, volume up.');
 }
 
@@ -758,6 +767,18 @@ function shiftLine(): string {
 /* ── Backup: everything on this phone (except the Claude key) to a file, and back ── */
 function backup(): void {
   const data = JSON.stringify({ app: 'alton-phone', v: 1, at: Date.now(), state: S });
+  if (isApp) {
+    // The app can't download: hand the file to the share sheet (Drive, My Files…).
+    const name = `alton-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    void shareFile(name, data, 'Alton backup').then((ok) => {
+      if (!ok) return toast('Couldn’t save the backup.');
+      S.lastBackup = Date.now();
+      save();
+      renderBackupNudge();
+      toast('Pick where to keep it (Drive or My Files). Your Claude key isn’t in it.');
+    });
+    return;
+  }
   const file = new File([data], `alton-backup-${new Date().toISOString().slice(0, 10)}.json`, {
     type: 'application/json',
   });
@@ -1199,7 +1220,9 @@ const newer = (a: string, b: string): boolean => {
 };
 async function checkUpdate(manual = false): Promise<void> {
   try {
-    const r = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' });
+    // The app carries its own copy of the web app, so it asks the website what's newest.
+    const src = isApp ? `${__PAGES_URL__}version.json` : './version.json';
+    const r = await fetch(`${src}?t=${Date.now()}`, { cache: 'no-store' });
     const j = (await r.json()) as { version?: string };
     if (j.version && newer(j.version, __APP_VERSION__)) {
       newVersion = j.version;
@@ -1214,6 +1237,12 @@ async function checkUpdate(manual = false): Promise<void> {
   renderAbout();
 }
 async function applyUpdate(): Promise<void> {
+  if (isApp) {
+    // A new app version is a new APK: download it, then tap it to install over this one.
+    toast('Downloading the new version: open it from your notifications to install.');
+    location.href = __APK_URL__;
+    return;
+  }
   $('updateBar').textContent = 'Updating…';
   try {
     const reg = await navigator.serviceWorker?.getRegistration();
@@ -1227,8 +1256,11 @@ async function applyUpdate(): Promise<void> {
   location.reload();
 }
 function renderAbout(): void {
+  const apk = $<HTMLAnchorElement>('getApk');
+  apk.hidden = isApp || !android;
+  apk.href = __APK_URL__;
   $('aboutVer').textContent =
-    `Phone app ${__APP_VERSION__}${newVersion ? ` (update ${newVersion} ready)` : ''}${
+    `${isApp ? 'Android app' : 'Phone app'} ${__APP_VERSION__}${newVersion ? ` (update ${newVersion} ready)` : ''}${
       S.pcVersion ? ` · PC Alton ${S.pcVersion}` : ''
     }`;
 }
@@ -1277,13 +1309,7 @@ async function setPin(): Promise<void> {
 
 /* ── Look: the PC's accent colour and an animated avatar (header and welcome screen) ── */
 const phoneState = (): string =>
-  busy
-    ? 'thinking'
-    : recog
-      ? 'listening'
-      : 'speechSynthesis' in window && speechSynthesis.speaking
-        ? 'speaking'
-        : 'idle';
+  busy ? 'thinking' : recog ? 'listening' : isSpeaking() ? 'speaking' : 'idle';
 function mountAvatar(canvas: HTMLCanvasElement): () => void {
   const ch = hexToChannels(S.accent || '#3fd0ff');
   canvas.style.setProperty('--accent', ch);
@@ -1292,7 +1318,7 @@ function mountAvatar(canvas: HTMLCanvasElement): () => void {
   if (S.avatar === 'none') return () => undefined;
   return runAvatar(canvas, S.avatar, {
     state: phoneState,
-    level: () => ('speechSynthesis' in window && speechSynthesis.speaking ? 0.35 : 0),
+    level: () => (isSpeaking() ? 0.35 : 0),
     center: () => ({ x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 }),
     radius: () => Math.max(4, Math.min(canvas.clientWidth, canvas.clientHeight) / 2 - 2),
     reduced: () => matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -1366,10 +1392,7 @@ async function shootAndAsk(question: string): Promise<void> {
 /* ── Voice settings and training ── */
 function renderVoiceSettings(): void {
   const sel = $<HTMLSelectElement>('voicePick');
-  const voices =
-    'speechSynthesis' in window
-      ? speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang))
-      : [];
+  const voices = voiceList().filter((v) => /^en/i.test(v.lang));
   sel.textContent = '';
   const auto = el('option', undefined, 'Best British voice (automatic)') as HTMLOptionElement;
   auto.value = '';
@@ -1441,6 +1464,8 @@ function trainOnce(phrase: string, out: HTMLElement): void {
 /* ── Reminders: listed here, and pinged by the app if it's open at the time ── */
 const pinged = new Set<number>();
 function scheduleReminderPings(): void {
+  // In the Android app they also become real notifications that work with the app closed.
+  void scheduleReminders(S.reminders);
   for (const r of S.reminders) {
     const ms = r.at - Date.now();
     if (ms <= 0 || ms > 6 * 3600_000 || pinged.has(r.at)) continue;
@@ -1551,18 +1576,23 @@ function shareChat(): void {
     `# ${cleanTitle(c.title)}`,
     ...c.messages.map((m) => `${m.role === 'user' ? 'Me' : S.name}: ${plain(m.text)}`),
   ].join('\n\n');
-  if (navigator.share)
-    void navigator.share({ title: cleanTitle(c.title), text }).catch(() => undefined);
-  else
-    void navigator.clipboard
-      ?.writeText(text)
-      .then(() => toast('Chat copied.'))
-      .catch(() => toast('Couldn’t copy that.'));
+  void shareText(cleanTitle(c.title), text).then((ok) => {
+    if (!ok)
+      void navigator.clipboard
+        ?.writeText(text)
+        .then(() => toast('Chat copied.'))
+        .catch(() => toast('Couldn’t copy that.'));
+  });
 }
 
 /** Hand a calendar file to the phone: the share sheet (pick Calendar), else a download
  *  that opens in the calendar app. */
 async function openIcs(name: string, text: string): Promise<void> {
+  if (isApp) {
+    if (!(await shareFile(name, text, 'Add shifts to your calendar')))
+      toast('Couldn’t open the calendar file.');
+    return;
+  }
   const file = new File([text], name, { type: 'text/calendar' });
   try {
     if (navigator.canShare?.({ files: [file] })) {
@@ -1599,8 +1629,9 @@ function actionNode(a: PhoneAction): HTMLElement {
   } else if (a.share != null) {
     b.onclick = () => {
       const text = a.share ?? '';
-      if (navigator.share) void navigator.share({ text }).catch(() => undefined);
-      else void navigator.clipboard?.writeText(text).then(() => toast('Copied'));
+      void shareText('Share', text).then((ok) => {
+        if (!ok) void navigator.clipboard?.writeText(text).then(() => toast('Copied'));
+      });
     };
   } else if (a.pickFor) {
     b.onclick = () => void pickContact(a.pickFor);
@@ -1778,31 +1809,14 @@ function setSending(on: boolean): void {
     : '<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 }
 
-/** The chosen voice, else the best British (then any) English voice on the phone. */
-function pickVoice(): SpeechSynthesisVoice | null {
-  if (!('speechSynthesis' in window)) return null;
-  const all = speechSynthesis.getVoices();
-  return (
-    all.find((v) => v.name === S.voiceName) ??
-    all.find((v) => /en[-_]GB/i.test(v.lang) && /google|natural|neural/i.test(v.name)) ??
-    all.find((v) => /en[-_]GB/i.test(v.lang)) ??
-    all.find((v) => /^en/i.test(v.lang)) ??
-    null
-  );
-}
-
 function say(text: string, force = false, then?: () => void): void {
-  if ((!S.speak && !force) || !('speechSynthesis' in window)) return then?.();
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(plain(text).slice(0, 3000));
-  u.rate = S.voiceRate || 1;
-  const v = pickVoice();
-  if (v) u.voice = v;
-  if (then) {
-    u.onend = () => then();
-    u.onerror = () => then();
-  }
-  speechSynthesis.speak(u);
+  if ((!S.speak && !force) || !canSpeak()) return then?.();
+  stopSpeaking();
+  speak(plain(text).slice(0, 3000), {
+    rate: S.voiceRate || 1,
+    voice: S.voiceName,
+    ...(then ? { onend: then } : {}),
+  });
 }
 
 /* Hands-free: Alton answers out loud, then listens again, until you tap the button or say
@@ -1816,7 +1830,7 @@ function setHandsFree(on: boolean): void {
     if (!recog && !busy) toggleMic();
   } else {
     recog?.stop();
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    stopSpeaking();
   }
 }
 
@@ -2741,6 +2755,8 @@ function wire(): void {
     );
   };
   if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => renderVoiceSettings();
+  installSpeechShim();
+  void loadVoices().then(() => renderVoiceSettings());
   scheduleReminderPings();
   $<HTMLSelectElement>('avatarPick').onchange = (e) => {
     S.avatar = (e.target as HTMLSelectElement).value as PhoneAvatar;
@@ -3025,5 +3041,5 @@ function wire(): void {
 takeHash();
 wire();
 start();
-if ('serviceWorker' in navigator)
+if ('serviceWorker' in navigator && !isApp)
   void navigator.serviceWorker.register('./sw.js').catch(() => undefined);

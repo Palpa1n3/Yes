@@ -17,6 +17,15 @@ Read this first in a new chat, then README.md for the feature list.
   chats to the PC's Alton when connected. Shows "Update ready" from `docs/version.json`. See
   PHONE_REDO.md for what's left.
 
+- **Android app**: Capacitor 7 (`capacitor.config.ts`, `android/`) wraps the built phone app
+  (`docs/`). Native bits go through `phone/src/native.ts` (speech recognition shim, text to
+  speech, local notifications for reminders, share/files) with browser fallbacks; `intent:`
+  links (alarm/timer/calendar) open via `IntentLinksPlugin.java`. The app's origin is
+  `https://localhost`, which the PC's CORS also allows. The release workflow's `android` job
+  builds a signed `Alton.apk` (secrets `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD`)
+  and adds it to the release; the app's "Update ready" downloads it. Android tools can't be
+  downloaded in the sandbox, so the APK is only ever compiled on GitHub.
+
 ## Layout
 
 - `src/shared/` pure logic and types (settings sanitizer, shifts, prompts, usage, phone sync...).
