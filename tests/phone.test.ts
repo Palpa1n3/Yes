@@ -182,3 +182,18 @@ describe('live sync with the PC', () => {
     expect(out[0]?.messages.map((m) => m.text)).toEqual(['offline one']);
   });
 });
+
+describe('Android app tools', () => {
+  it('adds message, calendar, contact and shift-app tools without clashing', async () => {
+    const { APP_TOOLS, PHONE_TOOLS } = await import('../phone/src/tools');
+    const names = [...PHONE_TOOLS, ...APP_TOOLS].map((t) => t.name);
+    expect(new Set(names).size).toBe(names.length);
+    expect(APP_TOOLS.map((t) => t.name)).toEqual([
+      'read_messages',
+      'reply_message',
+      'read_calendar',
+      'find_contact',
+      'read_shift_app',
+    ]);
+  });
+});

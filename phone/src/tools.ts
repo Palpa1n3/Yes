@@ -256,6 +256,58 @@ const READY =
 
 const s = (v: unknown, max = 2000): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
+/** Extra tools inside the Android app (the native side does the work). */
+export const APP_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'read_messages',
+    description:
+      'Read the user\'s recent messages (texts, WhatsApp, Messenger and other chat apps) from their phone\'s notifications, newest first. Use for "any messages?", "what did Mum say?", "read my texts". Read them out naturally (who, which app, what they said); summarise long ones. Only messages still showing as notifications are seen.',
+    input_schema: obj({
+      from: { type: 'string', description: 'Only messages from this person (optional).' },
+    }),
+  },
+  {
+    name: 'reply_message',
+    description:
+      'Prepare a reply to one of the messages from read_messages (use its id). It becomes a Send button the user taps; nothing is sent until they tap it. Say what the reply will be. Only works when canReply is true.',
+    input_schema: obj(
+      {
+        id: { type: 'string' },
+        text: { type: 'string' },
+        to: { type: 'string', description: 'Who it is for (for the button).' },
+      },
+      ['id', 'text'],
+    ),
+  },
+  {
+    name: 'read_calendar',
+    description:
+      'Read the events in the phone\'s calendar (work shifts, appointments, birthdays…) for "what\'s on today/tomorrow/this week?". Times come back in local time with start and end.',
+    input_schema: obj({
+      days_ahead: {
+        type: 'number',
+        description: 'How many days from today (1 = today only; default 1).',
+      },
+      start_day_offset: {
+        type: 'number',
+        description: '0 = today (default), 1 = tomorrow, -1 = yesterday.',
+      },
+    }),
+  },
+  {
+    name: 'find_contact',
+    description:
+      "Look up someone in the phone's contacts by name to get their number (before texting or calling someone not in the saved People list).",
+    input_schema: obj({ name: { type: 'string' } }, ['name']),
+  },
+  {
+    name: 'read_shift_app',
+    description:
+      'Open the user\'s shift/rota app on the phone and read the rota off the screen (no screenshot needed). Then call add_shifts with the shifts you find. Use for "add my shifts", "check my rota", "have my shifts changed?".',
+    input_schema: obj({}),
+  },
+];
+
 export function runPhoneTool(name: string, input: unknown, st: ToolState): ToolOutcome {
   const o = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   const need = (who: string): ToolOutcome => ({

@@ -23,6 +23,8 @@ import {
   isSpeaking,
   loadVoices,
   scheduleReminders,
+  Native,
+  powerStatus,
   shareFile,
   shareText,
   speak,
@@ -95,7 +97,7 @@ import {
   summarise,
   type DayUsage,
 } from '@shared/usage';
-import { PHONE_TOOLS, nearbyLink, runPhoneTool, weatherSummary } from './tools';
+import { APP_TOOLS, PHONE_TOOLS, nearbyLink, runPhoneTool, weatherSummary } from './tools';
 import {
   DEFAULT_PROMPTS,
   expandPrompt,
@@ -165,6 +167,11 @@ interface State {
   snow: boolean;
   /** This phone's own personality (used when not following the PC). */
   personality: Personality | null;
+  /** Android app: the shift app to read, setting shift alarms by themselves, and which are set. */
+  shiftApp: string;
+  shiftAppName: string;
+  autoAlarms: boolean;
+  alarmsSet: string[];
   /** Saved prompts were changed on the phone: keep them rather than the PC's. */
   promptsMine: boolean;
   /** Send chats to the PC's Alton (full tools) when connected. */
@@ -240,6 +247,10 @@ const DEFAULTS: State = {
   snow: true,
   personality: null,
   promptsMine: false,
+  shiftApp: '',
+  shiftAppName: '',
+  autoAlarms: true,
+  alarmsSet: [],
   usePc: true,
   pcName: '',
   pcVersion: '',
@@ -384,8 +395,13 @@ function systemText(): string {
     `You are running in ${S.name}'s phone app. The user's PC may be off, so you cannot control the PC, its files or apps here (when the PC is on and connected, the user's messages go to the PC's Alton instead, which can).`,
     "Messages are often spoken and turned into text by the phone, so words can be misheard (the user has a UK, possibly Welsh, accent). Work out what they most likely meant; if it could mean different things, ask a short question. Don't comment on the mistakes.",
     'Ideas for improving Alton: when the user wishes you could do something, a request fails because you lack a feature, or they suggest an improvement, add a short specific idea to the list "Alton roadmap" with add_to_list (it syncs to the PC roadmap) and mention it briefly.',
+    isApp
+      ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a Send button the user taps), read_calendar for what's on, find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar). Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone powers)."
+      : '',
     'Alexa: you cannot reach Alexa directly; tell_alexa makes the phone say a command out loud for a nearby Echo (e.g. turning alarms or lights on).',
-    'Shifts: you cannot open or read other apps. To add work shifts to the calendar, the user shares a screenshot of their rota/shift app (screenshot it, then Share › Alton, or the camera button here); read it and use add_shifts. If they ask without a screenshot, tell them that in one or two short steps.',
+    isApp
+      ? ''
+      : 'Shifts: you cannot open or read other apps. To add work shifts to the calendar, the user shares a screenshot of their rota/shift app (screenshot it, then Share › Alton, or the camera button here); read it and use add_shifts. If they ask without a screenshot, tell them that in one or two short steps.',
     'On the phone you can get things ready with your tools: texts and WhatsApp messages, calls, emails, directions, places nearby, calendar events, timers/alarms (Android), sharing and links. Each becomes a button the user taps and then confirms; never say a message was sent or a call made. If you do not know who someone is, ask, or use the contact button. You can also check where the user is (get_location) and the local weather (get_weather).',
     'Write for a phone screen: short paragraphs, bullet points when useful. You can search the web when it helps.',
     `Current local date and time: ${now.toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })} (${Intl.DateTimeFormat().resolvedOptions().timeZone}).`,
@@ -464,7 +480,7 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
           model: model(),
           max_tokens: 16000,
           system: [{ type: 'text', text: systemText(), cache_control: { type: 'ephemeral' } }],
-          tools: [...PHONE_TOOLS, ...webTools()],
+          tools: [...PHONE_TOOLS, ...(isApp ? APP_TOOLS : []), ...webTools()],
           messages,
           thinking: { type: 'adaptive' },
           output_config: { effort: research ? 'medium' : 'low' },
@@ -509,6 +525,14 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
       if (!uses.length) break;
       const results: Anthropic.ToolResultBlockParam[] = [];
       for (const u of uses) {
+        // The Android app's own powers (messages, calendar, contacts, shift app).
+        const nat = isApp ? await appTool(u.name, u.input) : null;
+        if (nat) {
+          if (nat.action) reply.actions?.push(nat.action);
+          results.push({ type: 'tool_result', tool_use_id: u.id, content: nat.result });
+          activity = nat.activity ?? activity;
+          continue;
+        }
         // Location and weather need the phone (and the internet), so they run here.
         const live2 = await placeTool(u.name, u.input);
         if (live2) {
@@ -528,6 +552,8 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
           unpaidBreak: S.unpaidBreak,
         });
         if (out.shifts?.length) S.shifts = replaceRota(S.shifts, out.shifts);
+        if (isApp && u.name === 'add_shifts' && out.shifts?.length)
+          await shiftsIntoCalendar(out, u.input);
         if (out.reminder) {
           S.reminders = [...S.reminders.filter((x) => x.at > Date.now()), out.reminder]
             .sort((a, b) => a.at - b.at)
@@ -1621,6 +1647,276 @@ function wireLook(): void {
   };
 }
 
+/* ── Android app: phone powers ── */
+async function appTool(
+  name: string,
+  input: unknown,
+): Promise<{ result: string; action?: PhoneAction; activity?: string } | null> {
+  const o = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  const off = (what: string): { result: string } => ({
+    result: `${what} is switched off on this phone. Tell the user to turn it on in Settings › Phone powers.`,
+  });
+  try {
+    if (name === 'read_messages') {
+      const st = await powerStatus();
+      if (!st?.messages) return off('Reading messages (Notification access)');
+      const who = String(o.from ?? '')
+        .toLowerCase()
+        .trim();
+      const list = (await Native.getMessages()).messages.filter(
+        (m) => !who || m.from.toLowerCase().includes(who),
+      );
+      if (!list.length)
+        return { result: who ? `No recent messages from ${o.from}.` : 'No new messages.' };
+      return {
+        result: list
+          .slice(0, 25)
+          .map(
+            (m) =>
+              `id=${m.id} | ${m.app} | from ${m.from} | ${new Date(m.at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} | ${m.canReply ? 'can reply' : 'no reply'}: ${m.text.slice(0, 600)}`,
+          )
+          .join('\n'),
+      };
+    }
+    if (name === 'reply_message') {
+      const id = String(o.id ?? '');
+      const text = String(o.text ?? '')
+        .trim()
+        .slice(0, 1000);
+      if (!id || !text) return { result: 'Need the message id and the reply text.' };
+      const to = String(o.to ?? '').slice(0, 60) || 'them';
+      return {
+        result:
+          'A Send button is ready; the reply goes when the user taps it. Do not say it was sent.',
+        action: { label: `Send reply to ${to}`, sub: text, reply: { id, text } },
+      };
+    }
+    if (name === 'read_calendar') {
+      const st = await powerStatus();
+      if (!st?.calendar) return off('Calendar access');
+      const off0 = Number(o.start_day_offset) || 0;
+      const days = Math.min(31, Math.max(1, Number(o.days_ahead) || 1));
+      const d0 = new Date();
+      d0.setHours(0, 0, 0, 0);
+      d0.setDate(d0.getDate() + off0);
+      const from = d0.getTime();
+      const to = from + days * 86_400_000;
+      const ev = (await Native.calendarEvents({ from, to })).events;
+      if (!ev.length) return { result: 'Nothing in the calendar for that time.' };
+      const t = (ms: number): string =>
+        new Date(ms).toLocaleString([], {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      return {
+        result: ev
+          .map((e) =>
+            e.allDay
+              ? `${new Date(e.start).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} (all day): ${e.title}`
+              : `${t(e.start)} – ${new Date(e.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${e.title}${e.location ? ` @ ${e.location}` : ''}`,
+          )
+          .join('\n'),
+      };
+    }
+    if (name === 'find_contact') {
+      const st = await powerStatus();
+      if (!st?.contacts) {
+        const r = await Native.requestAccess({ which: 'contacts' });
+        if (!r.granted) return off('Contacts access');
+      }
+      const list = (await Native.findContacts({ name: String(o.name ?? '').slice(0, 60) }))
+        .contacts;
+      return {
+        result: list.length
+          ? list.map((c) => `${c.name}: ${c.phone}`).join('\n')
+          : `No contact called ${o.name}. Ask the user for the number.`,
+      };
+    }
+    if (name === 'read_shift_app') {
+      const text = await readShiftApp();
+      return text.ok
+        ? {
+            result: `Text on the shift app's screen (read just now):\n${text.text.slice(0, 12000)}\n\nWork out the shifts from this and call add_shifts. If it doesn't look like a rota (e.g. a sign-in page), tell the user.`,
+          }
+        : { result: text.text };
+    }
+  } catch (e) {
+    return { result: `That didn't work: ${(e as Error).message}` };
+  }
+  return null;
+}
+
+/** Open the chosen shift app, read its screen, and come back. */
+async function readShiftApp(): Promise<{ ok: boolean; text: string }> {
+  if (!S.shiftApp)
+    return {
+      ok: false,
+      text: 'No shift app chosen yet: the user picks it in Settings › Phone powers.',
+    };
+  const st = await powerStatus();
+  if (!st?.screenReader)
+    return {
+      ok: false,
+      text: 'Reading the shift app (Accessibility) is switched off. The user turns it on in Settings › Phone powers.',
+    };
+  toast(`Opening ${S.shiftAppName || 'your shift app'} to read your rota…`);
+  try {
+    const r = await Native.readApp({ package: S.shiftApp });
+    return { ok: !!r.text.trim(), text: r.text || 'The screen was empty.' };
+  } catch (e) {
+    return { ok: false, text: `Couldn't read it: ${(e as Error).message}` };
+  }
+}
+
+/** add_shifts inside the app: straight into the calendar when allowed (no buttons). */
+async function shiftsIntoCalendar(
+  out: { result: string; actions?: PhoneAction[]; shifts?: Shift[] },
+  input: unknown,
+): Promise<void> {
+  const keys = new Set(out.actions?.[0]?.marks ?? []);
+  const fresh = (out.shifts ?? []).filter((x) => keys.has(shiftKey(x)));
+  if (!fresh.length) return;
+  const st = await powerStatus();
+  if (!st?.calendar) {
+    const r = await Native.requestAccess({ which: 'calendar' }).catch(() => ({ granted: false }));
+    if (!r.granted) {
+      out.result +=
+        ' (Tip for the user: allow Calendar in Settings › Phone powers and shifts go in by themselves.)';
+      return;
+    }
+  }
+  const mins = Number((input as { reminder_minutes?: unknown })?.reminder_minutes) || 0;
+  try {
+    const { added } = await Native.addEvents({
+      events: fresh.map((x) => ({
+        title: x.title,
+        start: new Date(x.start).getTime(),
+        end: new Date(x.end).getTime(),
+        location: x.location ?? '',
+        notes: x.notes ?? '',
+        remindMinutes: mins > 0 && mins <= 1440 ? mins : 0,
+      })),
+    });
+    if (!added) return;
+    S.addedShifts = [...new Set([...S.addedShifts, ...fresh.map(shiftKey)])].slice(-500);
+    out.actions = [];
+    out.result = `DONE: ${added} shift${added > 1 ? 's were' : ' was'} added straight into the phone's calendar (no buttons needed; ignore anything below about buttons). ${out.result}`;
+    void autoShiftAlarms();
+  } catch {
+    /* keep the buttons */
+  }
+}
+
+/** Sets tomorrow's wake-up alarm in the Clock app by itself (or switches on the one already
+ *  there at that time). Only the next day, because a Clock alarm rings at its next time. */
+async function autoShiftAlarms(): Promise<void> {
+  if (!isApp || !S.autoAlarms) return;
+  const n = nextShift(S.shifts, new Date(), 30);
+  if (!n) return;
+  const a = alarmFor(n.shift, S.shiftRules, S.shiftLead);
+  const start = new Date(n.shift.start);
+  const at = new Date(start);
+  at.setHours(a.hour, a.minute, 0, 0);
+  if (at > start) at.setDate(at.getDate() - 1);
+  const ms = at.getTime() - Date.now();
+  const key = `${shiftKey(n.shift)}@${a.time}`;
+  if (ms <= 60_000 || ms > 20 * 3600_000 || S.alarmsSet.includes(key)) return;
+  try {
+    await Native.setAlarm({ hour: a.hour, minute: a.minute, label: `Work · ${n.shift.title}` });
+    S.alarmsSet = [...S.alarmsSet, key].slice(-60);
+    save();
+    toast(`⏰ Alarm set for ${a.time} (${n.shift.title}, ${n.when})`);
+  } catch {
+    /* no clock app took it: the shift card's buttons still work */
+  }
+}
+
+/* Settings › Phone powers */
+async function renderPowers(): Promise<void> {
+  $('powersGrp').hidden = !isApp;
+  if (!isApp) return;
+  const st = await powerStatus();
+  const set = (id: string, on: boolean, offLabel: string): void => {
+    const b = $<HTMLButtonElement>(id);
+    b.textContent = on ? 'On ✓' : offLabel;
+    b.classList.toggle('acc', !on);
+  };
+  set('pwMsgs', !!st?.messages, 'Turn on');
+  set('pwCal', !!st?.calendar, 'Allow');
+  set('pwContacts', !!st?.contacts, 'Allow');
+  set('pwScreen', !!st?.screenReader, 'Turn on');
+  $('pwAlarms').classList.toggle('on', S.autoAlarms);
+  $('pwAlarms').textContent = S.autoAlarms ? '✓' : '';
+  $('pwApp').textContent = S.shiftAppName || 'Choose…';
+}
+function wirePowers(): void {
+  if (!isApp) return;
+  $('pwMsgs').onclick = () => void Native.openSettings({ which: 'messages' });
+  $('pwScreen').onclick = () => void Native.openSettings({ which: 'screenReader' });
+  $('pwRestricted').onclick = () => void Native.openSettings({ which: 'app' });
+  $('pwCal').onclick = async () => {
+    await Native.requestAccess({ which: 'calendar' }).catch(() => undefined);
+    void renderPowers();
+  };
+  $('pwContacts').onclick = async () => {
+    await Native.requestAccess({ which: 'contacts' }).catch(() => undefined);
+    void renderPowers();
+  };
+  $('pwAlarms').onclick = () => {
+    S.autoAlarms = !S.autoAlarms;
+    save();
+    void renderPowers();
+    if (S.autoAlarms) void autoShiftAlarms();
+  };
+  $('pwApp').onclick = async () => {
+    const box = $('pwAppList');
+    if (!box.hidden) {
+      box.hidden = true;
+      return;
+    }
+    box.textContent = 'Loading your apps…';
+    box.hidden = false;
+    try {
+      const { apps } = await Native.listApps();
+      box.textContent = '';
+      for (const a of apps) {
+        const b = el('button', 'li', a.name);
+        b.style.width = '100%';
+        b.style.textAlign = 'left';
+        b.onclick = () => {
+          S.shiftApp = a.package;
+          S.shiftAppName = a.name;
+          save();
+          box.hidden = true;
+          void renderPowers();
+          toast(`Shift app: ${a.name}`);
+        };
+        box.appendChild(b);
+      }
+    } catch {
+      box.textContent = 'Couldn’t list your apps.';
+    }
+  };
+  $('pwRead').onclick = async () => {
+    const r = await readShiftApp();
+    if (!r.ok) return toast(r.text);
+    setView('chat');
+    newChat(false);
+    send(
+      `Here is what my shift app shows right now. Add my shifts to my calendar and tell me if anything changed:\n\n${r.text.slice(0, 12000)}`,
+    );
+  };
+  // Back from Android's settings: show what changed.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && view === 'set') void renderPowers();
+  });
+  void autoShiftAlarms();
+  setInterval(() => void autoShiftAlarms(), 30 * 60_000);
+}
+
 /* ── App lock (PIN) ── */
 async function pinHashOf(pin: string, salt: string): Promise<string> {
   const data = new TextEncoder().encode(`${salt}:${pin}`);
@@ -2040,6 +2336,20 @@ function actionNode(a: PhoneAction): HTMLElement {
     };
   } else if (a.pickFor) {
     b.onclick = () => void pickContact(a.pickFor);
+  } else if (a.reply) {
+    const r = a.reply;
+    b.onclick = async () => {
+      if (b.classList.contains('done')) return;
+      try {
+        await Native.replyMessage(r);
+        b.classList.add('done');
+        const sub = b.querySelector('small');
+        if (sub) sub.textContent = `Sent ✓ ${r.text}`;
+        toast('Reply sent.');
+      } catch (e) {
+        toast((e as Error).message);
+      }
+    };
   } else if (a.alexa) {
     const cmd = a.alexa;
     b.onclick = () => tellAlexa(cmd);
@@ -3135,6 +3445,7 @@ function setView(v: string): void {
     renderLook();
     renderPersonality();
     renderPrompts();
+    void renderPowers();
   }
   if (v === 'chat') renderMsgs();
 }
@@ -3431,6 +3742,7 @@ function wire(): void {
   };
   wirePc();
   wireLook();
+  wirePowers();
   // The background follows the time of day.
   setInterval(applyAmbient, 10 * 60_000);
   // People & lists: one section at a time (remembered).

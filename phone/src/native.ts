@@ -1,6 +1,6 @@
 /** The Android app's native features, with the browser's own as the fallback, so the same
  *  phone app works both as a web page and inside the app (Capacitor). */
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { SpeechRecognition } from '@capacitor-community/speech-recognition';
 import { TextToSpeech } from '@capacitor-community/text-to-speech';
 import { LocalNotifications } from '@capacitor/local-notifications';
@@ -206,5 +206,61 @@ export async function shareFile(name: string, text: string, title: string): Prom
     return true;
   } catch (e) {
     return /cancel/i.test(String(e));
+  }
+}
+
+/* ── Phone powers (Android app only): messages, alarms, calendar, contacts, shift app ── */
+export interface AppMessage {
+  id: string;
+  app: string;
+  from: string;
+  text: string;
+  at: number;
+  canReply: boolean;
+}
+export interface CalEvent {
+  title: string;
+  start: number;
+  end: number;
+  allDay: boolean;
+  location: string;
+}
+export interface PowerStatus {
+  messages: boolean;
+  screenReader: boolean;
+  calendar: boolean;
+  contacts: boolean;
+}
+interface AltonNativePlugin {
+  status(): Promise<PowerStatus>;
+  openSettings(o: { which: 'messages' | 'screenReader' | 'app' }): Promise<void>;
+  requestAccess(o: { which: 'calendar' | 'contacts' }): Promise<{ granted: boolean }>;
+  getMessages(): Promise<{ messages: AppMessage[] }>;
+  replyMessage(o: { id: string; text: string }): Promise<void>;
+  setAlarm(o: { hour: number; minute: number; label: string }): Promise<void>;
+  calendarEvents(o: { from: number; to: number }): Promise<{ events: CalEvent[] }>;
+  addEvents(o: {
+    events: Array<{
+      title: string;
+      start: number;
+      end: number;
+      location?: string;
+      notes?: string;
+      remindMinutes?: number;
+    }>;
+  }): Promise<{ added: number }>;
+  findContacts(o: { name: string }): Promise<{ contacts: Array<{ name: string; phone: string }> }>;
+  listApps(): Promise<{ apps: Array<{ name: string; package: string }> }>;
+  readApp(o: { package: string }): Promise<{ text: string }>;
+}
+/** The app's own native code (android/app/src/main/java/com/alton/phone/AltonNativePlugin.java). */
+export const Native = registerPlugin<AltonNativePlugin>('AltonNative');
+
+export async function powerStatus(): Promise<PowerStatus | null> {
+  if (!isApp) return null;
+  try {
+    return await Native.status();
+  } catch {
+    return null;
   }
 }

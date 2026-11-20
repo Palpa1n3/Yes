@@ -29,6 +29,8 @@ export interface PhoneAction {
   marks?: string[];
   /** Say this out loud so a nearby Echo hears it ("set an alarm for 5:45 a.m."). */
   alexa?: string;
+  /** Android app: send this reply through the message's own notification (on tap). */
+  reply?: { id: string; text: string };
 }
 
 export interface PhoneChat {

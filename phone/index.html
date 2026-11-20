@@ -1820,6 +1820,71 @@
               <button class="btn full" id="keyChange">Change Claude key</button>
             </div>
           </details>
+          <details class="grp" id="powersGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z" /></svg></span
+              ><span class="gt"
+                ><b>Phone powers</b
+                ><small>Messages, calendar, contacts, alarms, shift app</small></span
+              >
+            </summary>
+            <div class="gb">
+              <div class="li">
+                <span style="flex: 1"
+                  >Read &amp; reply to messages<br /><small class="muted"
+                    >Texts, WhatsApp and more. Turn on <b>Alton</b> in Notification access. Replies
+                    are only sent when you tap Send.</small
+                  ></span
+                ><button class="btn" id="pwMsgs" style="padding: 6px 10px"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Calendar<br /><small class="muted"
+                    >Shifts go straight in, and “what’s on today?”</small
+                  ></span
+                ><button class="btn" id="pwCal" style="padding: 6px 10px"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Contacts<br /><small class="muted">So “text Sam” finds Sam’s number</small></span
+                ><button class="btn" id="pwContacts" style="padding: 6px 10px"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Shift alarms by themselves<br /><small class="muted"
+                    >The night before a shift, Alton sets (or switches on) the Clock alarm for
+                    it</small
+                  ></span
+                ><button class="check" id="pwAlarms"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Read my shift app<br /><small class="muted"
+                    >Turn on <b>Alton: read my shift app</b> in Accessibility (Installed
+                    apps)</small
+                  ></span
+                ><button class="btn" id="pwScreen" style="padding: 6px 10px"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Your shift app<br /><small class="muted"
+                    >The app Alton opens to read your rota</small
+                  ></span
+                ><button class="btn" id="pwApp" style="padding: 6px 10px"></button>
+              </div>
+              <div id="pwAppList" hidden style="max-height: 260px; overflow-y: auto"></div>
+              <button class="btn acc full" id="pwRead" style="margin-top: 8px">
+                Read my rota now
+              </button>
+              <p class="muted small">
+                If Android says <b>“Restricted setting”</b> when you turn something on: open App
+                info, tap ⋮ (top right) › <b>Allow restricted settings</b>, then try again. Android
+                asks this for apps installed from outside the Play Store.
+              </p>
+              <button class="btn full" id="pwRestricted">Open Alton’s App info</button>
+            </div>
+          </details>
           <details class="grp">
             <summary>
               <span class="gi"
