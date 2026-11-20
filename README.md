@@ -296,6 +296,20 @@ Set the wake-up time in People › Shifts: minutes before a shift, or exact time
 time like `07:00=05:45, 12:00=10:00`. You can also ask "when am I working this week?",
 "how many hours next week?", or "tell Alexa to turn on the bedroom light".
 
+### Phone app: camera, voice and reminders
+
+- **Live camera**: the 👁 button in the chat box opens the camera; point it at something and tap
+  a suggestion ("What is this?", "Read this to me", "Add these shifts to my calendar"…) or type a
+  question and press the round button.
+- **Voice**: hold the mic to talk and let go to send (or tap to start/stop). Pick Alton's voice
+  and speed in Settings › Voice (it picks the best British voice by default). **Train on my
+  voice** there works like the PC's: say the phrases, and mishearings are learnt and fixed. The
+  PC's training comes across when you sync.
+- **Reminders that buzz**: "remind me to call the bank tomorrow at 6" gives a button that opens
+  your phone's Calendar with it filled in (its alert buzzes the phone). They're listed in People ›
+  Reminders; "Also notify me in Alton" adds an in-app alert if Alton is open at the time.
+- **Look**: smoother screens, glowing HUD cards and tab indicator.
+
 ### Pay, travel and backups (phone app)
 
 In People › Shifts, add your hourly pay (and any unpaid break) to see estimated pay for this

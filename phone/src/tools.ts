@@ -17,6 +17,8 @@ import {
   androidAlarmLink,
   androidTimerLink,
   calendarLink,
+  androidEventLink,
+  reminderIcs,
   callLink,
   directionsLink,
   emailLink,
@@ -49,6 +51,8 @@ export interface ToolOutcome {
   actions?: PhoneAction[];
   /** Shifts read from a rota, to keep on the phone. */
   shifts?: Shift[];
+  /** A reminder to list in the app. */
+  reminder?: { what: string; at: number };
   /** Changes to keep (new memory, list items, contact). */
   remember?: string;
   listItems?: Array<{ list: string; text: string }>;
@@ -149,6 +153,22 @@ export const PHONE_TOOLS: Anthropic.Tool[] = [
         },
       },
       ['shifts'],
+    ),
+  },
+  {
+    name: 'set_reminder',
+    description:
+      'A reminder that actually alerts the phone: it goes into the phone\'s own Calendar app (with an alert at the time), via a button the user taps and saves. Use for "remind me to … at 6", "remind me tomorrow at 9 to …". For "in 20 minutes" use set_timer instead. "when" is local time like 2026-11-21T18:00.',
+    input_schema: obj(
+      {
+        what: { type: 'string' },
+        when: { type: 'string' },
+        minutes_before: {
+          type: 'number',
+          description: 'Alert this many minutes early (default 0).',
+        },
+      },
+      ['what', 'when'],
     ),
   },
   {
@@ -378,6 +398,48 @@ export function runPhoneTool(name: string, input: unknown, st: ToolState): ToolO
         result: `Ready. The first button adds all ${n} shift${n > 1 ? 's' : ''} in one go (the phone asks which calendar app to use); below it there is a Google Calendar button for each shift as a backup. Shifts: ${fresh.map((x) => `${describeShift(x)} ${x.title}`).join('; ')}.${skipped ? ` ${skipped} were already added before, so they were left out.` : ''} Total ${Math.round(hours * 10) / 10} hours. Ask the user to check them against their shift app. They are not in the calendar until the user taps and saves.${changeNote ? ` ${changeNote}` : ''} Lead with any changes.`,
         actions,
         shifts: all,
+      };
+    }
+    case 'set_reminder': {
+      const what = s(o.what, 200);
+      const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(s(o.when, 40));
+      if (!what || !m) return { result: 'Need "what" and "when" like 2026-11-21T18:00.' };
+      const [y, mo, d, h, mi] = m.slice(1, 6).map(Number) as [
+        number,
+        number,
+        number,
+        number,
+        number,
+      ];
+      const at = new Date(y, mo - 1, d, h, mi).getTime();
+      if (!(at > Date.now() - 60_000))
+        return { result: 'That time has already passed; ask for another.' };
+      const before = Math.max(0, Math.min(1440, Number(o.minutes_before) || 0));
+      const when = new Date(at).toLocaleString([], {
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        day: 'numeric',
+        month: 'short',
+      });
+      return {
+        result: `Ready as a button: it opens the phone's ${st.android ? 'Calendar' : 'calendar'} with the reminder filled in, set to alert ${before ? `${before} minutes before` : 'at the time'}; the user taps Save. ${READY}`,
+        action: st.android
+          ? {
+              label: `Remind me: ${what}`,
+              sub: `${when} · opens your Calendar`,
+              href: androidEventLink(
+                what,
+                at - before * 60_000,
+                at - before * 60_000 + 15 * 60_000,
+              ),
+            }
+          : {
+              label: `Remind me: ${what}`,
+              sub: `${when} · add to your calendar`,
+              ics: { name: 'reminder.ics', text: reminderIcs(what, at, before) },
+            },
+        reminder: { what, at },
       };
     }
     case 'get_shifts': {

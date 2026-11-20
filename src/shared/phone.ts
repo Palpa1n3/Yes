@@ -64,6 +64,8 @@ export interface SyncFromPc {
   prompts?: Array<{ name: string; text: string }>;
   /** The PC's look: accent colour (#rrggbb) and avatar. */
   look?: { accent: string; avatar: string };
+  /** Voice corrections learnt on the PC. */
+  voiceFixes?: Array<{ heard: string; meant: string }>;
   at: number;
 }
 
@@ -249,4 +251,41 @@ export function mergeLists(
     }
   }
   return out;
+}
+
+/** Android: open the phone's Calendar app with a new event (its own reminder buzzes). */
+export function androidEventLink(
+  title: string,
+  startMs: number,
+  endMs: number,
+  notes = '',
+): string {
+  const enc2 = (v: string): string => encodeURIComponent(v).replace(/;/g, '%3B');
+  return `intent:#Intent;action=android.intent.action.INSERT;type=vnd.android.cursor.item/event;S.title=${enc2(title)};S.description=${enc2(notes)};l.beginTime=${Math.round(startMs)};l.endTime=${Math.round(endMs)};B.hasAlarm=true;end`;
+}
+
+/** A one-event calendar file with an alert at the time (iPhone and others). */
+export function reminderIcs(title: string, startMs: number, minutesBefore = 0): string {
+  const z = (t: number): string =>
+    new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const clean = title.replace(/[\r\n]+/g, ' ').replace(/([,;\\])/g, '\\$1');
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Alton//Reminder//EN',
+    'BEGIN:VEVENT',
+    `UID:reminder-${Math.round(startMs)}@alton`,
+    `DTSTAMP:${z(Date.now())}`,
+    `DTSTART:${z(startMs)}`,
+    `DTEND:${z(startMs + 15 * 60_000)}`,
+    `SUMMARY:${clean}`,
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${clean}`,
+    `TRIGGER:-PT${Math.max(0, Math.round(minutesBefore))}M`,
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
 }

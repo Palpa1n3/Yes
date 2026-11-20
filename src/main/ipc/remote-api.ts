@@ -269,6 +269,7 @@ export function makePhoneRoutes(
           .notes.slice(0, 30)
           .map((n) => n.text.slice(0, 2000)),
         prompts: st.prompts,
+        voiceFixes: st.voiceFixes,
         look: {
           accent: st.avatarColor || THEME_ACCENT[st.theme],
           avatar: phoneAvatarFor(st.avatar),

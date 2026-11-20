@@ -797,9 +797,181 @@
         font-size: 15px;
         color: var(--ice);
       }
+      /* ── HUD look ── */
+      header {
+        box-shadow:
+          0 1px 0 rgba(63, 208, 255, 0.12),
+          0 8px 24px rgba(0, 0, 0, 0.35);
+      }
+      .view.on {
+        animation: viewIn 0.22s ease-out both;
+      }
+      @keyframes viewIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      .card {
+        background: linear-gradient(160deg, rgba(16, 30, 44, 0.92), rgba(8, 16, 26, 0.94));
+        border-color: rgba(120, 190, 230, 0.16);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.03),
+          0 6px 20px rgba(0, 0, 0, 0.25);
+        position: relative;
+        overflow: hidden;
+      }
+      .card::before {
+        content: '';
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        top: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        opacity: 0.45;
+      }
+      nav.tabs button {
+        position: relative;
+        transition: color 0.2s;
+      }
+      nav.tabs button.on::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 30%;
+        right: 30%;
+        height: 2px;
+        border-radius: 2px;
+        background: var(--accent);
+        box-shadow: 0 0 10px var(--accent);
+      }
+      nav.tabs button.on svg {
+        filter: drop-shadow(0 0 6px var(--accent));
+      }
+      button:active,
+      .btn:active,
+      .chip:active {
+        transform: scale(0.97);
+      }
+      .welcome-avatar {
+        width: 190px;
+        height: 190px;
+      }
+      .welcome h2 {
+        text-shadow: 0 0 18px rgba(63, 208, 255, 0.35);
+      }
+      .it {
+        animation: viewIn 0.25s ease-out both;
+      }
+      .me {
+        animation: viewIn 0.18s ease-out both;
+      }
+      .composer .box {
+        box-shadow:
+          0 0 0 1px rgba(63, 208, 255, 0.08),
+          0 8px 26px rgba(0, 0, 0, 0.35);
+      }
+      /* Live camera */
+      .cam {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+      }
+      .cam[hidden] {
+        display: none;
+      }
+      .cam video {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        object-fit: cover;
+      }
+      .cam .frame {
+        position: absolute;
+        inset: 18% 10% 34% 10%;
+        border: 1px solid rgba(63, 208, 255, 0.55);
+        border-radius: 14px;
+        box-shadow:
+          0 0 0 9999px rgba(0, 0, 0, 0.18),
+          0 0 24px rgba(63, 208, 255, 0.25);
+        pointer-events: none;
+      }
+      .cam .cambar {
+        padding: 10px 12px calc(14px + env(safe-area-inset-bottom));
+        background: rgba(5, 10, 16, 0.94);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .cam .chips {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+      }
+      .cam .chips button {
+        flex: none;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: inherit;
+        border-radius: 18px;
+        padding: 8px 12px;
+        font: inherit;
+        font-size: 14px;
+      }
+      .cam .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .cam .shutter {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        border: 3px solid #fff;
+        background: var(--accent);
+        box-shadow: 0 0 18px var(--accent);
+        flex: none;
+      }
+      .cam .close {
+        position: absolute;
+        top: calc(12px + env(safe-area-inset-top));
+        right: 12px;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        border: 0;
+        font-size: 20px;
+      }
     </style>
   </head>
   <body>
+    <div id="cam" class="cam" hidden>
+      <video id="camVideo" autoplay playsinline muted></video>
+      <div class="frame"></div>
+      <button class="close" id="camClose" aria-label="Close camera">✕</button>
+      <div class="cambar">
+        <div class="chips" id="camChips"></div>
+        <div class="row">
+          <input
+            class="input"
+            id="camText"
+            placeholder="Ask about this… (or tap a suggestion)"
+            style="flex: 1"
+          />
+          <button class="shutter" id="camShoot" aria-label="Ask"></button>
+        </div>
+      </div>
+    </div>
     <div id="lock" hidden class="lock">
       <img src="./icon-192.png" width="64" height="64" alt="" style="border-radius: 16px" />
       <h2 style="margin: 10px 0 4px; font-weight: 500">Alton is locked</h2>
@@ -900,6 +1072,12 @@
             <div class="slash" id="slash" hidden></div>
             <div class="thumbs" id="thumbs"></div>
             <div class="box">
+              <button class="icon" id="camBtn" aria-label="Ask about what the camera sees">
+                <svg viewBox="0 0 24 24">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
               <button class="icon" id="attachBtn" aria-label="Add a photo">
                 <svg viewBox="0 0 24 24">
                   <path
@@ -982,6 +1160,13 @@
             </div>
           </div>
           <div class="card">
+            <div class="lbl"><span class="dot"></span>Reminders</div>
+            <div id="reminderList"></div>
+            <button class="btn full" id="notifyAllow" style="margin-top: 8px">
+              Also notify me in Alton
+            </button>
+          </div>
+          <div class="card">
             <div class="lbl"><span class="dot"></span>Lists</div>
             <div id="lists"></div>
           </div>
@@ -1052,6 +1237,32 @@
           </div>
         </section>
         <section id="setView" class="view">
+          <div class="card">
+            <div class="lbl"><span class="dot"></span>Voice</div>
+            <label class="muted">Alton's voice</label>
+            <select id="voicePick" class="input" style="margin: 4px 0 10px"></select>
+            <label class="muted">Speed</label>
+            <input
+              id="voiceRate"
+              type="range"
+              min="0.6"
+              max="1.6"
+              step="0.1"
+              style="width: 100%; accent-color: var(--accent)"
+            />
+            <p class="muted" style="margin: 10px 0 4px">
+              Hold the mic button to talk and let go to send, or tap it to start and stop.
+            </p>
+            <div class="lbl" style="margin-top: 12px">
+              <span class="dot"></span>Train on my voice
+            </div>
+            <p class="muted" style="margin-top: 0">
+              Tap 🎤 and say the phrase. Anything heard wrong is learnt and fixed from then on (the
+              PC's training comes across when you sync).
+            </p>
+            <div id="voiceTrain"></div>
+            <p class="muted" id="voiceLearnt" style="font-size: 12px"></p>
+          </div>
           <div class="card">
             <div class="lbl"><span class="dot"></span>Backup</div>
             <p class="muted" style="margin-top: 0">

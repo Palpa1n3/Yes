@@ -20,6 +20,7 @@ import { hoursSvg, mondayOf, weekSvg, weeksSummary } from '@shared/shiftChart';
 import { runAvatar } from '../../src/renderer/components/core/engines';
 import { hexToChannels } from '../../src/renderer/components/core/avatarKit';
 import type { PhoneAvatar } from '@shared/looks';
+import { addFix, applyFixes, learnFix, type VoiceFix } from '@shared/vocab';
 import {
   alarmFor,
   describeShift,
@@ -96,6 +97,13 @@ interface State {
   /** Accent colour from the PC (#rrggbb, '' = default) and the avatar to draw. */
   accent: string;
   avatar: PhoneAvatar;
+  /** Alton's spoken voice on this phone ('' = best English voice) and speed. */
+  voiceName: string;
+  voiceRate: number;
+  /** Learnt from voice training on the phone (and synced from the PC). */
+  voiceFixes: VoiceFix[];
+  /** Reminders set from the phone (shown in People › Reminders). */
+  reminders: Array<{ what: string; at: number }>;
   /** The PC's HTTPS address over Tailscale (tailscale serve), for automatic switching. */
   pcHttps: string;
   /** Open the full PC version automatically when the PC is on. */
@@ -151,6 +159,10 @@ const DEFAULTS: State = {
   saver: false,
   accent: '',
   avatar: 'orb',
+  voiceName: '',
+  voiceRate: 1,
+  voiceFixes: [],
+  reminders: [],
   pcHttps: '',
   autoSwitch: true,
   pinHash: '',
@@ -246,6 +258,7 @@ function takeHash(): void {
     goals: d.goals ?? S.goals,
     notes: [...S.newNotes, ...(d.notes ?? S.notes)],
     prompts: d.prompts ? sanitizePrompts(d.prompts) : S.prompts,
+    voiceFixes: (d.voiceFixes ?? []).reduce((acc, f) => addFix(acc, f), S.voiceFixes),
     accent: /^#[0-9a-f]{6}$/i.test(d.look?.accent ?? '') ? (d.look?.accent ?? '') : S.accent,
     avatar: (['orb', 'swarm', 'wave', 'head', 'none'] as const).includes(
       d.look?.avatar as PhoneAvatar,
@@ -417,6 +430,12 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
           unpaidBreak: S.unpaidBreak,
         });
         if (out.shifts?.length) S.shifts = replaceRota(S.shifts, out.shifts);
+        if (out.reminder) {
+          S.reminders = [...S.reminders.filter((x) => x.at > Date.now()), out.reminder]
+            .sort((a, b) => a.at - b.at)
+            .slice(0, 50);
+          scheduleReminderPings();
+        }
         if (out.action) reply.actions?.push(out.action);
         if (out.actions) reply.actions?.push(...out.actions);
         if (out.remember) {
@@ -1038,6 +1057,187 @@ function applyLook(): void {
   stopHeader = mountAvatar(c);
 }
 
+/* ── Live camera: point it at something and ask straight away ── */
+let camStream: MediaStream | null = null;
+const CAM_ASKS = [
+  'What is this?',
+  'Read this to me',
+  'Add these shifts to my calendar',
+  'What does this error mean?',
+  'Summarise this',
+  'How much is this worth?',
+];
+async function openCamera(): Promise<void> {
+  if (!navigator.mediaDevices?.getUserMedia) return toast('This browser can’t use the camera.');
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } },
+      audio: false,
+    });
+  } catch {
+    return toast('Allow the camera for this site in your browser settings.');
+  }
+  const v = $<HTMLVideoElement>('camVideo');
+  v.srcObject = camStream;
+  $('cam').hidden = false;
+  const chips = $('camChips');
+  chips.textContent = '';
+  for (const q of CAM_ASKS) {
+    const b = el('button', undefined, q);
+    b.onclick = () => void shootAndAsk(q);
+    chips.appendChild(b);
+  }
+}
+function closeCamera(): void {
+  for (const t of camStream?.getTracks() ?? []) t.stop();
+  camStream = null;
+  $('cam').hidden = true;
+}
+async function shootAndAsk(question: string): Promise<void> {
+  const v = $<HTMLVideoElement>('camVideo');
+  if (!v.videoWidth) return toast('The camera isn’t ready yet.');
+  const scale = (max: number): HTMLCanvasElement => {
+    const k = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.round(v.videoWidth * k);
+    c.height = Math.round(v.videoHeight * k);
+    c.getContext('2d')?.drawImage(v, 0, 0, c.width, c.height);
+    return c;
+  };
+  const big = scale(1568).toDataURL('image/jpeg', 0.85);
+  const small = scale(160).toDataURL('image/jpeg', 0.7);
+  closeCamera();
+  pending.push({ data: big.slice(big.indexOf(',') + 1), thumb: small });
+  renderThumbs();
+  send(question.trim() || 'What is this?');
+}
+
+/* ── Voice settings and training ── */
+function renderVoiceSettings(): void {
+  const sel = $<HTMLSelectElement>('voicePick');
+  const voices =
+    'speechSynthesis' in window
+      ? speechSynthesis.getVoices().filter((v) => /^en/i.test(v.lang))
+      : [];
+  sel.textContent = '';
+  const auto = el('option', undefined, 'Best British voice (automatic)') as HTMLOptionElement;
+  auto.value = '';
+  sel.appendChild(auto);
+  for (const v of voices) {
+    const o = el('option', undefined, `${v.name} (${v.lang})`) as HTMLOptionElement;
+    o.value = v.name;
+    sel.appendChild(o);
+  }
+  sel.value = S.voiceName;
+  $<HTMLInputElement>('voiceRate').value = String(S.voiceRate || 1);
+  const box = $('voiceTrain');
+  box.textContent = '';
+  for (const p of TRAIN_PHRASES) {
+    const row = el('div', 'li');
+    const b = el('button', 'btn', '🎤');
+    b.setAttribute('aria-label', `Say “${p}”`);
+    const t = el('span', undefined, p);
+    t.style.flex = '1';
+    const r = el('div', 'muted');
+    r.style.fontSize = '12px';
+    b.onclick = () => trainOnce(p, r);
+    const wrap = el('div');
+    wrap.style.flex = '1';
+    wrap.append(t, r);
+    row.append(b, wrap);
+    box.appendChild(row);
+  }
+  const learnt = $('voiceLearnt');
+  learnt.textContent = S.voiceFixes.length
+    ? S.voiceFixes.map((f) => `“${f.heard}” → ${f.meant}`).join(' · ')
+    : 'Nothing learnt yet.';
+}
+const TRAIN_PHRASES = [
+  'Open Lunar Client',
+  'Text Mum that I will be late',
+  'Remind me to call the bank at five',
+  'Add bread to my shopping list',
+  'What time do I finish work tomorrow?',
+  'Set a timer for ten minutes',
+];
+function trainOnce(phrase: string, out: HTMLElement): void {
+  const W = window as unknown as {
+    SpeechRecognition?: new () => Recog;
+    webkitSpeechRecognition?: new () => Recog;
+  };
+  const R = W.SpeechRecognition ?? W.webkitSpeechRecognition;
+  if (!R) return toast('Voice isn’t supported in this browser.');
+  const r = new R();
+  r.lang = 'en-GB';
+  r.interimResults = false;
+  out.textContent = 'Listening… say it now';
+  r.onresult = (e) => {
+    const heard = e.results[0]?.[0]?.transcript ?? '';
+    const fix = learnFix(heard, phrase);
+    if (fix) {
+      S.voiceFixes = addFix(S.voiceFixes, fix);
+      save();
+      out.textContent = `Heard “${heard}”. Learnt: “${fix.heard}” → ${fix.meant}`;
+      $('voiceLearnt').textContent = S.voiceFixes
+        .map((f) => `“${f.heard}” → ${f.meant}`)
+        .join(' · ');
+    } else out.textContent = heard ? `Heard “${heard}”: ✓` : 'Didn’t catch that, try again.';
+  };
+  r.onerror = () => (out.textContent = 'Couldn’t listen (allow the microphone).');
+  r.start();
+}
+
+/* ── Reminders: listed here, and pinged by the app if it's open at the time ── */
+const pinged = new Set<number>();
+function scheduleReminderPings(): void {
+  for (const r of S.reminders) {
+    const ms = r.at - Date.now();
+    if (ms <= 0 || ms > 6 * 3600_000 || pinged.has(r.at)) continue;
+    pinged.add(r.at);
+    setTimeout(() => {
+      toast(`⏰ ${r.what}`);
+      if ('vibrate' in navigator) navigator.vibrate([200, 100, 200]);
+      if ('Notification' in window && Notification.permission === 'granted')
+        void navigator.serviceWorker?.ready
+          .then((reg) =>
+            reg.showNotification(`Alton · ${r.what}`, { body: 'Reminder', tag: `r${r.at}` }),
+          )
+          .catch(() => new Notification(`Alton · ${r.what}`));
+    }, ms);
+  }
+}
+function renderReminders(): void {
+  S.reminders = S.reminders.filter((r) => r.at > Date.now() - 3600_000);
+  const box = $('reminderList');
+  box.textContent = '';
+  for (const r of S.reminders) {
+    const row = el('div', 'li');
+    const t = el(
+      'span',
+      undefined,
+      `${new Date(r.at).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${r.what}`,
+    );
+    t.style.flex = '1';
+    const x = el('button', 'x', '✕');
+    x.setAttribute('aria-label', 'Remove from this list');
+    x.onclick = () => {
+      S.reminders = S.reminders.filter((y) => y !== r);
+      save();
+      renderReminders();
+    };
+    row.append(t, x);
+    box.appendChild(row);
+  }
+  if (!S.reminders.length)
+    box.appendChild(
+      el(
+        'p',
+        'muted',
+        'None yet. Say “remind me to … at …”. They go into your phone’s Calendar so they buzz.',
+      ),
+    );
+}
+
 /* ── Offline queue ── */
 const queuedImages = new Map<string, string[]>();
 let flushing = false;
@@ -1327,11 +1527,26 @@ function setSending(on: boolean): void {
     : '<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 }
 
+/** The chosen voice, else the best British (then any) English voice on the phone. */
+function pickVoice(): SpeechSynthesisVoice | null {
+  if (!('speechSynthesis' in window)) return null;
+  const all = speechSynthesis.getVoices();
+  return (
+    all.find((v) => v.name === S.voiceName) ??
+    all.find((v) => /en[-_]GB/i.test(v.lang) && /google|natural|neural/i.test(v.name)) ??
+    all.find((v) => /en[-_]GB/i.test(v.lang)) ??
+    all.find((v) => /^en/i.test(v.lang)) ??
+    null
+  );
+}
+
 function say(text: string, force = false, then?: () => void): void {
   if ((!S.speak && !force) || !('speechSynthesis' in window)) return then?.();
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(plain(text).slice(0, 3000));
-  u.rate = 1.03;
+  u.rate = S.voiceRate || 1;
+  const v = pickVoice();
+  if (v) u.voice = v;
   if (then) {
     u.onend = () => then();
     u.onerror = () => then();
@@ -1473,6 +1688,28 @@ type Recog = {
   stop(): void;
 };
 let recog: Recog | null = null;
+/** Hold the mic button to talk; let go to send. A short tap starts/stops as before. */
+let holdSend = false;
+let holdTimer: ReturnType<typeof setTimeout> | null = null;
+function micDown(): void {
+  holdTimer = setTimeout(() => {
+    holdTimer = null;
+    holdSend = true;
+    if (!recog) toggleMic();
+    if ('vibrate' in navigator) navigator.vibrate(15);
+  }, 280);
+}
+function micUp(): void {
+  if (holdTimer) {
+    // A tap.
+    clearTimeout(holdTimer);
+    holdTimer = null;
+    toggleMic();
+    return;
+  }
+  if (holdSend) recog?.stop();
+}
+
 function toggleMic(): void {
   const W = window as unknown as {
     SpeechRecognition?: new () => Recog;
@@ -1504,7 +1741,7 @@ function toggleMic(): void {
       text += res[0]?.transcript ?? '';
       if (res.isFinal) done = true;
     }
-    ta.value = `${before}${before ? ' ' : ''}${text}`;
+    ta.value = `${before}${before ? ' ' : ''}${applyFixes(text, S.voiceFixes)}`;
     if (done) final = ta.value;
   };
   r.onend = () => {
@@ -1519,7 +1756,9 @@ function toggleMic(): void {
       setHandsFree(false);
       return;
     }
-    if (final && (S.autoSend || handsFree)) send(final);
+    const hold = holdSend;
+    holdSend = false;
+    if (final && (S.autoSend || handsFree || hold)) send(final);
     else if (handsFree && !final)
       setTimeout(() => handsFree && !busy && !recog && toggleMic(), 400);
   };
@@ -1616,6 +1855,7 @@ function renderShifts(): void {
 
 function renderPeople(): void {
   renderShifts();
+  renderReminders();
   const box = $('peopleList');
   box.textContent = '';
   S.people.forEach((p) => {
@@ -1806,6 +2046,7 @@ function renderSettings(): void {
   tick('speakToggle', S.speak);
   tick('autoToggle', S.autoSend);
   tick('saverToggle', S.saver);
+  renderVoiceSettings();
   $<HTMLSelectElement>('avatarPick').value = S.avatar;
   tick('autoSwitchToggle', S.autoSwitch);
   $('pinBtn').textContent = S.pinHash ? 'Remove PIN lock' : 'Set a PIN lock';
@@ -1931,7 +2172,34 @@ async function takeLaunchParams(): Promise<void> {
 
 function wire(): void {
   $('shareBtn').onclick = shareChat;
+  $('camBtn').onclick = () => void openCamera();
+  $('camClose').onclick = closeCamera;
+  $('camShoot').onclick = () => void shootAndAsk($<HTMLInputElement>('camText').value);
+  $('camText').addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter')
+      void shootAndAsk($<HTMLInputElement>('camText').value);
+  });
   $('mode').onclick = () => setView('set');
+  $<HTMLSelectElement>('voicePick').onchange = (e) => {
+    S.voiceName = (e.target as HTMLSelectElement).value;
+    save();
+    say('This is how I sound now.', true);
+  };
+  $<HTMLInputElement>('voiceRate').onchange = (e) => {
+    S.voiceRate = Math.min(1.6, Math.max(0.6, Number((e.target as HTMLInputElement).value) || 1));
+    save();
+    say('This is how fast I talk now.', true);
+  };
+  $('notifyAllow').onclick = () => {
+    if (!('Notification' in window)) return toast('This browser can’t show notifications.');
+    void Notification.requestPermission().then((p) =>
+      toast(
+        p === 'granted' ? 'Alton can notify you while it’s open.' : 'Notifications are blocked.',
+      ),
+    );
+  };
+  if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => renderVoiceSettings();
+  scheduleReminderPings();
   $<HTMLSelectElement>('avatarPick').onchange = (e) => {
     S.avatar = (e.target as HTMLSelectElement).value as PhoneAvatar;
     save();
@@ -2104,7 +2372,14 @@ function wire(): void {
     }
   };
   $('sendBtn').onclick = () => (busy ? busy.abort() : send());
-  $('micBtn').onclick = toggleMic;
+  const mic = $('micBtn');
+  mic.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    micDown();
+  });
+  mic.addEventListener('pointerup', micUp);
+  mic.addEventListener('pointercancel', micUp);
+  mic.addEventListener('contextmenu', (e) => e.preventDefault());
   $('attachBtn').onclick = () => $('photo').click();
   $<HTMLInputElement>('photo').onchange = (e) => {
     const input = e.target as HTMLInputElement;
