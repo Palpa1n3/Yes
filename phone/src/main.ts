@@ -5,8 +5,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import {
   androidAlarmLink,
   decodeSync,
-  encodeSync,
-  mergeChats,
+  chatsToSend,
+  mergeChatHistory,
   mergeLists,
   type Person,
   type PhoneAction,
@@ -16,6 +16,17 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import {
+  PcError,
+  isPcAddress,
+  pairWithPc,
+  pcApi,
+  pcScreen,
+  pcUpload,
+  type PcConn,
+  type PcJob,
+  type PcStatus,
+} from './pc';
 import { hoursSvg, mondayOf, weekSvg, weeksSummary } from '@shared/shiftChart';
 import { runAvatar } from '../../src/renderer/components/core/engines';
 import { hexToChannels } from '../../src/renderer/components/core/avatarKit';
@@ -106,8 +117,13 @@ interface State {
   reminders: Array<{ what: string; at: number }>;
   /** The PC's HTTPS address over Tailscale (tailscale serve), for automatic switching. */
   pcHttps: string;
-  /** Open the full PC version automatically when the PC is on. */
-  autoSwitch: boolean;
+  /** Send chats to the PC's Alton (full tools) when connected. */
+  usePc: boolean;
+  /** The connected PC's name and Alton version. */
+  pcName: string;
+  pcVersion: string;
+  /** Upcoming shifts last sent to the PC (so they're only sent when they change). */
+  shiftsSent: string;
   /** App lock: salted SHA-256 of the PIN ('' = no lock). */
   pinHash: string;
   pinSalt: string;
@@ -164,7 +180,10 @@ const DEFAULTS: State = {
   voiceFixes: [],
   reminders: [],
   pcHttps: '',
-  autoSwitch: true,
+  usePc: true,
+  pcName: '',
+  pcVersion: '',
+  shiftsSent: '',
   pinHash: '',
   pinSalt: '',
   addedShifts: [],
@@ -236,13 +255,8 @@ const uid = (): string => `p-${Date.now().toString(36)}${Math.random().toString(
 const android = /android/i.test(navigator.userAgent);
 const cleanTitle = (t: string): string => t.replace(/[*_`#]+/g, '').trim() || 'Chat';
 
-/* ── Sync from the PC (#sync=…) ── */
-function takeHash(): void {
-  const h = location.hash;
-  if (!h.startsWith('#sync=')) return;
-  const d = decodeSync<SyncFromPc>(h.slice(6));
-  history.replaceState(null, '', location.pathname + location.search);
-  if (!d || d.v !== 1) return toast('That sync link was damaged. Try again from the PC.');
+/* ── What the PC knows (from live sync, or an old #sync= link) ── */
+function applyFromPc(d: SyncFromPc): void {
   S = {
     ...S,
     name: d.name || S.name,
@@ -252,7 +266,7 @@ function takeHash(): void {
     memories: [...new Set([...d.memories, ...S.newMemories])],
     // Keep the phone's not-yet-sent additions, ticks and deletions on top of the PC's lists.
     lists: mergeLists(d.lists, S.newListItems, S.listOps),
-    chats: mergeChats(S.chats, d.chats),
+    chats: mergeChatHistory(S.chats, d.chats),
     pcUrl: d.pcUrl || S.pcUrl,
     macs: d.macs?.length ? d.macs : S.macs,
     goals: d.goals ?? S.goals,
@@ -266,12 +280,18 @@ function takeHash(): void {
       ? (d.look?.avatar as PhoneAvatar)
       : S.avatar,
     lastPcSync: Date.now(),
-    // Opened from the PC's Tailscale HTTPS address: that's the one to check.
-    pcHttps: /^https:\/\//.test(d.pcUrl) ? d.pcUrl.replace(/\/+$/, '') : S.pcHttps,
+    pcHttps: isPcAddress(d.pcUrl.replace(/\/+$/, '')) ? d.pcUrl.replace(/\/+$/, '') : S.pcHttps,
   };
-  // Just came from the PC on purpose: don't switch straight back to it.
-  stayPhone = true;
   save();
+}
+/** Old-style sync link from the PC (still works for one more version). */
+function takeHash(): void {
+  const h = location.hash;
+  if (!h.startsWith('#sync=')) return;
+  const d = decodeSync<SyncFromPc>(h.slice(6));
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!d || d.v !== 1) return toast('That sync link was damaged. Try again from the PC.');
+  applyFromPc(d);
   toast(`Synced from your PC: ${d.memories.length} memories, ${d.chats.length} chats`);
 }
 
@@ -283,7 +303,7 @@ function systemText(): string {
     `You are ${S.name}, a friendly, capable personal assistant${S.userName ? ` for ${S.userName}` : ''}.`;
   return [
     base,
-    `You are running in ${S.name}'s phone app. The user's PC may be off, so you cannot control the PC, its files or apps here (if they need that, say they can open the full version from the PC tab when the PC is on).`,
+    `You are running in ${S.name}'s phone app. The user's PC may be off, so you cannot control the PC, its files or apps here (when the PC is on and connected, the user's messages go to the PC's Alton instead, which can).`,
     "Messages are often spoken and turned into text by the phone, so words can be misheard (the user has a UK, possibly Welsh, accent). Work out what they most likely meant; if it could mean different things, ask a short question. Don't comment on the mistakes.",
     'Ideas for improving Alton: when the user wishes you could do something, a request fails because you lack a feature, or they suggest an improvement, add a short specific idea to the list "Alton roadmap" with add_to_list (it syncs to the PC roadmap) and mention it briefly.',
     'Alexa: you cannot reach Alexa directly; tell_alexa makes the phone say a command out loud for a nearby Echo (e.g. turning alarms or lights on).',
@@ -685,10 +705,12 @@ function send(text?: string, expanded = false, typed?: string): void {
   }
   save();
   renderMsgs('Thinking…');
-  void ask(
-    c,
-    imgs.map((i) => i.data),
-  );
+  if (usePcNow()) void askPc(c, imgs);
+  else
+    void ask(
+      c,
+      imgs.map((i) => i.data),
+    );
 }
 
 const money = (n: number): string =>
@@ -913,73 +935,302 @@ function renderSpend(): void {
   $('spendFill').style.width = `${Math.max(2, lvl.pct)}%`;
 }
 
-/* ── Is the PC on? (Tailscale HTTPS address): switch to the full version automatically ── */
-let pcOnline = false;
-let stayPhone = false;
-try {
-  stayPhone = sessionStorage.getItem('alton-stay-phone') === '1';
-} catch {
-  /* private mode */
-}
-/** Why the last PC check failed ('' when it worked). */
+/* ── The PC connection: off (phone only), on (reachable, not paired) or paired ── */
+type PcLink = 'off' | 'on' | 'paired';
+let pcLink: PcLink = 'off';
+let pcStatus: PcStatus | null = null;
+/** Why the PC isn't connected ('' when it is). */
 let pcWhy = '';
+const TOKEN_KEY = 'alton-pc-token';
+const pcBase = (): string => S.pcHttps.replace(/\/+$/, '');
+const pcToken = (): string => ls.get(TOKEN_KEY) ?? '';
+function conn(): PcConn | null {
+  return pcLink === 'paired' ? { base: pcBase(), token: pcToken() } : null;
+}
+const usePcNow = (): boolean => S.usePc && pcLink === 'paired';
 async function checkPc(): Promise<void> {
-  const base = S.pcHttps.replace(/\/+$/, '');
-  // Tailscale HTTPS names only (the app's security policy allows nothing else).
+  const base = pcBase();
   if (!base) {
-    pcWhy = 'No PC address yet: paste it in the box above.';
-    return setPcOnline(false);
+    pcWhy = 'Add your PC’s Tailscale address below.';
+    return setLink('off');
   }
-  if (!/^https:\/\/[\w.-]+\.ts\.net(:\d+)?$/.test(base)) {
+  if (!isPcAddress(base)) {
     pcWhy = 'The address should look like https://palpatine.tail1234.ts.net';
-    return setPcOnline(false);
+    return setLink('off');
   }
-  const timeout = (ms: number): AbortSignal | undefined => {
+  const tok = pcToken();
+  if (tok) {
     try {
-      return AbortSignal.timeout(ms);
-    } catch {
-      return undefined; // older browsers: no timeout
+      pcStatus = await pcApi<PcStatus>({ base, token: tok }, 'GET', '/api/status', undefined, 6000);
+      pcWhy = '';
+      if (pcStatus.name && pcStatus.name !== S.pcName) {
+        S.pcName = pcStatus.name;
+        save();
+      }
+      return setLink('paired');
+    } catch (e) {
+      if (e instanceof PcError && e.status === 401) {
+        ls.del(TOKEN_KEY);
+        pcWhy = 'The PC no longer knows this phone. Connect again with a new code.';
+      }
     }
-  };
+  }
   try {
-    const r = await fetch(`${base}/api/ping`, { cache: 'no-store', signal: timeout(5000) });
-    pcWhy = r.ok
-      ? ''
-      : r.status === 404
-        ? 'The PC answered but its Alton is older: install the latest version on the PC.'
-        : `The PC answered with an error (${r.status}).`;
-    setPcOnline(r.ok);
-  } catch (e) {
-    // Some browsers block reading the answer from a private address; a plain "is anything
-    // there?" request still works (it can't read anything back, which is all we need).
+    const r = await fetch(`${base}/api/ping`, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout?.(5000),
+    });
+    const j = (await r.json().catch(() => ({}))) as { version?: string };
+    if (j.version && j.version !== S.pcVersion) {
+      S.pcVersion = j.version;
+      save();
+    }
+    if (!pcToken()) pcWhy = 'Your PC is on. Connect this phone with a code from the PC.';
+    else if (!pcWhy) pcWhy = 'Your PC is on but didn’t answer properly. Try Check now.';
+    return setLink(r.ok ? 'on' : 'off');
+  } catch {
+    // Some browsers block reading the answer; a plain "is anything there?" still works.
     try {
       await fetch(`${base}/api/ping`, {
         mode: 'no-cors',
         cache: 'no-store',
-        signal: timeout(5000),
+        signal: AbortSignal.timeout?.(5000),
       });
-      pcWhy = '';
-      setPcOnline(true);
+      pcWhy =
+        'Your PC is on, but this browser can’t talk to it directly. Install the latest Alton on the PC; if the browser asks to allow devices on your network, allow it.';
+      return setLink('on');
     } catch (e2) {
       const err = e2 as Error;
       pcWhy =
         err.name === 'TimeoutError' || err.name === 'AbortError'
-          ? 'No answer: is Tailscale on (on both), and is the PC on with Alton running?'
-          : `Couldn’t reach the PC from the app (${(e as Error).name}: ${(e as Error).message}). Check Tailscale is on; if the browser asks to allow access to devices on your network, allow it.`;
-      setPcOnline(false);
+          ? 'No answer. Is Tailscale on (on both), and is the PC on with Alton running?'
+          : 'Couldn’t reach the PC. Check Tailscale is on on both.';
+      return setLink('off');
     }
   }
 }
-function setPcOnline(on: boolean): void {
-  const was = pcOnline;
-  pcOnline = on;
-  const m = $('mode').firstElementChild;
-  if (m) m.textContent = on ? 'PC is on · tap “Full” for PC control' : 'Phone mode · PC not needed';
-  $('fullBtn').hidden = !on;
-  if (on && !was && S.autoSwitch && !stayPhone && !busy) {
-    toast('Your PC is on: opening the full version…');
-    setTimeout(() => (location.href = S.pcHttps), 900);
+function setLink(l: PcLink): void {
+  const was = pcLink;
+  pcLink = l;
+  const chip = $('pcChip');
+  chip.className = `pcchip${l === 'paired' ? ' on' : l === 'on' ? ' half' : ''}`;
+  const label = chip.querySelector('span');
+  if (label)
+    label.textContent =
+      l === 'paired'
+        ? `${S.pcName || 'PC'} connected`
+        : l === 'on'
+          ? 'PC on · tap to connect'
+          : 'Phone only';
+  if (l === 'paired' && (was !== 'paired' || Date.now() - S.lastPcSync > 3 * 60_000))
+    void syncWithPc();
+  if (view === 'pc') renderPc();
+  if (view === 'today') renderToday();
+}
+
+/* ── Live sync: send what changed here, then take the PC's latest ── */
+let syncing = false;
+async function syncWithPc(manual = false): Promise<void> {
+  const c = conn();
+  if (!c) {
+    if (manual) toast(pcWhy || 'Not connected to the PC.');
+    return;
   }
+  if (syncing) return;
+  syncing = true;
+  try {
+    const since = Date.now();
+    const n = {
+      m: S.newMemories.length,
+      i: S.newListItems.length,
+      o: S.listOps.length,
+      t: S.newNotes.length,
+    };
+    const chats = chatsToSend(S.chats, S.lastExport);
+    const shifts = upcomingShifts(S.shifts);
+    const sk = JSON.stringify(shifts);
+    const sendShifts = sk !== S.shiftsSent && shifts.length > 0;
+    if (chats.length || n.m || n.i || n.o || n.t || sendShifts) {
+      const data: SyncToPc = {
+        v: 1,
+        chats,
+        memories: S.newMemories.slice(0, n.m),
+        listItems: S.newListItems.slice(0, n.i),
+        listOps: S.listOps.slice(0, n.o),
+        notes: S.newNotes.slice(0, n.t),
+        ...(sendShifts ? { shifts } : {}),
+      };
+      await pcApi(c, 'POST', '/api/import', { data }, 30_000);
+      // Anything added while that was on its way stays for next time.
+      S.newMemories = S.newMemories.slice(n.m);
+      S.newListItems = S.newListItems.slice(n.i);
+      S.listOps = S.listOps.slice(n.o);
+      S.newNotes = S.newNotes.slice(n.t);
+      S.lastExport = since;
+      if (sendShifts) S.shiftsSent = sk;
+      save();
+    }
+    const r = await pcApi<{ payload: SyncFromPc }>(
+      c,
+      'GET',
+      `/api/sync?pc=${encodeURIComponent(c.base)}`,
+      undefined,
+      30_000,
+    );
+    applyFromPc(r.payload);
+    applyLook();
+    if (view === 'chat') renderMsgs();
+    else setView(view);
+    if (manual) toast('Synced with your PC.');
+  } catch (e) {
+    if (e instanceof PcError && e.status === 401) {
+      ls.del(TOKEN_KEY);
+      void checkPc();
+    }
+    if (manual) toast(`Couldn’t sync: ${(e as Error).message}`);
+  } finally {
+    syncing = false;
+  }
+}
+
+/* ── Chats through the PC's Alton (full tools, the PC's key) ── */
+const pcChatsSent = new Set<string>();
+async function askPc(chat: PhoneChat, imgs: Array<{ data: string; thumb: string }>): Promise<void> {
+  const c = conn();
+  const last = chat.messages[chat.messages.length - 1];
+  if (!c || !last)
+    return ask(
+      chat,
+      imgs.map((i) => i.data),
+    );
+  const ctrl = new AbortController();
+  busy = ctrl;
+  setSending(true);
+  renderMsgs(`Asking ${S.pcName || 'your PC'}…`);
+  let reply: PhoneMessage | null = null;
+  try {
+    // Make sure the PC has this chat's earlier messages (it finds them by this phone's id).
+    const earlier = chat.messages.slice(0, -1).filter((m) => !m.pc);
+    if (!pcChatsSent.has(chat.id) || earlier.some((m) => m.at > S.lastExport)) {
+      const data: SyncToPc = {
+        v: 1,
+        chats: [{ ...chat, messages: earlier }],
+        memories: [],
+        listItems: [],
+      };
+      await pcApi(c, 'POST', '/api/import', { data }, 20_000);
+      pcChatsSent.add(chat.id);
+    }
+    const r = await pcApi<{ jobId: string }>(
+      c,
+      'POST',
+      '/api/send',
+      {
+        text: last.text,
+        chatId: chat.id,
+        research: chat.research,
+        images: imgs.map((i, k) => ({ name: `photo${k + 1}.jpg`, data: i.data, thumb: i.thumb })),
+      },
+      60_000,
+    );
+    last.pc = true;
+    reply = { role: 'assistant', text: '', at: Date.now(), sources: [], pc: true };
+    chat.messages.push(reply);
+    let fails = 0;
+    for (;;) {
+      if (ctrl.signal.aborted) {
+        void pcApi(c, 'POST', '/api/cancel', {}).catch(() => undefined);
+        break;
+      }
+      await new Promise((res) => setTimeout(res, 500));
+      let j: PcJob;
+      try {
+        j = await pcApi<PcJob>(
+          c,
+          'GET',
+          `/api/job/${encodeURIComponent(r.jobId)}`,
+          undefined,
+          8000,
+        );
+        fails = 0;
+      } catch (e) {
+        if ((e instanceof PcError && e.status === 404) || ++fails > 30) throw e;
+        continue;
+      }
+      reply.text = j.text;
+      reply.sources = j.sources ?? [];
+      renderMsgs(j.text ? undefined : j.activity || 'Thinking…');
+      if (j.done) {
+        if (j.error) reply.text = `${reply.text}${reply.text ? '\n\n' : ''}_${j.error}_`;
+        break;
+      }
+    }
+  } catch (err) {
+    if (!reply) {
+      // Couldn't hand it to the PC: ask Claude from the phone instead.
+      busy = null;
+      setSending(false);
+      void checkPc();
+      toast('Couldn’t reach your PC, so I asked from the phone.');
+      return ask(
+        chat,
+        imgs.map((i) => i.data),
+      );
+    }
+    reply.text = `${reply.text}${reply.text ? '\n\n' : ''}_Lost the connection to the PC (${(err as Error).message})._`;
+  }
+  busy = null;
+  setSending(false);
+  if (!reply.text) reply.text = '_(stopped)_';
+  chat.updatedAt = Date.now();
+  save();
+  renderMsgs();
+  if (handsFree) say(reply.text, true, () => handsFree && !busy && toggleMic());
+  else say(reply.text);
+}
+
+/* ── Updates: GitHub Pages has a newer build than this one ── */
+let newVersion = '';
+const newer = (a: string, b: string): boolean => {
+  const pa = a.split('.').map(Number);
+  const pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0);
+  return false;
+};
+async function checkUpdate(manual = false): Promise<void> {
+  try {
+    const r = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' });
+    const j = (await r.json()) as { version?: string };
+    if (j.version && newer(j.version, __APP_VERSION__)) {
+      newVersion = j.version;
+      $('updVer').textContent = j.version;
+      $('updateBar').hidden = false;
+      if (manual)
+        $('updMsg').textContent = `Version ${j.version} is ready: tap the banner at the top.`;
+    } else if (manual) $('updMsg').textContent = 'You’re on the latest version. ✓';
+  } catch {
+    if (manual) $('updMsg').textContent = 'Couldn’t check (no signal?).';
+  }
+  renderAbout();
+}
+async function applyUpdate(): Promise<void> {
+  $('updateBar').textContent = 'Updating…';
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+    reg?.waiting?.postMessage('skip-waiting');
+    // The old copy of the page must not be used again.
+    for (const k of await caches.keys()) if (k.startsWith('alton-v')) await caches.delete(k);
+  } catch {
+    /* reload anyway */
+  }
+  location.reload();
+}
+function renderAbout(): void {
+  $('aboutVer').textContent =
+    `Phone app ${__APP_VERSION__}${newVersion ? ` (update ${newVersion} ready)` : ''}${
+      S.pcVersion ? ` · PC Alton ${S.pcVersion}` : ''
+    }`;
 }
 
 /* ── App lock (PIN) ── */
@@ -1994,44 +2245,331 @@ function renderPeople(): void {
     );
 }
 
+/* ── Today: work, what's coming up, weather, lists and the PC at a glance ── */
+function renderToday(): void {
+  const now = new Date();
+  const h = now.getHours();
+  const hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  $('tdHello').textContent = `${hi}${S.userName ? `, ${S.userName.split(' ')[0]}` : ''}`;
+  $('tdDate').textContent = now.toLocaleDateString([], {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  // Work: on now, the next few shifts, and this week's hours (and pay, if set).
+  const sh = $('tdShifts');
+  sh.textContent = '';
+  const cur = currentShift(S.shifts);
+  if (cur) sh.appendChild(el('p', undefined, `🟢 At work now: ${describeShift(cur)}`));
+  const next = upcomingShifts(S.shifts)
+    .filter((x) => x !== cur)
+    .slice(0, 3);
+  for (const x of next) {
+    const lb = leaveBy(x, S.travel);
+    sh.appendChild(el('div', 'li', `${describeShift(x)}${lb ? ` · leave by ${lb}` : ''}`));
+  }
+  const hrs = weekHours(S.shifts);
+  const pay = weekPay(S.shifts, S.payRate, S.unpaidBreak);
+  if (hrs > 0)
+    sh.appendChild(
+      el('p', 'muted', `This week: ${hrs.toFixed(1)} h${pay > 0 ? ` · about ${money(pay)}` : ''}`),
+    );
+  if (!sh.childElementCount)
+    sh.appendChild(
+      el('p', 'muted', 'No shifts yet. Share a screenshot of your rota with Alton to add them.'),
+    );
+  // Reminders.
+  const rem = $('tdRems');
+  rem.textContent = '';
+  for (const r of S.reminders.filter((x) => x.at > Date.now()).slice(0, 4))
+    rem.appendChild(
+      el(
+        'div',
+        'li',
+        `${new Date(r.at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })} · ${r.what}`,
+      ),
+    );
+  $('tdRemCard').hidden = !rem.childElementCount;
+  // Lists with things still to do.
+  const lists = $('tdLists');
+  lists.textContent = '';
+  for (const l of S.lists) {
+    const open = l.items.filter((i) => !i.done);
+    if (!open.length) continue;
+    const row = el('div', 'li');
+    row.appendChild(
+      el(
+        'span',
+        undefined,
+        `${l.name} (${open.length}): ${open
+          .slice(0, 3)
+          .map((i) => i.text)
+          .join(', ')}${open.length > 3 ? '…' : ''}`,
+      ),
+    );
+    row.onclick = () => setView('people');
+    lists.appendChild(row);
+  }
+  $('tdListsCard').hidden = !lists.childElementCount;
+  // Weather (last check).
+  $('tdWeather').textContent = lastWeather ? lastWeather : 'Tap below (uses your location once).';
+  // PC.
+  $('tdPc').textContent =
+    pcLink === 'paired'
+      ? `${S.pcName || 'PC'} is on and connected.${pcStatus?.playing ? ` Playing: ${pcStatus.playing}` : ''}`
+      : pcLink === 'on'
+        ? 'Your PC is on. Connect this phone in the PC tab.'
+        : 'Your PC is off or out of reach. Alton works here on its own.';
+  $('tdPlay').hidden = pcLink !== 'paired';
+}
+let lastWeather = '';
+
 /* ── PC tab ── */
 function renderPc(): void {
-  const open = $<HTMLAnchorElement>('openPc');
-  if (S.pcUrl) {
-    open.href = S.pcUrl;
-    $('pcUrlText').textContent = S.pcUrl;
-  } else {
-    open.removeAttribute('href');
-    $('pcUrlText').textContent =
-      'Sync once from the PC version and its address will be saved here.';
-  }
+  const tickBtn = (id: string, on: boolean): void => {
+    $(id).classList.toggle('on', on);
+    $(id).textContent = on ? '✓' : '';
+  };
+  const inp = $<HTMLInputElement>('pcHttps');
+  if (document.activeElement !== inp) inp.value = S.pcHttps;
+  const ver = S.pcVersion ? ` (Alton ${S.pcVersion})` : '';
+  $('pcState').textContent =
+    pcLink === 'paired'
+      ? `✓ Connected to ${S.pcName || 'your PC'}${ver}. Chats, lists, notes and shifts sync by themselves.`
+      : pcLink === 'on'
+        ? `Your PC is on${ver}, but this phone isn’t connected yet.`
+        : 'Phone only: Alton works here on its own. Connect when your PC is on.';
+  $('pcCheckMsg').textContent = pcLink === 'paired' ? '' : pcWhy;
+  $('pairBox').hidden = pcLink === 'paired';
+  $('unpairBtn').hidden = !pcToken();
+  $('syncNow').hidden = pcLink !== 'paired';
+  tickBtn('usePcToggle', S.usePc);
   $('syncInfo').textContent = S.lastPcSync
-    ? `Last synced from the PC: ${new Date(S.lastPcSync).toLocaleString()}`
+    ? `Last synced: ${new Date(S.lastPcSync).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}`
     : 'Not synced yet.';
+  $('pcLive').hidden = pcLink !== 'paired';
   const macs = $('macs');
   macs.textContent = '';
   S.macs.forEach((m) => macs.appendChild(el('code', 'mac', m)));
-  if (!S.macs.length) macs.textContent = 'Sync from the PC to see it here.';
+  if (!S.macs.length) macs.textContent = 'Connect to the PC once to see it here.';
+  renderPcStatus();
 }
-function sendToPc(): void {
-  if (!S.pcUrl) return toast('Sync from the PC version first, so I know its address.');
-  const chats = S.chats.filter((c) => c.updatedAt > S.lastExport);
-  const payload: SyncToPc = {
-    v: 1,
-    chats,
-    memories: S.newMemories,
-    listItems: S.newListItems,
-    listOps: S.listOps,
-    notes: S.newNotes,
-    shifts: upcomingShifts(S.shifts),
+function renderPcStatus(): void {
+  const st = pcStatus;
+  if (!st || pcLink !== 'paired') return;
+  const pct = (x: number | null): string => (x == null ? '–' : `${Math.round(x)}%`);
+  $('pcTitle').textContent = st.name || 'PC';
+  $('cpu').textContent = pct(st.pc.cpu);
+  $('mem').textContent = pct(st.pc.memPct);
+  $('temp').textContent = st.pc.cpuTemp == null ? '–' : `${Math.round(st.pc.cpuTemp)}°`;
+  $('pcExtra').textContent = [
+    st.gaming ? `Gaming: ${st.gaming}` : '',
+    st.pc.uptimeHours != null ? `Up ${st.pc.uptimeHours} h` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  $('playing').textContent = st.playing || 'Nothing playing';
+  // Approvals waiting on the PC (sending, paying, deleting…): the tap here is the answer.
+  const ap = $('approvals');
+  ap.textContent = '';
+  for (const a of st.approvals) {
+    const box = el('div', 'li');
+    box.style.flexDirection = 'column';
+    box.style.alignItems = 'stretch';
+    box.appendChild(el('b', undefined, a.title));
+    if (a.detail) box.appendChild(el('p', 'muted', a.detail));
+    const row = el('div', 'row');
+    const yes = el('button', 'btn acc', 'Allow');
+    const no = el('button', 'btn', 'Decline');
+    yes.style.flex = no.style.flex = '1';
+    yes.onclick = () => void pcPost('/api/approve', { id: a.id, ok: true });
+    no.onclick = () => void pcPost('/api/approve', { id: a.id, ok: false });
+    row.append(yes, no);
+    box.appendChild(row);
+    ap.appendChild(box);
+  }
+  $('approvalsCard').hidden = !st.approvals.length;
+  // Agent Mode: what it's doing, and its question if it has one.
+  const ag = $('agentBox');
+  ag.textContent = '';
+  const a = st.agent;
+  if (a && /running|waiting|paused/.test(a.state)) {
+    ag.appendChild(el('p', undefined, a.task));
+    ag.appendChild(el('p', 'muted', `${a.state} · ${a.last}`));
+    if (a.question) {
+      ag.appendChild(el('p', undefined, `❓ ${a.question.text}`));
+      const row = el('div', 'row');
+      if (a.question.kind === 'confirm') {
+        const y = el('button', 'btn acc', 'Yes');
+        const n = el('button', 'btn', 'No');
+        y.style.flex = n.style.flex = '1';
+        y.onclick = () => void pcPost('/api/agent', { id: a.question?.id, answer: true });
+        n.onclick = () => void pcPost('/api/agent', { id: a.question?.id, answer: false });
+        row.append(y, n);
+      } else {
+        const inp = el('input', 'input');
+        inp.placeholder = 'Your answer';
+        inp.style.flex = '1';
+        const go = el('button', 'btn acc', 'Send');
+        go.onclick = () =>
+          void pcPost('/api/agent', { id: a.question?.id, answer: inp.value || 'Done' });
+        row.append(inp, go);
+      }
+      ag.appendChild(row);
+    }
+    const row2 = el('div', 'row');
+    row2.style.margin = '6px 0 10px';
+    const p = el('button', 'btn', a.state === 'paused' ? 'Resume' : 'Pause');
+    const stop = el('button', 'btn red', 'Stop');
+    p.style.flex = stop.style.flex = '1';
+    p.onclick = () => void pcPost('/api/agent/pause', { on: a.state !== 'paused' });
+    stop.onclick = () => void pcPost('/api/stop', {});
+    row2.append(p, stop);
+    ag.appendChild(row2);
+  }
+}
+async function refreshPcStatus(): Promise<void> {
+  const c = conn();
+  if (!c) return;
+  try {
+    pcStatus = await pcApi<PcStatus>(c, 'GET', '/api/status', undefined, 6000);
+    renderPcStatus();
+  } catch {
+    void checkPc();
+  }
+}
+async function pcPost(path: string, body: unknown, done?: string): Promise<void> {
+  const c = conn();
+  if (!c) return toast('Not connected to the PC.');
+  try {
+    const r = await pcApi<{ message?: string }>(c, 'POST', path, body);
+    toast(r.message || done || 'Done');
+  } catch (e) {
+    toast((e as Error).message);
+  }
+  void refreshPcStatus();
+}
+const pcAct = (action: string, target?: string): Promise<void> =>
+  pcPost('/api/action', { action, ...(target ? { target } : {}) });
+function wirePc(): void {
+  $('pcChip').onclick = (e) => {
+    e.stopPropagation(); // the bar itself opens Settings (spending)
+    setView('pc');
   };
-  S.newMemories = [];
-  S.newListItems = [];
-  S.listOps = [];
-  S.newNotes = [];
-  S.lastExport = Date.now();
-  save();
-  location.href = `${S.pcUrl.replace(/\/?$/, '/')}#import=${encodeSync(payload)}`;
+  $('pairGo').onclick = async () => {
+    const base = $<HTMLInputElement>('pcHttps').value.trim().replace(/\/+$/, '');
+    const code = $<HTMLInputElement>('pairCode').value.replace(/\D/g, '');
+    if (!isPcAddress(base))
+      return toast('Put your PC’s address in first, like https://palpatine.tail1234.ts.net');
+    if (code.length !== 6) return toast('The code from the PC has 6 numbers.');
+    S.pcHttps = base;
+    save();
+    $('pcCheckMsg').textContent = 'Connecting…';
+    try {
+      const r = await pairWithPc(base, code);
+      ls.set(TOKEN_KEY, r.token);
+      S.pcName = r.name;
+      save();
+      $<HTMLInputElement>('pairCode').value = '';
+      pcWhy = '';
+      await checkPc();
+      toast(pcLink === 'paired' ? `Connected to ${r.name}.` : pcWhy);
+    } catch (e) {
+      $('pcCheckMsg').textContent =
+        e instanceof PcError
+          ? e.message
+          : 'Couldn’t reach the PC. Is Tailscale on, and Alton up to date on the PC?';
+    }
+  };
+  $('unpairBtn').onclick = () => {
+    if (!confirm('Disconnect this phone from the PC? You can connect again with a new code.'))
+      return;
+    ls.del(TOKEN_KEY);
+    pcStatus = null;
+    void checkPc();
+  };
+  $('pcCheck').onclick = async () => {
+    $('pcCheckMsg').textContent = 'Checking…';
+    await checkPc();
+    renderPc();
+    if (pcLink === 'paired') toast('Connected ✓');
+  };
+  $('syncNow').onclick = () => void syncWithPc(true);
+  $('usePcToggle').onclick = () => {
+    S.usePc = !S.usePc;
+    save();
+    renderPc();
+  };
+  document.querySelectorAll<HTMLButtonElement>('#pcLive [data-m]').forEach((b) => {
+    b.onclick = () => void pcAct('media_control', b.dataset.m);
+  });
+  $<HTMLInputElement>('pcVol').onchange = (e) =>
+    void pcAct('set_volume', (e.target as HTMLInputElement).value);
+  let muted = false;
+  $('muteBtn').onclick = () => {
+    muted = !muted;
+    $('muteBtn').textContent = muted ? 'Unmute' : 'Mute';
+    void pcAct('set_volume', muted ? 'mute' : 'unmute');
+  };
+  $('lockBtn').onclick = () => {
+    if (confirm('Lock the PC?')) void pcAct('lock_screen');
+  };
+  $('screenBtn').onclick = async () => {
+    const c = conn();
+    if (!c) return;
+    try {
+      const img = $<HTMLImageElement>('screenImg');
+      if (img.src) URL.revokeObjectURL(img.src);
+      img.src = URL.createObjectURL(await pcScreen(c));
+      img.hidden = false;
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
+  $('agentGo').onclick = () => {
+    const t = $<HTMLInputElement>('agentTask').value.trim();
+    if (!t) return toast('Say what Alton should do on the PC.');
+    $<HTMLInputElement>('agentTask').value = '';
+    void pcPost('/api/agent/start', { task: t }, 'Agent Mode started on the PC.');
+  };
+  const power = (action: string, ask?: string, extra: Record<string, string> = {}): void => {
+    if (ask && !confirm(ask)) return;
+    void pcPost('/api/power', { action, ...extra });
+  };
+  $('offBtn').onclick = () =>
+    power('shutdown', 'Shut down the PC in 1 minute? Unsaved work will be lost.');
+  $('restartBtn').onclick = () => power('restart', 'Restart the PC in 1 minute?');
+  $('cancelOffBtn').onclick = () => power('cancel');
+  $('dlBtn').onclick = () => power('download');
+  $('dlStopBtn').onclick = () => power('download-off');
+  $('dlOffBtn').onclick = () =>
+    power(
+      'download',
+      'Download mode, then shut the PC down when Steam finishes? You can’t turn it back on from the phone.',
+      { then: 'shutdown' },
+    );
+  $('sleepBtn').onclick = () => {
+    if (confirm('Put the PC to sleep? Wake it with a Wake-on-LAN app or its power button.'))
+      void pcPost('/api/sleep', {}, 'The PC is going to sleep.');
+  };
+  $<HTMLInputElement>('pcFile').onchange = async (e) => {
+    const input = e.target as HTMLInputElement;
+    const f = input.files?.[0];
+    const c = conn();
+    if (!f || !c) return;
+    $('pcFileMsg').textContent = `Sending ${f.name}…`;
+    try {
+      const saved = await pcUpload(c, f);
+      $('pcFileMsg').textContent = `Sent ✓ Saved as ${saved} in Downloads › From phone.`;
+    } catch (e2) {
+      $('pcFileMsg').textContent = (e2 as Error).message;
+    }
+    input.value = '';
+  };
+  // Keep the PC tab live while it's open.
+  setInterval(() => {
+    if (view === 'pc' && pcLink === 'paired' && !document.hidden) void refreshPcStatus();
+  }, 5000);
 }
 
 /* ── Settings ── */
@@ -2048,8 +2586,12 @@ function renderSettings(): void {
   tick('saverToggle', S.saver);
   renderVoiceSettings();
   $<HTMLSelectElement>('avatarPick').value = S.avatar;
-  tick('autoSwitchToggle', S.autoSwitch);
   $('pinBtn').textContent = S.pinHash ? 'Remove PIN lock' : 'Set a PIN lock';
+  $('setInitial').textContent = (S.userName || S.name).slice(0, 1).toUpperCase();
+  $('setName').textContent = S.userName || 'You';
+  $('setSub').textContent = `${S.name} on this phone · ${
+    S.model.includes('opus') ? 'Opus' : S.model.includes('sonnet') ? 'Sonnet' : 'Haiku'
+  }${S.saver ? ' · saver' : ''}`;
   $<HTMLInputElement>('pcHttps').value = S.pcHttps;
   const u = summarise(S.usage, S.budget);
   $('spendToday').textContent = fmtUsd(u.today);
@@ -2073,25 +2615,32 @@ async function checkKey(k: string): Promise<string | null> {
 /* ── Wiring ── */
 function setView(v: string): void {
   view = v;
-  for (const x of ['chat', 'people', 'pc', 'set']) $(`${x}View`).classList.toggle('on', x === v);
+  for (const x of ['chat', 'today', 'people', 'pc', 'set'])
+    $(`${x}View`).classList.toggle('on', x === v);
   document
     .querySelectorAll('nav.tabs button')
     .forEach((b) => b.classList.toggle('on', b.getAttribute('data-v') === v));
-  for (const id of ['menuBtn', 'newBtn', 'researchBtn'])
+  for (const id of ['menuBtn', 'newBtn', 'researchBtn', 'handsBtn', 'shareBtn'])
     $(id).style.visibility = v === 'chat' ? 'visible' : 'hidden';
   $('title').textContent =
     v === 'chat'
       ? chat()
         ? cleanTitle(chat()?.title ?? '')
         : S.name
-      : v === 'people'
-        ? 'People & lists'
-        : v === 'pc'
-          ? 'PC'
-          : 'Settings';
+      : v === 'today'
+        ? 'Today'
+        : v === 'people'
+          ? 'People & lists'
+          : v === 'pc'
+            ? 'PC'
+            : 'Settings';
   if (v === 'people') renderPeople();
+  if (v === 'today') renderToday();
   if (v === 'pc') renderPc();
-  if (v === 'set') renderSettings();
+  if (v === 'set') {
+    renderSettings();
+    renderAbout();
+  }
   if (v === 'chat') renderMsgs();
 }
 
@@ -2106,6 +2655,7 @@ function start(): void {
     renderSpend();
     lockNow();
     void checkPc();
+    void checkUpdate();
     void takeLaunchParams();
     void flushQueue();
   }
@@ -2116,14 +2666,6 @@ async function takeLaunchParams(): Promise<void> {
   const p = new URLSearchParams(location.search);
   if (![...p.keys()].length) return;
   history.replaceState(null, '', location.pathname);
-  if (p.has('stay')) {
-    stayPhone = true;
-    try {
-      sessionStorage.setItem('alton-stay-phone', '1');
-    } catch {
-      /* private mode */
-    }
-  }
   if (p.has('new')) {
     newChat(false);
     renderMsgs();
@@ -2214,12 +2756,9 @@ function wire(): void {
     else {
       if (S.pinHash && hiddenAt && Date.now() - hiddenAt > 5 * 60_000) lockNow();
       void checkPc();
+      if (hiddenAt && Date.now() - hiddenAt > 10 * 60_000) void checkUpdate();
     }
   });
-  $('fullBtn').onclick = (e) => {
-    e.stopPropagation();
-    location.href = S.pcHttps;
-  };
   $('pinGo').onclick = () => void tryUnlock();
   $('pinInput').addEventListener('keydown', (e) => {
     if ((e as KeyboardEvent).key === 'Enter') void tryUnlock();
@@ -2240,17 +2779,6 @@ function wire(): void {
     start();
   };
   $('pinBtn').onclick = () => void setPin();
-  $('autoSwitchToggle').onclick = () => {
-    S.autoSwitch = !S.autoSwitch;
-    save();
-    renderSettings();
-  };
-  $('pcCheck').onclick = async () => {
-    $('pcCheckMsg').textContent = 'Checking…';
-    stayPhone = true; // just report here; don't jump away mid-check
-    await checkPc();
-    $('pcCheckMsg').textContent = pcOnline ? 'Connected: your PC is on. ✓' : pcWhy;
-  };
   $<HTMLInputElement>('pcHttps').onchange = (e) => {
     const v = (e.target as HTMLInputElement).value.trim().replace(/\/+$/, '');
     if (v && !/^https:\/\/[\w.-]+\.ts\.net(:\d+)?$/.test(v))
@@ -2258,6 +2786,7 @@ function wire(): void {
     S.pcHttps = v;
     save();
     void checkPc();
+    renderPc();
   };
   $('saverToggle').onclick = () => {
     S.saver = !S.saver;
@@ -2268,7 +2797,7 @@ function wire(): void {
   };
   // Keep the shift card's countdown fresh.
   setInterval(() => {
-    if (!document.hidden && view === 'chat') renderShiftCard();
+    if (!document.hidden && (view === 'chat' || view === 'today')) renderShiftCard();
   }, 60_000);
   $('shiftLead').onchange = () => {
     const v = Number($<HTMLInputElement>('shiftLead').value);
@@ -2408,7 +2937,45 @@ function wire(): void {
     save();
     renderPeople();
   };
-  $('sendToPc').onclick = sendToPc;
+  wirePc();
+  // People & lists: one section at a time (remembered).
+  const seg = (k: string): void => {
+    $('peopleView').dataset.seg = k;
+    document
+      .querySelectorAll<HTMLButtonElement>('.seg button')
+      .forEach((b) => b.classList.toggle('on', b.dataset.seg === k));
+    ls.set('alton-seg', k);
+  };
+  document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) => {
+    b.onclick = () => seg(b.dataset.seg ?? 'people');
+  });
+  seg(ls.get('alton-seg') ?? 'people');
+  // A dot on Today when the shift card or the backup reminder wants attention.
+  const dot = (): void => {
+    const on = !$('shiftCard').hidden || !$('backupNudge').hidden;
+    document.querySelector('nav.tabs button[data-v="today"]')?.classList.toggle('ping', on);
+  };
+  const mo = new MutationObserver(dot);
+  for (const id of ['shiftCard', 'backupNudge'])
+    mo.observe($(id), { attributes: true, attributeFilter: ['hidden'] });
+  dot();
+  $('tdPcOpen').onclick = () => setView('pc');
+  $('tdPlay').onclick = () => void pcAct('media_control', 'play_pause');
+  $('tdWeatherBtn').onclick = async () => {
+    $('tdWeather').textContent = 'Checking…';
+    const r = await placeTool('get_weather', {});
+    lastWeather = (r?.result ?? 'Couldn’t get the weather.').replace(
+      /^Weather for where the user is: /,
+      '',
+    );
+    renderToday();
+  };
+  $('updateBar').onclick = () => void applyUpdate();
+  $('updCheck').onclick = () => {
+    $('updMsg').textContent = 'Checking…';
+    void checkUpdate(true);
+  };
+  setInterval(() => void checkUpdate(), 60 * 60_000);
   $('handsBtn').onclick = () => setHandsFree(!handsFree);
   $('noteAdd').onclick = () => {
     const v = $<HTMLInputElement>('noteInput').value.trim();

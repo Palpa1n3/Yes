@@ -33,15 +33,16 @@ export function dayPhase(hour: number): DayPhase {
   return 'night';
 }
 
-/** A soft colour cast over the HUD ("r g b", strength) and how much to dim it. */
+/** A faint glow at the screen edges ("r g b", strength) and how much to dim. Never over the
+ *  middle of the HUD, so text and panels keep their real colours. */
 export function tintFor(phase: DayPhase): { color: string; alpha: number; dim: number } {
   switch (phase) {
     case 'morning':
-      return { color: '120 190 255', alpha: 0.1, dim: 0 }; // cool, fresh
+      return { color: '120 190 255', alpha: 0.12, dim: 0 }; // cool, fresh
     case 'evening':
-      return { color: '255 160 70', alpha: 0.13, dim: 0.04 }; // warm amber
+      return { color: '150 110 220', alpha: 0.12, dim: 0.03 }; // dusk violet
     case 'night':
-      return { color: '60 80 160', alpha: 0.08, dim: 0.18 }; // dim and deep blue
+      return { color: '60 80 160', alpha: 0.12, dim: 0.1 }; // dim and deep blue
     default:
       return { color: '0 0 0', alpha: 0, dim: 0 };
   }

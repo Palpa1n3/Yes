@@ -324,7 +324,7 @@ export function AppearanceTab() {
         </Field>
         <Field
           label="Colours follow the time of day"
-          hint="Cooler in the morning, warm amber in the evening, dimmer at night."
+          hint="A faint glow at the screen edges: cool in the morning, dusk violet in the evening, dimmer at night."
         >
           <Toggle
             label="Colours follow the time of day"

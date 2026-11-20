@@ -44,6 +44,8 @@ export interface RemoteStatus {
 export interface RemoteDeps {
   /** The phone-only app's site (e.g. https://name.github.io), allowed to ping. */
   pingOrigin?(): string;
+  /** The PC app's version, shown on the phone. */
+  version?(): string;
   status(): RemoteStatus;
   /** Send a message to Alton as if typed; resolves with the reply text. */
   message(text: string): Promise<string>;
@@ -227,6 +229,25 @@ export class RemoteServer {
       if (!isPrivateAddress(req.socket.remoteAddress))
         return send(403, { error: 'Home network only.' });
       const url = new URL(req.url ?? '/', 'http://local');
+      // The phone app (GitHub Pages) talks to the API directly: allow exactly its origin.
+      const allowed = this.d.pingOrigin?.() ?? '';
+      const fromApp = !!allowed && req.headers.origin === allowed;
+      if (fromApp && url.pathname.startsWith('/api/')) {
+        res.setHeader('access-control-allow-origin', allowed);
+        res.setHeader('access-control-allow-private-network', 'true');
+        res.setHeader('access-control-expose-headers', 'content-type');
+        res.setHeader('vary', 'Origin');
+      }
+      if (req.method === 'OPTIONS') {
+        if (!fromApp || !url.pathname.startsWith('/api/')) return send(403, { error: 'No' });
+        res.writeHead(204, {
+          'access-control-allow-methods': 'GET, POST, OPTIONS',
+          'access-control-allow-headers': 'authorization, content-type, x-file-name',
+          'access-control-max-age': '600',
+        });
+        res.end();
+        return;
+      }
       if (req.method === 'GET' && url.pathname === '/')
         return send(200, REMOTE_PAGE, 'text/html; charset=utf-8');
       if (req.method === 'POST' && url.pathname === '/api/pair') {
@@ -242,22 +263,10 @@ export class RemoteServer {
       }
       // The phone-only app asks "is the PC on?" (it runs on GitHub Pages, so it needs CORS).
       if (url.pathname === '/api/ping') {
-        const origin = this.d.pingOrigin?.() ?? '';
-        res.writeHead(200, {
-          'content-type': 'application/json',
-          'cache-control': 'no-store',
-          ...(origin
-            ? {
-                'access-control-allow-origin': origin,
-                'access-control-allow-methods': 'GET',
-                // Chrome asks before a public site (GitHub Pages) may reach a private
-                // address like Tailscale's; this says yes for the phone app only.
-                'access-control-allow-private-network': 'true',
-                vary: 'Origin',
-              }
-            : {}),
-        });
-        res.end(JSON.stringify({ ok: true, name: this.d.status().name }));
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(
+          JSON.stringify({ ok: true, name: this.d.status().name, version: this.d.version?.() }),
+        );
         return;
       }
       if (!url.pathname.startsWith('/api/')) return send(404, { error: 'Not found' });

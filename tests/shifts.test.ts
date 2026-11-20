@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   alarmFor,
   buildIcs,
@@ -133,7 +133,10 @@ describe('shift alarms and Alexa', () => {
   });
 
   it('tools: get_shifts lists them, tell_alexa makes a speak button, add_shifts hands shifts back', () => {
+    // The shifts in this file are fixed dates: look at them from the day before.
+    vi.useFakeTimers({ now: new Date(2026, 10, 19, 12), toFake: ['Date'] });
     const g = runPhoneTool('get_shifts', {}, { ...st, shifts: [early, late] });
+    vi.useRealTimers();
     expect(g.result).toContain('Early');
     expect(g.result).toContain('Hours this week');
     const a = runPhoneTool('tell_alexa', { command: 'Alexa, turn on my 5:45 alarm' }, st);

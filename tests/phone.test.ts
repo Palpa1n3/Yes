@@ -6,6 +6,8 @@ import {
   directionsLink,
   emailLink,
   encodeSync,
+  chatsToSend,
+  mergeChatHistory,
   mergeChats,
   resolvePerson,
   smsLink,
@@ -124,5 +126,59 @@ describe('location and weather', () => {
     });
     expect(w).toMatch(/Now 7°C, light rain, wind 18 km\/h/);
     expect(w).toMatch(/overcast, 3–9°C, 40% chance of rain/);
+  });
+});
+
+describe('live sync with the PC', () => {
+  const chat = (id: string, msgs: Array<[string, string, number, boolean?]>, updatedAt = 10) => ({
+    id,
+    title: 'Chat',
+    research: false,
+    updatedAt,
+    messages: msgs.map(([role, text, at, pc]) => ({
+      role: role as 'user' | 'assistant',
+      text,
+      at,
+      ...(pc ? { pc } : {}),
+    })),
+  });
+  it('adds the PC’s new messages without dropping the phone’s own copies', () => {
+    const mine = chat('a', [
+      ['user', 'Text Mum', 1],
+      ['assistant', 'Ready to send', 2],
+    ]);
+    mine.messages[1] = { ...mine.messages[1]!, actions: [{ label: 'Send' }] } as never;
+    const theirs = chat(
+      'a',
+      [
+        ['user', 'Text Mum', 5],
+        ['assistant', 'Ready to send', 6],
+        ['user', 'From the PC', 7],
+      ],
+      20,
+    );
+    const out = mergeChatHistory([mine], [theirs, chat('b', [['user', 'new', 3]])]);
+    const a = out.find((c) => c.id === 'a')!;
+    expect(a.messages.map((m) => m.text)).toEqual(['Text Mum', 'Ready to send', 'From the PC']);
+    expect((a.messages[1] as { actions?: unknown[] }).actions).toHaveLength(1);
+    expect(out.find((c) => c.id === 'b')).toBeTruthy();
+    // Nothing new: left as it is.
+    expect(mergeChatHistory([mine], [chat('a', [['user', 'Text Mum', 9]], 30)])[0]).toBe(mine);
+  });
+  it('sends only changed chats, without messages the PC answered itself', () => {
+    const c1 = chat(
+      'a',
+      [
+        ['user', 'hi', 1, true],
+        ['assistant', 'hello', 2, true],
+        ['user', 'offline one', 3],
+      ],
+      50,
+    );
+    const c2 = chat('b', [['user', 'old', 1]], 5);
+    const c3 = chat('c', [['user', 'pc only', 1, true]], 60);
+    const out = chatsToSend([c1, c2, c3], 10);
+    expect(out.map((c) => c.id)).toEqual(['a']);
+    expect(out[0]?.messages.map((m) => m.text)).toEqual(['offline one']);
   });
 });

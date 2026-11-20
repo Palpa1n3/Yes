@@ -897,14 +897,11 @@
           <div class="card">
             <div class="lbl"><span class="dot"></span>Phone app (works with the PC off)</div>
             <p class="muted" style="margin: 0 0 10px">
-              The phone-only Alton talks to Claude directly, so it works anywhere. This button
-              copies your memories, personality, lists and recent chats into it (and saves this PC's
-              address there). Chats you have on the phone come back here from its PC tab.
+              The phone app talks to Claude directly, so it works anywhere, and syncs with this PC
+              by itself once connected (its PC tab: this PC's Tailscale address and a pairing code).
+              It can control the PC too, so you won't need this page for much.
             </p>
-            <button class="btn acc full" id="syncPhoneApp">Update phone app</button>
-            <button class="btn full" id="phoneMode" style="margin-top: 8px">
-              Back to phone mode
-            </button>
+            <button class="btn acc full" id="phoneMode">Open the phone app</button>
           </div>
           <div class="card">
             <div class="lbl"><span class="dot"></span>Notifications</div>
@@ -1831,13 +1828,6 @@
         };
         /* Phone-only app sync: data travels in the link's #fragment, which is never sent to
            any server (GitHub only serves the page). */
-        function b64urlEncode(obj) {
-          var bytes = new TextEncoder().encode(JSON.stringify(obj)),
-            bin = '';
-          for (var i = 0; i < bytes.length; i += 0x8000)
-            bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-          return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        }
         function b64urlDecode(s) {
           var b = s.replace(/-/g, '+').replace(/_/g, '/');
           b += '===='.slice(0, (4 - (b.length % 4)) % 4);
@@ -1849,24 +1839,14 @@
         $('phoneMode').onclick = function () {
           api('GET', '/api/sync?pc=' + encodeURIComponent(location.origin)).then(
             function (r) {
-              location.href = r.appUrl.replace(/#.*$/, '').replace(/\?.*$/, '') + '?stay=1';
+              location.href = r.appUrl.replace(/#.*$/, '').replace(/\?.*$/, '');
             },
             function (e) {
               toast(e.message);
             },
           );
         };
-        $('syncPhoneApp').onclick = function () {
-          var pc = location.origin;
-          api('GET', '/api/sync?pc=' + encodeURIComponent(pc)).then(
-            function (r) {
-              location.href = r.appUrl.replace(/#.*$/, '') + '#sync=' + b64urlEncode(r.payload);
-            },
-            function (e) {
-              toast(e.message);
-            },
-          );
-        };
+        // Old-style links from phone apps before 0.24 (kept for one more version).
         function takeImport() {
           if (location.hash.indexOf('#import=') !== 0) return;
           var data = null;

@@ -85,6 +85,7 @@ export function registerRemoteIpc(
   );
   const server = new RemoteServer({
     route: phone.route,
+    version: () => app.getVersion(),
     pingOrigin: () => {
       try {
         return new URL(ctx.settings.get().phoneAppUrl).origin;

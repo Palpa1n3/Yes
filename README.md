@@ -137,17 +137,21 @@ and watches for scams (sellers wanting payment or chat off the site).
 
 ### Phone app: automatic switching and PIN lock
 
-**Automatic switching:** the phone app can open the full PC version by itself whenever the PC
-is on. It needs the PC's private HTTPS address from Tailscale:
+**Connecting to the PC:** the phone app talks to the PC directly over Tailscale (no jumping
+between sites):
 
 1. In the Tailscale admin console › DNS, make sure MagicDNS is on and turn on **HTTPS
    Certificates**.
 2. On the PC, in PowerShell: `tailscale serve --bg 47615`. It prints an address like
    `https://palpatine.tail1234.ts.net`.
-3. Open that address on the phone once, pair, then More › **Update phone app** (it saves the
-   address), or paste it in the phone app › PC tab.
-   The phone app checks once a minute while it's open; a **Full** button shows when the PC is
-   on. "Back to phone mode" on the PC page returns without bouncing back.
+3. In the phone app's **PC** tab, enter that address and the pairing code from the PC
+   (Settings › Connections › Phone companion), then **Connect to my PC**.
+
+The chip at the top then says **PC connected**. Chats, memories, lists, notes and shifts sync by
+themselves (on opening and every few minutes; **Sync now** for straight away), the PC tab controls
+the PC (media, volume, lock, screen, Agent Mode, approvals, power, Steam download mode, sending
+files), and chats go to the PC's Alton while it's on (switch off in the PC tab). With the PC off
+the app works on its own. After an update is pushed, the app shows **Update ready**.
 
 **PIN lock:** phone app › Settings › App lock asks for a PIN when Alton opens and after 5
 minutes away. "Forgot PIN" removes the lock and the Claude key from the phone (chats stay).
@@ -435,9 +439,9 @@ A separate version of Alton for your phone that talks to Claude directly, so it 
 - **Brief me:** a button on the start screen (or the home-screen shortcut) gives today's date, local weather, your lists and a tip.
 - **Share into Alton (Android):** in any app, Share › Alton to send a link, text or photo, then ask "summarise this" or "what's this?".
 - **Home-screen shortcuts:** long-press the Alton icon for New chat, Talk, Text someone and Brief me.
-- **Edit on the phone:** tick off, add (e.g. "Shopping: milk, eggs") and delete list items; add notes; edit or delete memories; rename and pin chats. Your goals and notes come over from the PC. **Send phone chats to PC** takes chats, new memories, notes, new items and ticked/deleted items back to the PC.
+- **Edit on the phone:** tick off, add (e.g. "Shopping: milk, eggs") and delete list items; add notes; edit or delete memories; rename and pin chats. Your goals and notes come over from the PC. Changes sync with the PC by themselves once it's connected.
 - **People:** "Add from my contacts" (Android Chrome) or type names and numbers, so "Mum" means the right person. Unknown names get a "Choose from contacts" button.
-- **Sync:** in the PC version on your phone, More › **Update phone app** copies your memories, personality, lists and recent chats (and the PC's address). In the phone app, PC › **Send phone chats to PC** brings chats, new memories and list items back (the PC must be on). The data travels inside the link itself, never through another server.
+- **Sync:** once connected (PC tab), memories, personality, lists, notes, goals, shifts and recent chats sync both ways by themselves, straight between the phone and your PC over Tailscale (never through another server).
 
 ### Wake the PC from your phone
 

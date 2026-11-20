@@ -58,13 +58,60 @@ describe('RemoteServer', () => {
       pingOrigin: () => 'https://palpa1n3.github.io',
     });
     await srv.start(0);
-    const r = await fetch(`http://127.0.0.1:${srv.port()}/api/ping`);
+    const base = `http://127.0.0.1:${srv.port()}`;
+    const app = { origin: 'https://palpa1n3.github.io' };
+    const r = await fetch(`${base}/api/ping`, { headers: app });
     expect(r.status).toBe(200);
     expect(r.headers.get('access-control-allow-origin')).toBe('https://palpa1n3.github.io');
     expect(r.headers.get('access-control-allow-private-network')).toBe('true');
     expect(await r.json()).toMatchObject({ ok: true });
+    // Other sites get no CORS permission.
+    const other = await fetch(`${base}/api/ping`, { headers: { origin: 'https://evil.example' } });
+    expect(other.headers.get('access-control-allow-origin')).toBeNull();
     // Everything else still needs pairing.
-    expect((await fetch(`http://127.0.0.1:${srv.port()}/api/status`)).status).toBe(401);
+    expect((await fetch(`${base}/api/status`, { headers: app })).status).toBe(401);
+    await srv.stop();
+  });
+
+  it('lets the phone app call the API directly (CORS preflight), and nobody else', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'arc-remote-'));
+    srv = new RemoteServer({
+      status,
+      message: vi.fn(async () => ''),
+      emergencyStop: vi.fn(),
+      agentAnswer: vi.fn(),
+      approve: vi.fn(),
+      uploadDir: () => join(dir, 'up'),
+      file: join(dir, 'paired.json'),
+      pingOrigin: () => 'https://palpa1n3.github.io',
+    });
+    await srv.start(0);
+    const base = `http://127.0.0.1:${srv.port()}`;
+    const pre = await fetch(`${base}/api/status`, {
+      method: 'OPTIONS',
+      headers: {
+        origin: 'https://palpa1n3.github.io',
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'authorization',
+        'access-control-request-private-network': 'true',
+      },
+    });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get('access-control-allow-origin')).toBe('https://palpa1n3.github.io');
+    expect(pre.headers.get('access-control-allow-headers')).toMatch(/authorization/);
+    expect(pre.headers.get('access-control-allow-private-network')).toBe('true');
+    const evil = await fetch(`${base}/api/status`, {
+      method: 'OPTIONS',
+      headers: { origin: 'https://evil.example', 'access-control-request-method': 'GET' },
+    });
+    expect(evil.status).toBe(403);
+    expect(evil.headers.get('access-control-allow-origin')).toBeNull();
+    // A real call from the app carries the header too (and still needs pairing).
+    const r = await fetch(`${base}/api/status`, {
+      headers: { origin: 'https://palpa1n3.github.io' },
+    });
+    expect(r.status).toBe(401);
+    expect(r.headers.get('access-control-allow-origin')).toBe('https://palpa1n3.github.io');
     await srv.stop();
   });
 

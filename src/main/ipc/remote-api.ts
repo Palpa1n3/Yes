@@ -147,8 +147,13 @@ export function makePhoneRoutes(
           : [];
       });
       if (!text && !images.length) return bad('Empty message');
-      let chatId = str(body.chatId, 40);
-      if (!chatId || !d.chats.get(chatId)) chatId = d.chats.create(body.research === true).id;
+      // The phone app uses its own chat ids; chats it has sent over are found by phoneId.
+      const want = str(body.chatId, 40);
+      let chatId =
+        (want &&
+          (d.chats.get(want)?.id ?? d.chats.state().chats.find((c) => c.phoneId === want)?.id)) ||
+        '';
+      if (!chatId) chatId = d.chats.create(body.research === true).id;
       const id = `job-${++seq}-${Date.now().toString(36)}`;
       jobs.set(id, { id, chatId, text: '', activity: 'Thinking…', done: false, at: Date.now() });
       // Old jobs are forgotten after a while.

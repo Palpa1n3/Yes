@@ -32,7 +32,7 @@ describe('ambient look', () => {
     expect(dayPhase(7)).toBe('morning');
     expect(dayPhase(19)).toBe('evening');
     expect(dayPhase(2)).toBe('night');
-    expect(tintFor('evening').color).toBe('255 160 70');
+    expect(tintFor('evening').color).toBe('150 110 220'); // no yellow wash
     expect(tintFor('night').dim).toBeGreaterThan(0);
     expect(tintFor('day').alpha).toBe(0);
   });

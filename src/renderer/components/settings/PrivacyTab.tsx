@@ -358,8 +358,11 @@ export function PhoneAppSection() {
           (the app is in the <code>docs</code> folder); 2) on GitHub: your repo › Settings › Pages ›
           Branch <code>main</code>, folder <code>/docs</code> › Save; 3) open the address below on
           your phone, add it to the home screen and enter your Claude key (it stays on the phone;
-          set a monthly limit at console.anthropic.com). 4) In the PC version on your phone, More ›
-          Update phone app brings your memories and chats across.
+          set a monthly limit at console.anthropic.com). 4) Connect it to this PC: in the phone
+          app's PC tab, enter the PC's Tailscale address (from{' '}
+          <code>tailscale serve --bg 47615</code>) and the pairing code under Phone companion. From
+          then on chats, lists, notes and shifts sync by themselves, and the PC tab controls this PC
+          whenever it's on.
         </p>
         <div className="flex items-center gap-4 py-2">
           <QrCode text={s.phoneAppUrl} size={132} label="Scan to open the phone-only app" />

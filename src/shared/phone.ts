@@ -11,6 +11,8 @@ export interface PhoneMessage {
   sources?: Array<{ url: string; title: string }>;
   /** Buttons that open the phone's apps (text, call, directions…). */
   actions?: PhoneAction[];
+  /** Answered by the PC's Alton (already in the PC's chat, so never sent back). */
+  pc?: boolean;
 }
 
 export interface PhoneAction {
@@ -112,6 +114,39 @@ export function mergeChats(mine: PhoneChat[], theirs: PhoneChat[]): PhoneChat[] 
     if (!m || c.updatedAt >= m.updatedAt) by.set(c.id, c);
   }
   return [...by.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Live sync: add messages the PC has that this phone hasn't, keeping the phone's own copies
+ *  (with their buttons and photos). Matched by who said it and how it starts. */
+export function mergeChatHistory(mine: PhoneChat[], theirs: PhoneChat[]): PhoneChat[] {
+  const key = (m: PhoneMessage): string => `${m.role}:${m.text.trim().slice(0, 200)}`;
+  const by = new Map(mine.map((c) => [c.id, c]));
+  for (const t of theirs) {
+    const m = by.get(t.id);
+    if (!m) {
+      by.set(t.id, t);
+      continue;
+    }
+    const have = new Set(m.messages.map(key));
+    const extra = t.messages.filter((x) => !have.has(key(x)));
+    const title = m.title === 'New chat' ? t.title : m.title;
+    if (!extra.length && title === m.title) continue;
+    by.set(t.id, {
+      ...m,
+      title,
+      updatedAt: Math.max(m.updatedAt, t.updatedAt),
+      messages: [...m.messages, ...extra].sort((a, b) => a.at - b.at),
+    });
+  }
+  return [...by.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Chats changed since the last sync, minus messages the PC already has. */
+export function chatsToSend(chats: PhoneChat[], since: number): PhoneChat[] {
+  return chats
+    .filter((c) => c.updatedAt > since)
+    .map((c) => ({ ...c, messages: c.messages.filter((m) => !m.pc) }))
+    .filter((c) => c.messages.length > 0);
 }
 
 /* ── People ───────────────────────────────────────────────────────────────── */

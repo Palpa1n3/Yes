@@ -1,7 +1,7 @@
 /* Alton phone app service worker.
    - Keeps the app itself available offline (network first, cache fallback; this site's own files only).
    - Receives things shared from other apps (Android share sheet) and hands them to the page. */
-const CACHE = 'alton-v2';
+const CACHE = 'alton-v3';
 const SHARED = 'alton-shared';
 self.addEventListener('install', (e) => {
   self.skipWaiting();
@@ -10,6 +10,9 @@ self.addEventListener('install', (e) => {
       .open(CACHE)
       .then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './icon-192.png'])),
   );
+});
+self.addEventListener('message', (e) => {
+  if (e.data === 'skip-waiting') self.skipWaiting();
 });
 self.addEventListener('activate', (e) => {
   e.waitUntil(
@@ -49,8 +52,11 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   if (e.request.method !== 'GET') return;
+  // Never cache the update check; always ask the server again for the page itself.
+  if (url.pathname.endsWith('/version.json')) return;
+  const fresh = e.request.mode === 'navigate' || url.pathname.endsWith('.html');
   e.respondWith(
-    fetch(e.request)
+    (fresh ? fetch(e.request.url, { cache: 'no-cache' }) : fetch(e.request))
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));

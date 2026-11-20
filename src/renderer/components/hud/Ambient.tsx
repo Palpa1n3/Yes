@@ -114,7 +114,7 @@ export function AmbientBack() {
         <div
           className="absolute inset-x-0 bottom-0 h-1/2"
           style={{
-            background: `linear-gradient(to top, rgba(255,140,60,${0.16 * glow}), rgba(255,110,80,${0.05 * glow}) 60%, transparent)`,
+            background: `linear-gradient(to top, rgba(255,140,90,${0.08 * glow}), rgba(255,110,120,${0.03 * glow}) 40%, transparent)`,
           }}
         />
       )}
@@ -141,7 +141,10 @@ export function AmbientTint() {
       {alpha > 0 && (
         <div
           className="absolute inset-0 transition-colors duration-[3000ms]"
-          style={{ background: `rgb(${color} / ${alpha})`, mixBlendMode: 'soft-light' }}
+          // Edges only: the middle stays clear.
+          style={{
+            background: `radial-gradient(ellipse at center, transparent 55%, rgb(${color} / ${alpha}) 100%)`,
+          }}
         />
       )}
       {tint.dim > 0 && (

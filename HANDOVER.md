@@ -11,8 +11,11 @@ Read this first in a new chat, then README.md for the feature list.
   (`src/main/services/remote-app.html`), paired with a 6-digit code. Reachable away from home over Tailscale
   (`tailscale serve` gives an HTTPS name; `/api/ping` answers the phone app with CORS).
 - **Phone-only app**: `phone/` (Vite) built into `docs/` and served by GitHub Pages. Talks to
-  Claude directly with a key stored only on the phone. Syncs with the PC through URL fragments
-  (`src/shared/phone.ts`). Switches to the PC version automatically when the PC is on.
+  Claude directly with a key stored only on the phone. Connects to the PC directly over Tailscale
+  (`phone/src/pc.ts`; the PC allows CORS for exactly the phone app's origin on `/api/*`), pairs with
+  the 6-digit code, syncs live (`/api/import` then `/api/sync`), has a native PC tab, and sends
+  chats to the PC's Alton when connected. Shows "Update ready" from `docs/version.json`. See
+  PHONE_REDO.md for what's left.
 
 ## Layout
 
