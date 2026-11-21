@@ -90,6 +90,7 @@ export function weeksSummary(
   today = new Date(),
   rate = 0,
   unpaidBreak = 0,
+  breakOver = 6,
 ): Array<{ label: string; hours: number; pay: number }> {
   const labels = ['Last week', 'This week', 'Next week', 'Week after'];
   return labels.map((label, k) => {
@@ -101,7 +102,9 @@ export function weeksSummary(
     });
     const hours = Math.round(inWeek.reduce((n, s) => n + shiftHours(s), 0) * 10) / 10;
     const pay =
-      rate > 0 ? Math.round(inWeek.reduce((n, s) => n + paidHours(s, unpaidBreak) * rate, 0)) : 0;
+      rate > 0
+        ? Math.round(inWeek.reduce((n, s) => n + paidHours(s, unpaidBreak, breakOver) * rate, 0))
+        : 0;
     return { label, hours, pay };
   });
 }

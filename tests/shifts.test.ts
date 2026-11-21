@@ -153,6 +153,7 @@ describe('pay, leave-by and the PC rota', () => {
   it('estimates weekly pay with an unpaid break on long shifts only', () => {
     expect(paidHours(long, 30)).toBe(9.5);
     expect(paidHours(short, 30)).toBe(4);
+    expect(paidHours(short, 15, 0)).toBe(3.75);
     expect(weekPay([long, short], 12, 30, new Date(2026, 10, 19))).toBe(162);
     expect(weekPay([long], 0, 30, new Date(2026, 10, 19))).toBe(0);
   });

@@ -303,6 +303,8 @@ interface State {
   /** Hourly pay (0 = don't show pay) and unpaid break per long shift, in minutes. */
   payRate: number;
   unpaidBreak: number;
+  /** The break comes off every shift (not just ones over 6 hours). */
+  breakAll: boolean;
   /** A known payday ("2026-12-11"), how often pay comes, and how many days before payday the paid period ends. */
   payNext: string;
   payCycle: PayCycle;
@@ -419,6 +421,7 @@ const DEFAULTS: State = {
   shiftCardsDone: [],
   payRate: 0,
   unpaidBreak: 0,
+  breakAll: false,
   payNext: '',
   payCycle: 28,
   payLag: 0,
@@ -748,6 +751,7 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
           shifts: S.shifts,
           payRate: S.payRate,
           unpaidBreak: S.unpaidBreak,
+          breakOver: S.breakAll ? 0 : 6,
         });
         if (out.shifts?.length) {
           S.shifts = replaceRota(S.shifts, out.shifts);
@@ -1110,7 +1114,7 @@ function shiftLine(): string {
   const n = nextShift(S.shifts, new Date(), 48);
   const rate =
     S.payRate > 0
-      ? ` They earn ${money(S.payRate)} an hour${S.unpaidBreak ? ` with a ${S.unpaidBreak}-minute unpaid break on long shifts` : ''}.`
+      ? ` They earn ${money(S.payRate)} an hour${S.unpaidBreak ? ` with a ${S.unpaidBreak}-minute unpaid break ${S.breakAll ? 'on every shift' : 'on shifts over 6 hours'}` : ''}.`
       : '';
   const travel = S.travel ? ` It takes them about ${S.travel} minutes to get to work.` : '';
   const pd = payInfo();
@@ -4704,7 +4708,11 @@ function renderShifts(): void {
   };
   $('shiftWeek').innerHTML = S.shifts.length
     ? weekSvg(S.shifts, mondayOf(new Date()), colors) +
-      hoursSvg(weeksSummary(S.shifts, new Date(), S.payRate, S.unpaidBreak), colors, money)
+      hoursSvg(
+        weeksSummary(S.shifts, new Date(), S.payRate, S.unpaidBreak, S.breakAll ? 0 : 6),
+        colors,
+        money,
+      )
     : '';
   const box = $('shiftList');
   box.textContent = '';
@@ -4712,7 +4720,9 @@ function renderShifts(): void {
   const now = new Date();
   const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
   const pay = (d: Date): string =>
-    S.payRate > 0 ? ` (≈ ${money(weekPay(S.shifts, S.payRate, S.unpaidBreak, d))})` : '';
+    S.payRate > 0
+      ? ` (≈ ${money(weekPay(S.shifts, S.payRate, S.unpaidBreak, d, S.breakAll ? 0 : 6))})`
+      : '';
   $('shiftHours').textContent = up.length
     ? `This week ${weekHours(S.shifts, now)}h${pay(now)} · next week ${weekHours(S.shifts, next)}h${pay(next)}`
     : 'No shifts yet: share a screenshot of your rota to Alton.';
@@ -4740,6 +4750,7 @@ function renderShifts(): void {
   $<HTMLInputElement>('shiftRules').value = formatAlarmRules(S.shiftRules);
   $<HTMLInputElement>('payRate').value = S.payRate ? String(S.payRate) : '';
   $<HTMLInputElement>('unpaidBreak').value = S.unpaidBreak ? String(S.unpaidBreak) : '';
+  $<HTMLSelectElement>('breakAll').value = S.breakAll ? '1' : '0';
   $<HTMLInputElement>('travel').value = S.travel ? String(S.travel) : '';
   $<HTMLInputElement>('payNext').value = S.payNext;
   $<HTMLSelectElement>('payCycle').value = String(S.payCycle);
@@ -4774,7 +4785,7 @@ function payInfo(): {
   const day = nextPayday(S.payNext, S.payCycle);
   const period = day ? payPeriod(day, S.payCycle, S.payLag) : null;
   if (!day || !period) return null;
-  const p = periodPay(S.shifts, period, S.payRate, S.unpaidBreak);
+  const p = periodPay(S.shifts, period, S.payRate, S.unpaidBreak, S.breakAll ? 0 : 6);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const days = Math.round((new Date(`${day}T00:00`).getTime() - today.getTime()) / 86_400_000);
@@ -5331,7 +5342,7 @@ function renderToday(): void {
     sh.appendChild(el('div', 'li', `${describeShift(x)}${lb ? ` · leave by ${lb}` : ''}`));
   }
   const hrs = weekHours(S.shifts);
-  const pay = weekPay(S.shifts, S.payRate, S.unpaidBreak);
+  const pay = weekPay(S.shifts, S.payRate, S.unpaidBreak, new Date(), S.breakAll ? 0 : 6);
   if (hrs > 0)
     sh.appendChild(
       el('p', 'muted', `This week: ${hrs.toFixed(1)} h${pay > 0 ? ` · about ${money(pay)}` : ''}`),
@@ -6319,6 +6330,11 @@ function wire(): void {
     } catch (e) {
       toast((e as Error).message);
     }
+  };
+  $<HTMLSelectElement>('breakAll').onchange = (e) => {
+    S.breakAll = (e.target as HTMLSelectElement).value === '1';
+    save();
+    renderShifts();
   };
   $('travel').onchange = () => {
     S.travel = Math.round(num('travel', 300));

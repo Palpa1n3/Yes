@@ -228,10 +228,11 @@ export function mergeShifts(saved: Shift[], incoming: Shift[], now = new Date())
     .slice(-120);
 }
 
-/** Paid hours for a shift after an unpaid break (breaks only on shifts over 6 hours). */
-export function paidHours(s: Shift, unpaidBreakMin = 0): number {
+/** Paid hours for a shift after an unpaid break, taken off shifts longer than `overHours`
+ *  (6 by default; 0 = every shift, as some rota apps show). */
+export function paidHours(s: Shift, unpaidBreakMin = 0, overHours = 6): number {
   const h = shiftHours(s);
-  return h > 6 && unpaidBreakMin > 0 ? Math.max(0, h - unpaidBreakMin / 60) : h;
+  return h > overHours && unpaidBreakMin > 0 ? Math.max(0, h - unpaidBreakMin / 60) : h;
 }
 
 /** Estimated pay for the Monday–Sunday week containing `day`. */
@@ -240,6 +241,7 @@ export function weekPay(
   rate: number,
   unpaidBreakMin = 0,
   day = new Date(),
+  breakOver = 6,
 ): number {
   if (!(rate > 0)) return 0;
   const mon = new Date(day.getFullYear(), day.getMonth(), day.getDate() - ((day.getDay() + 6) % 7));
@@ -249,7 +251,7 @@ export function weekPay(
       const a = parts(s.start);
       return !!a && a >= mon && a < next;
     })
-    .reduce((n, s) => n + paidHours(s, unpaidBreakMin) * rate, 0);
+    .reduce((n, s) => n + paidHours(s, unpaidBreakMin, breakOver) * rate, 0);
   return Math.round(total * 100) / 100;
 }
 
@@ -516,12 +518,13 @@ export function periodPay(
   period: { start: string; end: string },
   rate: number,
   unpaidBreakMin = 0,
+  breakOver = 6,
 ): { hours: number; gross: number; shifts: number } {
   const inside = shifts.filter((s) => {
     const d = s.start.slice(0, 10);
     return d >= period.start && d < period.end;
   });
-  const hours = inside.reduce((n, s) => n + paidHours(s, unpaidBreakMin), 0);
+  const hours = inside.reduce((n, s) => n + paidHours(s, unpaidBreakMin, breakOver), 0);
   return {
     hours: Math.round(hours * 100) / 100,
     gross: rate > 0 ? Math.round(hours * rate * 100) / 100 : 0,

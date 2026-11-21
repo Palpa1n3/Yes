@@ -78,6 +78,11 @@ Read this first in a new chat, then README.md for the feature list.
   get-my-shifts, Your shift app (moved from Phone powers) and At work list. Lists (`peopleView`, title
   "Lists") has segments Lists · Notes · People; Reminders sit under Lists. Settings has three
   headings: About you & Alton · Phone · Account & data.
+  Shift app (owner's is a workforce app: bottom bar Home · Schedule · Requests · Shift Trade, Day/Week/
+  Month tabs, "16 Nov to 22 Nov" with < > arrows): `AppReader` taps the tab with `ScreenReader.tapTab`
+  (lowest match on screen = the nav bar), then "Week", reads, then `tapNextWeek` (date text only,
+  not the word "week"). Its hours take a 15-min break off every shift: setting `breakAll`
+  (`paidHours(s, brk, overHours)`).
   One-tap app updates: the update banner calls native `installUpdate` (GitHub .apk links only):
   downloads to the cache, opens the Install screen via the FileProvider (REQUEST_INSTALL_PACKAGES;
   first time it opens "Install unknown apps" for Alton). Falls back to the browser download.

@@ -130,7 +130,7 @@ public class ScreenReader extends AccessibilityService {
     }
 
     private static final java.util.regex.Pattern DATEISH = java.util.regex.Pattern.compile(
-        "\\b\\d{1,2}(st|nd|rd|th)?\\s?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s\\d{1,2}\\b|\\bweek\\b|\\b\\d{1,2}/\\d{1,2}\\b",
+        "\\b\\d{1,2}(st|nd|rd|th)?\\s?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s\\d{1,2}\\b|\\b\\d{1,2}/\\d{1,2}\\b",
         java.util.regex.Pattern.CASE_INSENSITIVE
     );
 
@@ -187,6 +187,37 @@ public class ScreenReader extends AccessibilityService {
         if (n == null || depth > 40 || out.size() > 800) return;
         out.add(n);
         for (int i = 0; i < n.getChildCount(); i++) flatten(n.getChild(i), out, depth + 1);
+    }
+
+    /**
+     * Taps a tab by name. When the name shows more than once (a "SCHEDULE" heading and the
+     * Schedule button in the bottom bar), it taps the lowest one on screen: the navigation bar.
+     */
+    public boolean tapTab(String target) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        String want = target.trim().toLowerCase();
+        List<AccessibilityNodeInfo> all = new java.util.ArrayList<>();
+        flatten(root, all, 0);
+        AccessibilityNodeInfo best = null;
+        int bestTop = Integer.MIN_VALUE;
+        for (AccessibilityNodeInfo n : all) {
+            CharSequence t = n.getText();
+            CharSequence d = n.getContentDescription();
+            boolean hit = (t != null && t.toString().trim().toLowerCase().equals(want))
+                || (d != null && d.toString().trim().toLowerCase().equals(want));
+            if (!hit) continue;
+            AccessibilityNodeInfo c = n;
+            while (c != null && !c.isClickable()) c = c.getParent();
+            if (c == null) continue;
+            android.graphics.Rect b = new android.graphics.Rect();
+            c.getBoundsInScreen(b);
+            if (b.top > bestTop) {
+                bestTop = b.top;
+                best = c;
+            }
+        }
+        return best != null && best.performAction(AccessibilityNodeInfo.ACTION_CLICK);
     }
 
     /** Taps the first item whose text or description is exactly this (any case). */

@@ -46,10 +46,10 @@ final class AppReader {
                     return;
                 case 1: { // go to the schedule tab (the one set in Phone powers, else "Schedule")
                     boolean tapped = false;
-                    if (tapFirst != null && !tapFirst.isEmpty()) tapped = sr.tapText(tapFirst);
+                    if (tapFirst != null && !tapFirst.isEmpty()) tapped = sr.tapTab(tapFirst);
                     if (!tapped)
                         for (String t : new String[] { "Schedule", "My schedule", "Rota", "My rota", "My shifts", "Shifts" })
-                            if (sr.tapText(t)) {
+                            if (sr.tapTab(t)) {
                                 tapped = true;
                                 break;
                             }
@@ -58,11 +58,19 @@ final class AppReader {
                         main.postDelayed(step[0], 2000);
                         return;
                     }
-                    st[0] = 2;
+                    st[0] = 5;
                     st[1] = 0;
                     main.postDelayed(step[0], tapped ? 2500 : 500);
                     return;
                 }
+                case 5: // Day / Week / Month views: read a week at a time
+                    st[0] = 2;
+                    if (sr.tapTab("Week")) {
+                        main.postDelayed(step[0], 2000);
+                        return;
+                    }
+                    main.post(step[0]);
+                    return;
                 case 2: { // read this week: wait until it has loaded, then scroll down for the rest
                     Set<String> page = ScreenReader.newLines();
                     sr.collectApp(pkg, page);

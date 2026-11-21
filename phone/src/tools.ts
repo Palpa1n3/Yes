@@ -42,6 +42,8 @@ export interface ToolState {
   /** Hourly pay and unpaid break minutes, for pay estimates (0 = unknown). */
   payRate?: number;
   unpaidBreak?: number;
+  /** Break taken off shifts longer than this many hours (0 = every shift). */
+  breakOver?: number;
 }
 
 export interface ToolOutcome {
@@ -569,7 +571,7 @@ export function runPhoneTool(name: string, input: unknown, st: ToolState): ToolO
       const nextWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
       const rate = st.payRate ?? 0;
       const est = (d: Date): string =>
-        weekPay(st.shifts ?? [], rate, st.unpaidBreak ?? 0, d).toFixed(2);
+        weekPay(st.shifts ?? [], rate, st.unpaidBreak ?? 0, d, st.breakOver ?? 6).toFixed(2);
       const pay =
         rate > 0
           ? ` Estimated pay before tax (their currency): this week ${est(now)}, next week ${est(nextWeek)}.`
