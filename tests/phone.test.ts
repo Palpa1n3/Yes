@@ -239,6 +239,10 @@ describe('needsPhone', () => {
     expect(needsPhone('what is on my rota')).toBe(true);
     expect(needsPhone('set an alarm for 6')).toBe(true);
     expect(needsPhone('message Sam on Snapchat')).toBe(true);
+    expect(needsPhone('Text will that I wont be able to come out tonight')).toBe(true);
+    expect(needsPhone('Send it to Will')).toBe(true);
+    expect(needsPhone('tell Sam I am running late')).toBe(true);
+    expect(needsPhone('let mum know I am home')).toBe(true);
     expect(needsPhone('free up space on drive D')).toBe(false);
     expect(needsPhone('what is the weather')).toBe(false);
   });
