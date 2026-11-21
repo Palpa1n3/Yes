@@ -238,6 +238,19 @@ export function PhoneSection() {
   return (
     <Section title="Phone companion">
       <Field
+        label="Alton project folder (updates from your phone)"
+        hint="The folder you push Alton to GitHub from (with the git setup in it), e.g. C:\\Users\\you\\Downloads\\…\\arc. With “Let my phone control this PC” on, your phone can send an update zip here and Alton unpacks it, commits and pushes. Nothing else is run."
+        stacked
+      >
+        <input
+          defaultValue={s.projectDir}
+          placeholder="Paste the folder path (File Explorer › address bar › copy)"
+          onBlur={(e) => void update({ projectDir: e.target.value.trim().replace(/^"|"$/g, '') })}
+          aria-label="Alton project folder"
+          className="h-8 w-full rounded-[6px] border border-line bg-panel-raised px-2 font-mono text-[12px] text-text-primary focus:border-accent focus:outline-none"
+        />
+      </Field>
+      <Field
         label="Use Alton from your phone"
         hint="The full Alton on your phone's browser (same home Wi-Fi): all your chats with live answers, research mode, photos from your camera, read-aloud, notes, lists and goals, plus music, volume, timers, routines, Agent Mode, a live view of your screen, approvals, file sending and an emergency stop. Windows may ask to allow ARC through the firewall: allow it on private networks only. Don't use this on public Wi-Fi."
       >

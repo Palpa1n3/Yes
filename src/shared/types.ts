@@ -282,6 +282,8 @@ export interface Settings {
   musicReactive: boolean;
   /** ARC's project folder, read-only, so Claude can read its own code ('' = not set). */
   sourceDir: string;
+  /** The Alton project folder (with git) that the phone can update: unpack + commit + push. */
+  projectDir: string;
 }
 
 export type AvatarStyle =
@@ -386,6 +388,7 @@ export const DEFAULT_SETTINGS: Settings = {
   desktopWidget: false,
   holoNotifications: true,
   sourceDir: '',
+  projectDir: '',
   whisper: false,
   followUp: true,
   localModel: '',

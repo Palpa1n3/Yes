@@ -1169,8 +1169,15 @@
         color: var(--ice);
         font-size: 13px;
       }
-      .rm-top span {
+      .rm-top > span:first-child {
         flex: 1;
+      }
+      .rm-screens {
+        display: flex;
+        gap: 6px;
+      }
+      .rm-screens .btn {
+        padding: 6px 10px;
       }
       .rm-view {
         flex: 1;
@@ -1773,6 +1780,7 @@
     <div id="remote" class="remote" hidden>
       <div class="rm-top">
         <span id="rmStatus">Connecting…</span>
+        <span id="rmScreens" class="rm-screens"></span>
         <button class="btn" id="rmZoom">Zoom</button>
         <button class="btn" id="rmClose">Close</button>
       </div>
@@ -2231,6 +2239,28 @@
               <button class="btn full" id="dlOffBtn" style="margin-top: 6px">
                 Download, then shut down
               </button>
+            </div>
+            <div class="card">
+              <div class="lbl"><span class="dot"></span>Update Alton (no PC needed)</div>
+              <p class="muted small" style="margin-top: 0" id="projState">
+                Pick the Alton zip from your chat: your PC unpacks it into the project, then commits
+                and pushes it to GitHub for you.
+              </p>
+              <input type="file" id="projFile" accept=".zip,application/zip" class="input" />
+              <input
+                id="projMsg"
+                class="input"
+                placeholder="What changed (optional)"
+                style="margin-top: 8px"
+              />
+              <button class="btn acc full" id="projGo" style="margin-top: 8px">
+                Update and push
+              </button>
+              <pre
+                id="projLog"
+                class="muted small"
+                style="white-space: pre-wrap; margin: 8px 0 0"
+              ></pre>
             </div>
             <div class="card">
               <div class="lbl"><span class="dot"></span>Send a file to the PC</div>

@@ -1,4 +1,4 @@
-import { app, desktopCapturer, screen } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, screen, session } from 'electron';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { IPC, type RemoteInfo } from '@shared/ipc';
@@ -15,6 +15,8 @@ import { WinInput } from '../services/agent-input-win';
 import { notifyUser } from '../holo';
 import { parseCombo } from '@shared/agent';
 import { toPhysical, type RemoteInput } from '@shared/remote-input';
+import { applyProjectUpdate, isAltonProject } from '../services/project-update';
+import { basename } from 'node:path';
 import type { ChatStore } from '../services/chat-store';
 import type { NotesStore } from '../services/notes-store';
 import type { Routine } from '@shared/routines';
@@ -65,9 +67,96 @@ export function registerRemoteIpc(
 
   // ── Remote control from the phone ──
   let liveDisplay: Electron.Display | null = null;
+  // A hidden window streams the chosen screen continuously, so each frame the phone asks for
+  // is ready at once (much faster than taking a fresh screenshot per frame).
+  let cap: BrowserWindow | null = null;
+  let capFor: number | null = null;
+  let latest: Buffer | null = null;
+  let lastAsked = 0;
+  /** When the stream last failed to start: use plain screenshots for a while instead. */
+  let streamFailedAt = 0;
+  const capSession = session.fromPartition('arc-remote-capture');
+  let capSource: Electron.DesktopCapturerSource | null = null;
+  capSession.setDisplayMediaRequestHandler((_req, cb) =>
+    capSource ? cb({ video: capSource }) : cb({}),
+  );
+  ipcMain.on('arc:remote-frame', (e, data: unknown) => {
+    if (!cap || e.sender !== cap.webContents || !(data instanceof Uint8Array)) return;
+    latest = Buffer.from(data);
+  });
+  const stopCapture = (): void => {
+    cap?.destroy();
+    cap = null;
+    capFor = null;
+    latest = null;
+  };
+  // Stop streaming once the phone has stopped looking for a while.
+  setInterval(() => {
+    if (cap && Date.now() - lastAsked > 20_000) stopCapture();
+  }, 5000);
+  const ensureCapture = async (d: Electron.Display): Promise<void> => {
+    lastAsked = Date.now();
+    if (cap && capFor === d.id) return;
+    stopCapture();
+    if (Date.now() - streamFailedAt < 60_000) return;
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: 0, height: 0 },
+    });
+    capSource = sources.find((s) => s.display_id === String(d.id)) ?? sources[0] ?? null;
+    if (!capSource) return;
+    const k = Math.min(1, 1280 / Math.max(d.size.width, d.size.height));
+    const w = Math.round(d.size.width * k);
+    const h = Math.round(d.size.height * k);
+    capFor = d.id;
+    cap = new BrowserWindow({
+      show: false,
+      width: 320,
+      height: 200,
+      webPreferences: {
+        partition: 'arc-remote-capture',
+        nodeIntegration: true,
+        contextIsolation: false,
+        backgroundThrottling: false,
+      },
+    });
+    const html = `<script>
+const { ipcRenderer } = require('electron');
+(async () => {
+  const s = await navigator.mediaDevices.getDisplayMedia({ video: { width: ${w}, height: ${h}, frameRate: 15 }, audio: false });
+  const v = document.createElement('video');
+  v.muted = true;
+  v.srcObject = s;
+  await v.play();
+  const c = document.createElement('canvas');
+  c.width = ${w};
+  c.height = ${h};
+  const g = c.getContext('2d');
+  const tick = () => {
+    g.drawImage(v, 0, 0, c.width, c.height);
+    c.toBlob((b) => {
+      if (b) b.arrayBuffer().then((a) => ipcRenderer.send('arc:remote-frame', new Uint8Array(a)));
+      setTimeout(tick, 80);
+    }, 'image/jpeg', 0.6);
+  };
+  tick();
+})().catch(() => window.close());
+</script>`;
+    const mine = cap;
+    mine.on('closed', () => {
+      if (cap === mine) {
+        if (!latest) streamFailedAt = Date.now();
+        cap = null;
+        capFor = null;
+      }
+    });
+    void cap.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  };
   let input: WinInput | null = null;
   let lastNotice = 0;
-  const noticeControl = (what: 'viewing' | 'controlling'): void => {
+  const noticeControl = (
+    what: 'viewing' | 'controlling' | 'updating the Alton project on',
+  ): void => {
     if (Date.now() - lastNotice < 5 * 60_000) return;
     lastNotice = Date.now();
     ctx.audit.add('action', `Your phone is ${what} this PC`);
@@ -134,10 +223,20 @@ export function registerRemoteIpc(
   const phone = makePhoneRoutes(ctx, {
     ...src.phone,
     screenshot: async () => (await grab().catch(() => null))?.jpeg ?? null,
-    live: async () => {
+    live: async (screenId) => {
       noticeControl('viewing');
-      const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+      const all = screen.getAllDisplays();
+      const d =
+        all.find((x) => x.id === screenId) ??
+        (liveDisplay && all.find((x) => x.id === liveDisplay?.id)) ??
+        screen.getPrimaryDisplay();
       liveDisplay = d;
+      await ensureCapture(d);
+      // Wait briefly for the first frame of a new stream.
+      for (let i = 0; i < 30 && cap && (!latest || capFor !== d.id); i++)
+        await new Promise((r) => setTimeout(r, 100));
+      if (capFor === d.id && latest) return latest;
+      // No stream (yet): a plain screenshot instead (slower, but always works).
       const k = Math.min(1, 1100 / Math.max(d.size.width, d.size.height));
       const sources = await desktopCapturer.getSources({
         types: ['screen'],
@@ -146,10 +245,36 @@ export function registerRemoteIpc(
           height: Math.round(d.size.height * k),
         },
       });
-      const s = sources.find((x) => x.display_id === String(d.id)) ?? sources[0];
-      return s && !s.thumbnail.isEmpty() ? s.thumbnail.toJPEG(55) : null;
+      const src = sources.find((x) => x.display_id === String(d.id)) ?? sources[0];
+      return src && !src.thumbnail.isEmpty() ? src.thumbnail.toJPEG(55) : null;
+    },
+    screens: () => {
+      const primary = screen.getPrimaryDisplay().id;
+      return screen.getAllDisplays().map((d, i) => ({
+        id: d.id,
+        label: `Screen ${i + 1}${d.id === primary ? ' (main)' : ''}`,
+        current: d.id === (liveDisplay?.id ?? primary),
+      }));
     },
     input: (cmd) => remoteInput(cmd),
+    projectStatus: () => {
+      const dir = ctx.settings.get().projectDir;
+      return { ready: isAltonProject(dir), dir };
+    },
+    projectUpdate: async (file, message) => {
+      if (process.platform !== 'win32') return { ok: false, log: 'Updating needs Windows.' };
+      noticeControl('updating the Alton project on');
+      const zip = join(app.getPath('downloads'), 'From phone', basename(file));
+      const r = await applyProjectUpdate(zip, ctx.settings.get().projectDir, message);
+      notifyUser(
+        'Alton project update',
+        r.ok
+          ? 'Updated from your phone and pushed to GitHub.'
+          : 'An update from your phone didn’t finish: see the phone for why.',
+        r.ok ? 'info' : 'warn',
+      );
+      return r;
+    },
     macs,
     sleep: () =>
       void ps(

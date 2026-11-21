@@ -126,8 +126,8 @@ export interface PcJob {
 }
 
 /** A quick live frame of the PC's screen (remote control). */
-export async function pcLive(c: PcConn): Promise<Blob> {
-  const r = await fetch(`${c.base}/api/live?t=${Date.now()}`, {
+export async function pcLive(c: PcConn, screen?: number): Promise<Blob> {
+  const r = await fetch(`${c.base}/api/live?t=${Date.now()}${screen ? `&screen=${screen}` : ''}`, {
     cache: 'no-store',
     headers: { authorization: `Bearer ${c.token}` },
     signal: timeout(10_000),

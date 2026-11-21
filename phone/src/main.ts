@@ -4529,40 +4529,82 @@ let lastWeather = '';
 /* ── Remote control: the PC's screen live, tap to click, swipe to scroll, type ── */
 let remoteOn = false;
 let rmZoom = false;
+let rmScreen = 0;
 async function openRemote(): Promise<void> {
   const c = conn();
   if (!c) return toast('Connect to your PC first.');
   remoteOn = true;
   $('remote').hidden = false;
   $('rmStatus').textContent = 'Connecting…';
+  void loadScreens();
   const img = $<HTMLImageElement>('rmImg');
   let frames = 0;
   let since = performance.now();
-  while (remoteOn) {
-    const cc = conn();
-    if (!cc) {
-      $('rmStatus').textContent = 'Lost the connection to your PC.';
-      break;
-    }
-    try {
-      const blob = await pcLive(cc);
-      const url = URL.createObjectURL(blob);
-      const old = img.src;
-      img.src = url;
-      await img.decode().catch(() => undefined);
-      if (old.startsWith('blob:')) URL.revokeObjectURL(old);
-      frames++;
-      const now = performance.now();
-      if (now - since > 2000) {
-        $('rmStatus').textContent = `Live · ${Math.round((frames * 1000) / (now - since))} fps`;
-        frames = 0;
-        since = now;
+  let shown = 0;
+  let seq = 0;
+  let stop = false;
+  // Two requests in flight at once: while one frame travels, the next is already asked for.
+  const worker = async (): Promise<void> => {
+    while (remoteOn && !stop) {
+      const cc = conn();
+      if (!cc) {
+        $('rmStatus').textContent = 'Lost the connection to your PC.';
+        return;
       }
-    } catch (e) {
-      $('rmStatus').textContent = (e as Error).message;
-      if (e instanceof PcError && e.status === 403) break;
-      await new Promise((r) => setTimeout(r, 1500));
+      const mine = ++seq;
+      try {
+        const blob = await pcLive(cc, rmScreen || undefined);
+        if (mine < shown || !remoteOn) continue;
+        shown = mine;
+        const url = URL.createObjectURL(blob);
+        const old = img.src;
+        img.src = url;
+        await img.decode().catch(() => undefined);
+        if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+        frames++;
+        const now = performance.now();
+        if (now - since > 2000) {
+          $('rmStatus').textContent = `Live · ${Math.round((frames * 1000) / (now - since))} fps`;
+          frames = 0;
+          since = now;
+        }
+      } catch (e) {
+        $('rmStatus').textContent = (e as Error).message;
+        if (e instanceof PcError && e.status === 403) {
+          stop = true;
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
     }
+  };
+  await Promise.all([worker(), worker()]);
+}
+/** Screen 1 / Screen 2 buttons when the PC has more than one monitor. */
+async function loadScreens(): Promise<void> {
+  const c = conn();
+  const box = $('rmScreens');
+  box.textContent = '';
+  if (!c) return;
+  try {
+    const list = await pcApi<Array<{ id: number; label: string; current: boolean }>>(
+      c,
+      'GET',
+      '/api/screens',
+    );
+    if (list.length < 2) return;
+    for (const s of list) {
+      const b = el('button', 'btn', s.label.replace(' (main)', ' ★'));
+      b.classList.toggle('acc', rmScreen ? rmScreen === s.id : s.current);
+      b.onclick = () => {
+        rmScreen = s.id;
+        box.querySelectorAll('button').forEach((x) => x.classList.remove('acc'));
+        b.classList.add('acc');
+      };
+      box.appendChild(b);
+    }
+  } catch {
+    /* older PC: one screen */
   }
 }
 function closeRemote(): void {
@@ -4677,6 +4719,52 @@ function wireRemote(): void {
   $('remoteBtn').onclick = () => void openRemote();
 }
 
+/* ── Update the Alton project from the phone (the PC unpacks, commits and pushes) ── */
+async function projectState(): Promise<void> {
+  const c = conn();
+  if (!c) return;
+  try {
+    const st = await pcApi<{ ready: boolean; dir: string }>(c, 'GET', '/api/project');
+    $('projState').textContent = st.ready
+      ? `Project folder on the PC: ${st.dir}. Pick the Alton zip and tap Update and push.`
+      : 'First, on the PC: Settings › Privacy & safety › Phone companion › “Alton project folder”: paste the folder you push Alton from.';
+  } catch (e) {
+    $('projState').textContent = (e as Error).message;
+  }
+}
+function wireProject(): void {
+  $('projGo').onclick = async () => {
+    const c = conn();
+    const f = $<HTMLInputElement>('projFile').files?.[0];
+    if (!c) return toast('Connect to your PC first.');
+    if (!f || !/\.zip$/i.test(f.name)) return toast('Pick the Alton .zip first.');
+    const log = $('projLog');
+    const btn = $<HTMLButtonElement>('projGo');
+    btn.disabled = true;
+    log.textContent = `Sending ${f.name} to the PC…`;
+    try {
+      const saved = await pcUpload(c, f);
+      log.textContent = 'Unpacking, committing and pushing on the PC… (up to a minute)';
+      const r = await pcApi<{ ok: boolean; log: string }>(
+        c,
+        'POST',
+        '/api/project/update',
+        {
+          file: saved,
+          message: $<HTMLInputElement>('projMsg').value.trim() || `Alton update (${f.name})`,
+        },
+        300_000,
+      );
+      log.textContent = `${r.ok ? '✅ Done' : '⚠️ Didn’t finish'}\n${r.log}`;
+      if (r.ok) toast('Pushed! The new version builds on GitHub now.');
+    } catch (e) {
+      log.textContent = `⚠️ ${(e as Error).message}`;
+    } finally {
+      btn.disabled = false;
+    }
+  };
+}
+
 /* ── Phone health check (Android app) ── */
 async function runHealth(): Promise<void> {
   const box = $('healthOut');
@@ -4744,7 +4832,12 @@ function renderPc(): void {
   if (!S.macs.length) macs.textContent = 'Connect to the PC once to see it here.';
   renderPcStatus();
 }
+let projChecked = false;
 function renderPcStatus(): void {
+  if (!projChecked && pcLink === 'paired') {
+    projChecked = true;
+    void projectState();
+  }
   const st = pcStatus;
   if (!st || pcLink !== 'paired') return;
   const pct = (x: number | null): string => (x == null ? '–' : `${Math.round(x)}%`);
@@ -5405,6 +5498,7 @@ function wire(): void {
   wirePc();
   wireLook();
   wireRemote();
+  wireProject();
   wireHealth();
   $('snapRead').onclick = () => void readSnapFriends();
   wireUi();

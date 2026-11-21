@@ -180,6 +180,7 @@ export function sanitizeSettings(raw: unknown): Settings {
       ? (r['avatar'] as Settings['avatar'])
       : d.avatar,
     sourceDir: str('sourceDir', 400).trim(),
+    projectDir: str('projectDir', 400).trim(),
     whisper: bool('whisper'),
     phoneAccess: bool('phoneAccess'),
     onboarded: typeof r['onboarded'] === 'boolean' ? r['onboarded'] : true,

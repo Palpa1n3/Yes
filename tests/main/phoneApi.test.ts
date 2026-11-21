@@ -47,6 +47,9 @@ function setup() {
     routines: () => [],
     execute,
     live: async () => Buffer.from([1]),
+    screens: () => [{ id: 1, label: 'Screen 1 (main)', current: true }],
+    projectStatus: () => ({ ready: false, dir: '' }),
+    projectUpdate: vi.fn(async () => ({ ok: true, log: '' })),
     input: vi.fn(async () => undefined),
     screenshot: async () => null,
     macs: () => ['AA:BB:CC:DD:EE:FF'],
@@ -198,5 +201,9 @@ describe('remote control from the phone', () => {
       status?: number;
     };
     expect(inp.status).toBe(403);
+    const up = (await call('POST', '/api/project/update', { file: 'u.zip' })) as {
+      status?: number;
+    };
+    expect(up.status).toBe(403);
   });
 });

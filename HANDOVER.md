@@ -46,6 +46,11 @@ Read this first in a new chat, then README.md for the feature list.
   with fixes) → the `phone_diagnostics` tool and Settings › Phone health.
   Remote control: PC setting `phoneControl` (off by default; notice on the PC when used),
   `/api/live` frames + `/api/input` (`src/shared/remote-input.ts`), phone overlay in the PC tab.
+  Faster remote view: a hidden capture window (partition `arc-remote-capture`, getDisplayMedia)
+  streams the chosen monitor; frames go to main over IPC and `/api/live?screen=` returns the newest
+  (falls back to thumbnails if the stream can't start). `/api/screens` lists monitors.
+  Project updates from the phone: `services/project-update.ts` (unpack zip → robocopy into
+  `projectDir` → git add/commit/push; fixed steps, execFile, no shell) via `/api/project/update`.
   Home-screen widget: `AltonWidget.java` + `res/layout/alton_widget.xml`; the app fills it via
   `setWidget` (next shift, weather, next reminder); its Talk/Drive buttons open the app with an
   action that `MainActivity.modeFor` turns into "talk" or "drive". Watch heads-ups: pure planner in

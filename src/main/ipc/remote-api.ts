@@ -55,7 +55,12 @@ export function makePhoneRoutes(
     execute(cmd: CanonicalCommand): Promise<CommandResult>;
     screenshot(): Promise<Buffer | null>;
     /** Remote control: a quick live frame, and mouse/keyboard input. */
-    live(): Promise<Buffer | null>;
+    live(screenId?: number): Promise<Buffer | null>;
+    /** The PC's screens, for switching between monitors. */
+    screens(): Array<{ id: number; label: string; current: boolean }>;
+    /** Update the Alton project from a zip the phone sent (unpack, commit, push). */
+    projectStatus(): { ready: boolean; dir: string };
+    projectUpdate(file: string, message: string): Promise<{ ok: boolean; log: string }>;
     input(cmd: RemoteInput): Promise<void>;
     /** MAC addresses of the network adapters (for Wake-on-LAN). */
     macs(): string[];
@@ -386,13 +391,31 @@ export function makePhoneRoutes(
           403,
         );
       if (a === 'live') {
-        const jpeg = await d.live();
+        const want = Number(q.get('screen'));
+        const jpeg = await d.live(Number.isFinite(want) && want ? want : undefined);
         return jpeg ? { jpeg } : bad('Could not capture the screen', 500);
       }
       const cmd = sanitizeInput(body);
       if (!cmd) return bad('Not a valid input');
       await d.input(cmd);
       return ok({ ok: true });
+    }
+    // ── Update the Alton project from the phone (fixed steps only) ──
+    if (a === 'project' && (method === 'GET' || (method === 'POST' && b === 'update'))) {
+      if (!ctx.settings.get().phoneControl)
+        return bad(
+          'Turn on “Let my phone control this PC” on the PC first (Settings › Privacy & safety).',
+          403,
+        );
+      if (method === 'GET') return ok(d.projectStatus());
+      const file = str(body.file, 200);
+      if (!/\.zip$/i.test(file)) return bad('Send a .zip file');
+      ctx.audit.add('action', `Phone: updating the Alton project from ${file}`);
+      return ok(await d.projectUpdate(file, str(body.message, 200)));
+    }
+    if (a === 'screens' && method === 'GET') {
+      if (!ctx.settings.get().phoneControl) return bad('Remote control is off on the PC.', 403);
+      return ok(d.screens());
     }
     if (a === 'screen' && method === 'GET') {
       if (!ctx.settings.get().screenAware)
