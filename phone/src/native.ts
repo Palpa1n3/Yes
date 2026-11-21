@@ -32,7 +32,62 @@ export async function loadVoices(): Promise<void> {
 
 export const canSpeak = (): boolean => isApp || 'speechSynthesis' in window;
 export const isSpeaking = (): boolean =>
-  isApp ? talking : 'speechSynthesis' in window && speechSynthesis.speaking;
+  talking || (!isApp && 'speechSynthesis' in window && speechSynthesis.speaking);
+
+/* A recorded-voice source (the PC's Fish Audio voice): MP3 per chunk, or null to use the phone. */
+let audioVoice: ((text: string) => Promise<Blob | null>) | null = null;
+export const setAudioVoice = (fn: ((text: string) => Promise<Blob | null>) | null): void => {
+  audioVoice = fn;
+};
+let player: HTMLAudioElement | null = null;
+let playToken = 0;
+function chunks(text: string): string[] {
+  const out: string[] = [];
+  let cur = '';
+  for (const s of text.match(/[^.!?\n]+[.!?]*\s*/g) ?? [text]) {
+    if ((cur + s).length > 900 && cur) {
+      out.push(cur.trim());
+      cur = '';
+    }
+    cur += s.slice(0, 900);
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+function play(blob: Blob, token: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (token !== playToken) return resolve();
+    const url = URL.createObjectURL(blob);
+    player = new Audio(url);
+    const done = (): void => {
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+    player.onended = done;
+    player.onerror = done;
+    void player.play().catch(done);
+  });
+}
+/** Speaks with the recorded voice; false if it isn't available (then the phone voice is used). */
+async function speakAudio(text: string, onend?: () => void): Promise<boolean> {
+  if (!audioVoice) return false;
+  const token = ++playToken;
+  const parts = chunks(text);
+  let next: Promise<Blob | null> = audioVoice(parts[0] ?? text).catch(() => null);
+  const first = await next;
+  if (!first) return false;
+  for (let i = 0; i < parts.length; i++) {
+    const blob = i === 0 ? first : await next;
+    if (token !== playToken || !blob) break;
+    if (i + 1 < parts.length) next = audioVoice(parts[i + 1] as string).catch(() => null);
+    await play(blob, token);
+  }
+  if (token === playToken) {
+    talking = false;
+    onend?.();
+  }
+  return true;
+}
 
 export function voiceList(): VoiceInfo[] {
   if (isApp) return appVoices;
@@ -53,6 +108,9 @@ export function chooseVoice<T extends VoiceInfo>(all: T[], name: string): T | nu
 }
 
 export function stopSpeaking(): void {
+  playToken++;
+  player?.pause();
+  player = null;
   if (isApp) {
     talking = false;
     void TextToSpeech.stop().catch(() => undefined);
@@ -63,6 +121,19 @@ export function speak(
   text: string,
   o: { rate?: number; voice?: string; onend?: () => void } = {},
 ): void {
+  if (audioVoice) {
+    talking = true;
+    void speakAudio(text, o.onend).then((ok) => {
+      if (!ok) {
+        talking = false;
+        speakDevice(text, o);
+      }
+    });
+    return;
+  }
+  speakDevice(text, o);
+}
+function speakDevice(text: string, o: { rate?: number; voice?: string; onend?: () => void }): void {
   if (isApp) {
     const v = chooseVoice(appVoices, o.voice ?? '');
     const idx = v ? appVoices.indexOf(v) : -1;
@@ -236,6 +307,12 @@ interface AltonNativePlugin {
   openSettings(o: { which: 'messages' | 'screenReader' | 'app' | 'assistant' }): Promise<void>;
   requestAccess(o: { which: 'calendar' | 'contacts' }): Promise<{ granted: boolean }>;
   getMessages(): Promise<{ messages: AppMessage[] }>;
+  setAnnounce(o: {
+    mode: 'off' | 'headphones' | 'always';
+    quietFrom: number;
+    quietTo: number;
+    rate: number;
+  }): Promise<void>;
   replyMessage(o: { id: string; text: string }): Promise<void>;
   setAlarm(o: { hour: number; minute: number; label: string }): Promise<void>;
   calendarEvents(o: { from: number; to: number }): Promise<{ events: CalEvent[] }>;
@@ -251,7 +328,11 @@ interface AltonNativePlugin {
   }): Promise<{ added: number }>;
   findContacts(o: { name: string }): Promise<{ contacts: Array<{ name: string; phone: string }> }>;
   listApps(): Promise<{ apps: Array<{ name: string; package: string }> }>;
-  readApp(o: { package: string }): Promise<{ text: string }>;
+  readApp(o: {
+    package: string;
+    tap?: string;
+  }): Promise<{ text: string; front: string; lines: number }>;
+  snapSend(o: { name: string; text: string }): Promise<void>;
   takeAssist(): Promise<{ assist: boolean }>;
   keepScreenOn(o: { on: boolean }): Promise<void>;
   media(o: {

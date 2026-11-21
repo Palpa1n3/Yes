@@ -74,6 +74,18 @@ public class AltonNativePlugin extends Plugin {
         if (p != null) p.main.post(() -> p.notifyListeners("message", m));
     }
 
+    /** Reading new messages out loud: "off", "headphones" or "always", and quiet hours. */
+    @PluginMethod
+    public void setAnnounce(PluginCall call) {
+        String mode = call.getString("mode", "off");
+        if (!"off".equals(mode) && !"headphones".equals(mode) && !"always".equals(mode)) mode = "off";
+        Integer from = call.getInt("quietFrom", 23);
+        Integer to = call.getInt("quietTo", 7);
+        Double rate = call.getDouble("rate", 1.0);
+        Announcer.save(getContext(), mode, from == null ? 23 : from, to == null ? 7 : to, rate == null ? 1f : rate.floatValue());
+        call.resolve();
+    }
+
     @PluginMethod
     public void takeAssist(PluginCall call) {
         boolean was = assistPending;
@@ -458,6 +470,7 @@ public class AltonNativePlugin extends Plugin {
     @PluginMethod
     public void readApp(final PluginCall call) {
         final String pkg = call.getString("package", "");
+        final String tapFirst = call.getString("tap", "");
         final Context ctx = getContext();
         if (!ScreenReader.isEnabled(ctx) || ScreenReader.get() == null) {
             call.reject("Screen reading is off.");
@@ -471,29 +484,139 @@ public class AltonNativePlugin extends Plugin {
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ctx.startActivity(launch);
         final Set<String> lines = ScreenReader.newLines();
-        final int[] pages = { 0 };
+        // stage, tries in this stage, pages read
+        final int[] st = { 0, 0, 0 };
+        final String[] seen = { "" };
         final Runnable[] step = new Runnable[1];
         step[0] = () -> {
             ScreenReader sr = ScreenReader.get();
             if (sr == null) {
-                finishRead(call, ctx, lines, "Screen reading was switched off.");
+                finishRead(call, ctx, lines, "Screen reading was switched off.", seen[0]);
                 return;
             }
-            if (!pkg.equals(sr.frontPackage()) && pages[0] == 0) {
-                // Still opening (or it opened a sign-in screen): give it a little longer once.
-                pages[0] = 1;
-                main.postDelayed(step[0], 2500);
-                return;
+            seen[0] = sr.frontPackage();
+            switch (st[0]) {
+                case 0: // wait for the app to be in front (splash screens, sign-in)
+                    if (!pkg.equals(seen[0]) && st[1]++ < 6) {
+                        main.postDelayed(step[0], 1500);
+                        return;
+                    }
+                    st[0] = 1;
+                    st[1] = 0;
+                    main.postDelayed(step[0], 2500); // let it load the rota
+                    return;
+                case 1: // open the rota tab if one is named
+                    st[0] = 2;
+                    if (tapFirst != null && !tapFirst.isEmpty() && sr.tapText(tapFirst)) {
+                        main.postDelayed(step[0], 2500);
+                        return;
+                    }
+                    main.post(step[0]);
+                    return;
+                default: // read, waiting a little if it's still loading, then scroll for more
+                    int before = lines.size();
+                    sr.collectApp(pkg, lines);
+                    if (lines.size() < 6 && st[1]++ < 3) {
+                        main.postDelayed(step[0], 2000);
+                        return;
+                    }
+                    st[2]++;
+                    if (st[2] < 8 && lines.size() > before && sr.scrollDown()) main.postDelayed(step[0], 1300);
+                    else finishRead(call, ctx, lines, null, seen[0]);
             }
-            sr.collect(lines);
-            pages[0]++;
-            if (pages[0] < 6 && sr.scrollDown()) main.postDelayed(step[0], 1200);
-            else finishRead(call, ctx, lines, null);
         };
-        main.postDelayed(step[0], 3500);
+        main.postDelayed(step[0], 2000);
     }
 
-    private void finishRead(PluginCall call, Context ctx, Set<String> lines, String err) {
+    /**
+     * Sends a Snapchat chat message: opens Snapchat, goes to Chat, opens the friend by the name
+     * shown in the chat list, types the message and presses send, then comes back to Alton.
+     * Only called after the user has confirmed the message (a tap, or "send it" while driving).
+     */
+    @PluginMethod
+    public void snapSend(final PluginCall call) {
+        final String name = call.getString("name", "").trim();
+        final String text = call.getString("text", "").trim();
+        final Context ctx = getContext();
+        final String pkg = "com.snapchat.android";
+        if (name.isEmpty() || text.isEmpty()) {
+            call.reject("Need who to send to and what to say.");
+            return;
+        }
+        if (!ScreenReader.isEnabled(ctx) || ScreenReader.get() == null) {
+            call.reject("Turn on “Read my shift app” in Phone powers first (Snapchat uses the same permission).");
+            return;
+        }
+        Intent launch = ctx.getPackageManager().getLaunchIntentForPackage(pkg);
+        if (launch == null) {
+            call.reject("Snapchat isn't installed.");
+            return;
+        }
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        ctx.startActivity(launch);
+        final int[] stage = { 0, 0 };
+        final Runnable[] step = new Runnable[1];
+        step[0] = () -> {
+            ScreenReader sr = ScreenReader.get();
+            if (sr == null) {
+                endSnap(call, ctx, "Screen reading was switched off.");
+                return;
+            }
+            switch (stage[0]) {
+                case 0: // Snapchat open: go to the Chat tab
+                    if (!pkg.equals(sr.frontPackage()) && stage[1]++ < 3) {
+                        main.postDelayed(step[0], 1500);
+                        return;
+                    }
+                    sr.tapText("Chat");
+                    stage[0] = 1;
+                    stage[1] = 0;
+                    main.postDelayed(step[0], 1800);
+                    return;
+                case 1: // find the friend in the list (scrolling down a few times)
+                    if (sr.tapText(name)) {
+                        stage[0] = 2;
+                        main.postDelayed(step[0], 2200);
+                        return;
+                    }
+                    if (stage[1]++ < 5 && sr.scrollDown()) {
+                        main.postDelayed(step[0], 1200);
+                        return;
+                    }
+                    endSnap(call, ctx, "Couldn't find “" + name + "” in your Snapchat chats.");
+                    return;
+                case 2: // type it
+                    if (!sr.typeText(text)) {
+                        if (stage[1]++ < 2) {
+                            main.postDelayed(step[0], 1200);
+                            return;
+                        }
+                        endSnap(call, ctx, "Couldn't find the chat box in Snapchat.");
+                        return;
+                    }
+                    stage[0] = 3;
+                    main.postDelayed(step[0], 700);
+                    return;
+                default: // send
+                    boolean sent = sr.pressSend();
+                    final boolean ok = sent;
+                    main.postDelayed(() -> endSnap(call, ctx, ok ? null : "Typed it, but couldn't press Send: check Snapchat."), 900);
+            }
+        };
+        main.postDelayed(step[0], 3000);
+    }
+
+    private void endSnap(PluginCall call, Context ctx, String err) {
+        Intent back = new Intent(ctx, MainActivity.class);
+        back.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+        try {
+            ctx.startActivity(back);
+        } catch (Exception ignored) {}
+        if (err == null) call.resolve();
+        else call.reject(err);
+    }
+
+    private void finishRead(PluginCall call, Context ctx, Set<String> lines, String err, String front) {
         // Back to Alton.
         Intent back = new Intent(ctx, MainActivity.class);
         back.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
@@ -506,6 +629,10 @@ public class AltonNativePlugin extends Plugin {
         }
         StringBuilder sb = new StringBuilder();
         for (String s : lines) sb.append(s).append('\n');
-        call.resolve(new JSObject().put("text", sb.toString()));
+        JSObject r = new JSObject();
+        r.put("text", sb.toString());
+        r.put("front", front == null ? "" : front);
+        r.put("lines", lines.size());
+        call.resolve(r);
     }
 }

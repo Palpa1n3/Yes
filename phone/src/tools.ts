@@ -98,10 +98,12 @@ export const PHONE_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'directions',
-    description: 'Open directions in Google Maps.',
+    description:
+      'Show the route to somewhere (a little map in the chat with the drive/walk time and distance) with buttons to start Google Maps navigation or open the route in Google Maps. Use for "route to…", "directions to…", "navigate to…", "how long to get to…". The destination can be an address, postcode or place name (add the town if it helps). Starts from where the user is unless they give a start.',
     input_schema: obj(
       {
         destination: { type: 'string' },
+        origin: { type: 'string', description: 'Start, if not where the user is now.' },
         mode: { type: 'string', enum: ['driving', 'walking', 'transit', 'bicycling'] },
       },
       ['destination'],
@@ -299,6 +301,12 @@ export const APP_TOOLS: Anthropic.Tool[] = [
     description:
       "Look up someone in the phone's contacts by name to get their number (before texting or calling someone not in the saved People list).",
     input_schema: obj({ name: { type: 'string' } }, ['name']),
+  },
+  {
+    name: 'snapchat_message',
+    description:
+      "Send a Snapchat chat message. 'to' is who it's for: a saved person (their Snapchat nickname is looked up) or the name exactly as it shows in their Snapchat chats. It becomes a Send button (or the user says \"send it\" while driving); Alton then opens Snapchat, types it and sends. Text only.",
+    input_schema: obj({ to: { type: 'string' }, text: { type: 'string' } }, ['to', 'text']),
   },
   {
     name: 'media_control',

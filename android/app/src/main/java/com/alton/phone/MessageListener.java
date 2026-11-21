@@ -73,6 +73,7 @@ public class MessageListener extends NotificationListenerService {
             o.put("at", e.at);
             o.put("canReply", e.reply != null);
             AltonNativePlugin.newMessage(o);
+            Announcer.message(this, e.key, e.app, e.from, e.text);
         }
     }
 

@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://*.ts.net https://*.github.io https://api.github.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; worker-src 'self'"
+      content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://*.ts.net https://*.github.io https://api.github.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://routing.openstreetmap.de https://api.fish.audio; media-src 'self' blob: data:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; worker-src 'self'"
     />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon-192.png" />
@@ -1061,6 +1061,45 @@
         pointer-events: none;
         z-index: 41;
       }
+      /* ── Route map in the chat ── */
+      figure.route {
+        margin: 8px 0 4px;
+        border: 1px solid rgba(63, 208, 255, 0.4);
+        border-radius: 12px;
+        overflow: hidden;
+        background: rgba(3, 8, 14, 0.85);
+      }
+      figure.route .grid {
+        stroke: rgba(29, 52, 72, 0.6);
+      }
+      figure.route .glow {
+        fill: none;
+        stroke: var(--accent);
+        stroke-opacity: 0.2;
+        stroke-width: 9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      figure.route .path {
+        fill: none;
+        stroke: var(--accent);
+        stroke-width: 2.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      figure.route .start {
+        fill: var(--ice);
+      }
+      figure.route .end {
+        fill: var(--accent);
+        filter: drop-shadow(0 0 6px var(--accent));
+      }
+      figure.route figcaption {
+        padding: 8px 12px;
+        font-size: 13px;
+        color: var(--ice);
+        border-top: 1px solid var(--line);
+      }
       /* ── Contact search sheet ── */
       .sheet {
         position: fixed;
@@ -1815,6 +1854,16 @@
             <button class="btn full" id="pAdd" style="margin-top: 8px">Add</button>
             <div id="peopleList" style="margin-top: 8px"></div>
           </div>
+          <div class="card" data-in="people" id="snapCard" hidden>
+            <div class="lbl"><span class="dot"></span>Snapchat friends</div>
+            <p class="muted" style="margin-top: 0">
+              So “message Sam on Snap” works with your nicknames: Alton reads the names in your
+              Snapchat chats and you say who each one is.
+            </p>
+            <button class="btn acc full" id="snapRead">Read my Snapchat friends</button>
+            <div id="snapTodo" style="margin-top: 8px"></div>
+            <div id="snapList" style="margin-top: 8px"></div>
+          </div>
           <div class="card" data-in="shifts">
             <div class="lbl"><span class="dot"></span>Shifts</div>
             <p class="muted" style="margin-top: 0" id="shiftHours"></p>
@@ -2127,6 +2176,22 @@
                 ><button class="btn" id="pwApp" style="padding: 6px 10px"></button>
               </div>
               <div id="pwAppList" hidden style="max-height: 260px; overflow-y: auto"></div>
+              <label class="muted" style="display: block; margin-top: 6px"
+                >If your rota isn’t on the first screen: the tab or button to tap first (e.g.
+                Schedule, Rota, My shifts)
+                <input
+                  class="input"
+                  id="pwTab"
+                  placeholder="Leave blank if the rota shows straight away"
+              /></label>
+              <details class="mini" id="pwPreview" hidden>
+                <summary id="pwPreviewSum">What Alton read last time</summary>
+                <pre
+                  id="pwPreviewText"
+                  class="muted small"
+                  style="white-space: pre-wrap; max-height: 260px; overflow-y: auto"
+                ></pre>
+              </details>
               <h3 class="sub">Hands-free &amp; driving</h3>
               <p class="muted small">
                 Driving mode keeps listening while Alton is on screen (phone in a car mount): say
@@ -2140,6 +2205,23 @@
                     (or swipe up from a bottom corner) to open it already listening</small
                   ></span
                 ><button class="btn" id="pwAssist" style="padding: 6px 10px">Set up</button>
+              </div>
+              <label class="muted" style="display: block; margin-top: 8px"
+                >Read new messages out loud (even with Alton closed)
+                <select id="pwAnnounce" class="input" style="margin-top: 4px">
+                  <option value="off">Off</option>
+                  <option value="headphones">Only with headphones or car Bluetooth</option>
+                  <option value="always">Always (not when the phone is on silent)</option>
+                </select></label
+              >
+              <div class="row" style="margin: 6px 0 4px">
+                <label class="muted" style="flex: 1"
+                  >Quiet from (hour)
+                  <input id="pwQuietFrom" class="input" type="number" min="0" max="23"
+                /></label>
+                <label class="muted" style="flex: 1"
+                  >until <input id="pwQuietTo" class="input" type="number" min="0" max="23"
+                /></label>
               </div>
               <div class="li">
                 <span style="flex: 1"
@@ -2169,6 +2251,33 @@
               ><span class="gt"><b>Voice</b><small>How Alton sounds and listens</small></span>
             </summary>
             <div class="gb">
+              <label class="muted">Alton’s voice comes from</label>
+              <select id="voiceSrc" class="input" style="margin: 4px 0 6px">
+                <option value="auto">Automatic: my PC’s voice when I can</option>
+                <option value="pc">My PC’s voice (when connected)</option>
+                <option value="fish">Fish Audio on this phone (works anywhere)</option>
+                <option value="phone">This phone’s voices</option>
+              </select>
+              <p class="muted small" id="voiceSrcInfo"></p>
+              <div id="fishKeyRow" hidden>
+                <label class="muted"
+                  >Fish Audio API key (optional: the same voice with the PC off; kept on this phone
+                  only)</label
+                >
+                <div class="row" style="margin: 4px 0 10px">
+                  <input
+                    id="fishKey"
+                    class="input"
+                    type="password"
+                    placeholder="Paste your Fish Audio key"
+                    style="flex: 1"
+                  />
+                  <button class="btn" id="fishKeySave">Save</button>
+                </div>
+              </div>
+              <button class="btn full" id="voiceTest" style="margin-bottom: 12px">
+                Test the voice
+              </button>
               <label class="muted">Alton's voice</label>
               <select id="voicePick" class="input" style="margin: 4px 0 10px"></select>
               <label class="muted">Speed</label>

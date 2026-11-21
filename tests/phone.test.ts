@@ -193,8 +193,38 @@ describe('Android app tools', () => {
       'reply_message',
       'read_calendar',
       'find_contact',
+      'snapchat_message',
       'media_control',
       'read_shift_app',
     ]);
+  });
+});
+
+describe('Snapchat chat list', () => {
+  it('keeps the friends’ names and drops buttons, times and statuses', async () => {
+    const { snapNames } = await import('@shared/phone');
+    const screen = [
+      'Chat',
+      'Search',
+      'Add Friends',
+      'Big Dawg 🐶',
+      'Received · 2h',
+      'Mumma bear',
+      'Opened',
+      '5m',
+      'Delivered · 1d',
+      'Tap to chat',
+      'Gaz',
+      'New Snap',
+      'My AI',
+      'Team Snapchat',
+      '12:45',
+      'Gaz',
+      'Stories',
+      'Spotlight',
+      'Map',
+      '🔥',
+    ].join('\n');
+    expect(snapNames(screen)).toEqual(['Big Dawg 🐶', 'Mumma bear', 'Gaz']);
   });
 });

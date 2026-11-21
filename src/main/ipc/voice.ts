@@ -24,6 +24,9 @@ export function registerVoiceIpc(ctx: MainContext): void {
     },
   });
   const status = (): VoiceStatus => ({ fishKey: key.has(), stt: whisper.getStatus() });
+  // The phone app can speak in the same voice through the PC (the key stays here).
+  ctx.fishSpeak = (text) => fish.speak(text.slice(0, 1000));
+  ctx.fishReady = () => key.has() && ctx.settings.get().voiceEngine === 'fish';
   const push = (): void => emit(ctx.getWindow(), IPC.voice.onStatus, status());
   const modelsDir = join(app.getPath('userData'), 'models');
   // Installed apps and games, so "open Lunar Client" is heard as written.

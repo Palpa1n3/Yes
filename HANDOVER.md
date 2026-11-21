@@ -26,7 +26,16 @@ Read this first in a new chat, then README.md for the feature list.
   look up contacts, set tomorrow's shift alarm silently (AlarmClock SKIP_UI), and read the chosen
   shift app's screen (accessibility, only when asked), native contact picker, media keys, SMS
   (only after a spoken "send it" or a tap), keep-screen-on, and opening as the phone's assistant
-  app (ACTION_ASSIST → Driving mode). Driving mode (phone/src/main.ts) listens for the wake word
+  app (ACTION_ASSIST → Driving mode). Snapchat: `snapSend` drives Snapchat through the accessibility service (Chat tab → friend by the
+  name shown → type → Send), only after confirmation; People › Snapchat friends reads the chat list
+  (`snapNames` filters it) so nicknames map to people. Routes: the phone's `directions` tool
+  geocodes with Nominatim and routes with OSRM (like the PC), draws the route in the chat and offers
+  Google Maps navigation (`google.navigation:`), started by itself in Driving mode.
+  Voice: the PC's Fish Audio voice reaches the phone via `POST /api/tts` (key stays on the PC),
+  or with a Fish key saved on the phone (native HTTP); `setAudioVoice` in native.ts plays MP3
+  chunks and falls back to the phone's TTS. `Announcer.java` reads new messages out (from the
+  notification listener, so even with the app closed): off / headphones-only / always, quiet hours.
+  Driving mode (phone/src/main.ts) listens for the wake word
   while on screen; a true background wake word is not built (Android limits it). Claude gets them as `APP_TOOLS`. The app's origin is
   `https://localhost`, which the PC's CORS also allows. The release workflow's `android` job
   builds a signed `Alton.apk` (secrets `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD`)

@@ -69,7 +69,10 @@ export interface RemoteDeps {
   ): Promise<RouteResult | null> | RouteResult | null;
 }
 
-export type RouteResult = { status?: number; json: unknown } | { status?: number; jpeg: Buffer };
+export type RouteResult =
+  | { status?: number; json: unknown }
+  | { status?: number; jpeg: Buffer }
+  | { status?: number; mp3: Uint8Array };
 
 /** 10.x, 172.16-31.x, 192.168.x, link-local, loopback and IPv6 ULA/link-local. */
 export function isPrivateAddress(addr: string | undefined): boolean {
@@ -346,6 +349,14 @@ export class RemoteServer {
           url.searchParams,
         );
         if (r) {
+          if ('mp3' in r) {
+            res.writeHead(r.status ?? 200, {
+              'content-type': 'audio/mpeg',
+              'cache-control': 'no-store',
+            });
+            res.end(Buffer.from(r.mp3));
+            return;
+          }
           if ('jpeg' in r) {
             res.writeHead(r.status ?? 200, {
               'content-type': 'image/jpeg',

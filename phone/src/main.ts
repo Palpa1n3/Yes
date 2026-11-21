@@ -8,6 +8,8 @@ import {
   chatsToSend,
   mergeChatHistory,
   mergeLists,
+  snapNames,
+  type RouteMap,
   type Person,
   type PhoneAction,
   type PhoneChat,
@@ -16,8 +18,12 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import { CapacitorHttp } from '@capacitor/core';
+import { fishRequest } from '../../src/main/services/fish-tts';
+import type { FishModel } from '@shared/voice';
 import {
   canSpeak,
+  setAudioVoice,
   installSpeechShim,
   isApp,
   isSpeaking,
@@ -167,6 +173,14 @@ interface State {
   snow: boolean;
   /** This phone's own personality (used when not following the PC). */
   personality: Personality | null;
+  /** Where Alton's voice comes from: automatic, this phone's voices, the PC (Fish Audio through
+   *  the PC), or Fish Audio with a key on this phone. And what the PC uses. */
+  voiceSource: 'auto' | 'phone' | 'pc' | 'fish';
+  pcVoice: SyncFromPc['voice'] | null;
+  /** Read new messages out loud (Android app): off, with headphones/car Bluetooth, or always. */
+  announce: 'off' | 'headphones' | 'always';
+  quietFrom: number;
+  quietTo: number;
   /** Background style, picture darkness (%), and interface options. */
   bg: 'aurora' | 'grid' | 'stars' | 'circuit' | 'plain' | 'photo';
   bgDim: number;
@@ -181,6 +195,8 @@ interface State {
   /** Android app: the shift app to read, setting shift alarms by themselves, and which are set. */
   shiftApp: string;
   shiftAppName: string;
+  /** A tab to tap after opening it (where the rota is), e.g. "Schedule". */
+  shiftTab: string;
   autoAlarms: boolean;
   alarmsSet: string[];
   /** Saved prompts were changed on the phone: keep them rather than the PC's. */
@@ -258,6 +274,11 @@ const DEFAULTS: State = {
   snow: true,
   personality: null,
   promptsMine: false,
+  voiceSource: 'auto',
+  pcVoice: null,
+  announce: 'off',
+  quietFrom: 23,
+  quietTo: 7,
   bg: 'aurora',
   bgDim: 60,
   uiText: 'm',
@@ -269,6 +290,7 @@ const DEFAULTS: State = {
   readOut: true,
   shiftApp: '',
   shiftAppName: '',
+  shiftTab: '',
   autoAlarms: true,
   alarmsSet: [],
   usePc: true,
@@ -367,6 +389,7 @@ function applyFromPc(d: SyncFromPc): void {
     name: d.name || S.name,
     userName: d.userName || S.userName,
     systemPrompt: d.systemPrompt || S.systemPrompt,
+    pcVoice: d.voice ?? S.pcVoice,
     personality:
       S.matchPersonality && d.personality ? sanitizePersonality(d.personality) : S.personality,
     model: d.model || S.model,
@@ -419,7 +442,7 @@ function systemText(): string {
       ? 'DRIVING MODE: the user is driving and hears your reply read aloud. Answer in one or two short spoken sentences, no lists, links or formatting. For texts and replies, get them ready (send_message / reply_message): the user confirms by saying "send it". Never ask them to look at or tap the screen unless unavoidable.'
       : '',
     isApp
-      ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a Send button the user taps), read_calendar for what's on, find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar). Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone powers)."
+      ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a Send button the user taps), read_calendar for what's on, find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar), snapchat_message to send Snapchat chats (people's Snapchat nicknames are saved), and media_control for music. Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone powers)."
       : '',
     'Alexa: you cannot reach Alexa directly; tell_alexa makes the phone say a command out loud for a nearby Echo (e.g. turning alarms or lights on).',
     isApp
@@ -560,6 +583,8 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
         const live2 = await placeTool(u.name, u.input);
         if (live2) {
           if (live2.action) reply.actions?.push(live2.action);
+          if (live2.actions) reply.actions?.push(...live2.actions);
+          if (live2.map) reply.map = live2.map;
           results.push({ type: 'tool_result', tool_use_id: u.id, content: live2.result });
           continue;
         }
@@ -667,8 +692,14 @@ function locate(): Promise<{ lat: number; lon: number } | null> {
 async function placeTool(
   name: string,
   input: unknown,
-): Promise<{ result: string; action?: PhoneAction } | null> {
+): Promise<{
+  result: string;
+  action?: PhoneAction;
+  actions?: PhoneAction[];
+  map?: RouteMap;
+} | null> {
   const o = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (name === 'directions') return routeTool(o);
   if (name === 'get_location') {
     const f = await locate();
     return {
@@ -1411,6 +1442,104 @@ function renderAbout(): void {
     }`;
 }
 
+/* ── Alton's voice: the PC's Fish Audio voice when possible, else the phone's ── */
+const FISH_KEY = 'alton-fish-key';
+async function fishDirect(text: string): Promise<Blob | null> {
+  const key = ls.get(FISH_KEY);
+  const v = S.pcVoice;
+  if (!key || !v?.fishVoiceId) return null;
+  const { url, init } = fishRequest(key, text, v.fishVoiceId, (v.fishModel || 's1') as FishModel);
+  if (isApp) {
+    // Native request (Fish Audio doesn't allow browser requests).
+    const r = await CapacitorHttp.request({
+      url,
+      method: 'POST',
+      headers: init.headers,
+      data: JSON.parse(init.body) as Record<string, unknown>,
+      responseType: 'blob',
+    });
+    if (r.status !== 200 || typeof r.data !== 'string') return null;
+    const bin = atob(r.data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: 'audio/mpeg' });
+  }
+  const r = await fetch(url, init);
+  return r.ok ? r.blob() : null;
+}
+async function voiceAudio(text: string): Promise<Blob | null> {
+  const src = S.voiceSource;
+  if (src === 'phone') return null;
+  const c = conn();
+  if ((src === 'auto' || src === 'pc') && c && S.pcVoice?.engine === 'fish') {
+    try {
+      const r = await fetch(`${c.base}/api/tts`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${c.token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (r.ok) return await r.blob();
+    } catch {
+      /* try the phone's own Fish key next */
+    }
+  }
+  if (src === 'auto' || src === 'fish') {
+    try {
+      return await fishDirect(text);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+function renderVoiceSource(): void {
+  $<HTMLSelectElement>('voiceSrc').value = S.voiceSource;
+  const v = S.pcVoice;
+  $('voiceSrcInfo').textContent = !v
+    ? 'Connect to your PC once so Alton knows which voice it uses.'
+    : v.engine === 'fish'
+      ? `Your PC speaks with a Fish Audio voice. Through the PC it works whenever you're connected; with your own Fish key on this phone it works anywhere${ls.get(FISH_KEY) ? ' (key saved ✓)' : ''}.`
+      : `Your PC uses a Windows voice${v.name ? ` (${v.name})` : ''}, which can't be copied to a phone. Pick the closest one above, or set up a Fish Audio voice on the PC to share it.`;
+  $('fishKeyRow').hidden = !(
+    S.voiceSource === 'fish' ||
+    (S.voiceSource === 'auto' && v?.engine === 'fish')
+  );
+}
+function wireVoiceSource(): void {
+  setAudioVoice(voiceAudio);
+  $<HTMLSelectElement>('voiceSrc').onchange = (e) => {
+    S.voiceSource = (e.target as HTMLSelectElement).value as State['voiceSource'];
+    save();
+    renderVoiceSource();
+  };
+  $('fishKeySave').onclick = () => {
+    const k = $<HTMLInputElement>('fishKey').value.trim();
+    if (k.length < 20) return toast('That doesn’t look like a Fish Audio API key.');
+    ls.set(FISH_KEY, k);
+    $<HTMLInputElement>('fishKey').value = '';
+    renderVoiceSource();
+    toast('Saved on this phone only.');
+  };
+  $('voiceTest').onclick = () => {
+    stopSpeaking();
+    speak(`Hello${S.userName ? ` ${S.userName}` : ''}, this is ${S.name}.`, {
+      rate: S.voiceRate || 1,
+      voice: S.voiceName,
+    });
+  };
+}
+
+/* ── Reading new messages out loud (Android app; works with Alton closed) ── */
+function sendAnnounce(): void {
+  if (!isApp) return;
+  void Native.setAnnounce({
+    mode: S.announce,
+    quietFrom: S.quietFrom,
+    quietTo: S.quietTo,
+    rate: S.voiceRate || 1,
+  }).catch(() => undefined);
+}
+
 /* ── Background style and interface options (this phone only) ── */
 const BG_KEY = 'alton-bg-photo';
 function applyUi(): void {
@@ -1450,6 +1579,7 @@ function wireUi(): void {
     save();
     applyUi();
     renderUiSettings();
+    renderVoiceSource();
   };
   $<HTMLSelectElement>('bgPick').onchange = (e) => {
     const v = (e.target as HTMLSelectElement).value as State['bg'];
@@ -1582,7 +1712,23 @@ function driveAfterReply(reply: PhoneMessage): void {
   $('dvReply').textContent = text;
   drvPending = null;
   let extra = '';
+  let nav = '';
   for (const a of reply.actions ?? []) {
+    if (a.href?.startsWith('google.navigation:')) {
+      nav = a.href;
+      continue;
+    }
+    if (a.snap) {
+      const sn = a.snap;
+      drvPending = {
+        run: () =>
+          Native.snapSend(sn).then(
+            () => 'Sent on Snapchat.',
+            (e: Error) => `Couldn’t send it: ${e.message}`,
+          ),
+      };
+      break;
+    }
     if (a.reply) {
       const r = a.reply;
       drvPending = {
@@ -1611,6 +1757,14 @@ function driveAfterReply(reply: PhoneMessage): void {
       extra = ' WhatsApp only sends when you tap it, so it’s ready on the screen.';
   }
   const ask = drvPending ? ' Say “send it” to send, or “cancel”.' : '';
+  if (nav && !drvPending) {
+    // "Navigate to…" while driving: start Google Maps once it has said the route.
+    dvSay(`${text} Starting navigation.`, () => {
+      location.href = nav;
+      setTimeout(() => driveListen(true), 3000);
+    });
+    return;
+  }
   dvSay(`${text}${extra}${ask}`, () => driveListen(!drvPending));
 }
 function enterDriving(listenNow: boolean): void {
@@ -1656,7 +1810,8 @@ function wireDriving(): void {
   });
   // New messages are read out while driving.
   void Native.addListener('message', (m) => {
-    if (!driving || !S.readOut || busy) return;
+    // Already read out by the phone itself when "Read new messages out loud" is on.
+    if (!driving || !S.readOut || busy || S.announce !== 'off') return;
     dvSay(
       `New ${m.app} message from ${m.from}: ${m.text.slice(0, 300)}.${m.canReply ? ` Say “${S.name}, reply” to answer.` : ''}`,
       () => driveListen(true),
@@ -1931,6 +2086,181 @@ function wireLook(): void {
   };
 }
 
+/* ── Routes: a little map in the chat, and Google Maps buttons ── */
+async function geocode(
+  q: string,
+  near: { lat: number; lon: number } | null,
+): Promise<{ lat: number; lon: number; name: string } | null> {
+  const box = near
+    ? `&viewbox=${near.lon - 1},${near.lat + 1},${near.lon + 1},${near.lat - 1}`
+    : '';
+  try {
+    const r = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1${box}&q=${encodeURIComponent(q)}`,
+      { headers: { 'accept-language': 'en' } },
+    );
+    const j = (await r.json()) as Array<{ lat: string; lon: string; display_name?: string }>;
+    const h = j[0];
+    if (!h) return null;
+    return {
+      lat: Number(h.lat),
+      lon: Number(h.lon),
+      name: (h.display_name ?? q).split(',').slice(0, 2).join(','),
+    };
+  } catch {
+    return null;
+  }
+}
+const ROUTERS: Record<string, string> = {
+  driving: 'https://router.project-osrm.org/route/v1/driving',
+  walking: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving',
+  bicycling: 'https://routing.openstreetmap.de/routed-bike/route/v1/driving',
+};
+async function routeTool(o: Record<string, unknown>): Promise<{
+  result: string;
+  actions?: PhoneAction[];
+  map?: RouteMap;
+}> {
+  const dest = String(o.destination ?? '')
+    .trim()
+    .slice(0, 200);
+  if (!dest) return { result: 'Missing destination.' };
+  const mode = ['driving', 'walking', 'transit', 'bicycling'].includes(String(o.mode))
+    ? String(o.mode)
+    : 'driving';
+  const here = await locate();
+  const originText = String(o.origin ?? '')
+    .trim()
+    .slice(0, 200);
+  const from = originText
+    ? await geocode(originText, here)
+    : here
+      ? { ...here, name: 'You' }
+      : null;
+  const to = await geocode(dest, from ?? here);
+  const enc = encodeURIComponent;
+  const mapsUrl = `https://www.google.com/maps/dir/?api=1${from ? `&origin=${from.lat},${from.lon}` : ''}&destination=${enc(to ? `${to.lat},${to.lon}` : dest)}&travelmode=${mode}`;
+  const navMode = mode === 'walking' ? 'w' : mode === 'bicycling' ? 'b' : 'd';
+  const actions: PhoneAction[] = [];
+  if (isApp && to && mode !== 'transit')
+    actions.push({
+      label: `Start navigation to ${dest}`,
+      sub: 'Google Maps, turn by turn',
+      href: `google.navigation:q=${to.lat},${to.lon}&mode=${navMode}`,
+    });
+  actions.push({ label: 'Open the route in Google Maps', sub: mode, href: mapsUrl });
+  if (!to || !from || mode === 'transit' || !ROUTERS[mode])
+    return {
+      result: `${to ? '' : `Couldn't pin down "${dest}" on the map, so `}The route is ready as buttons (Google Maps).`,
+      actions,
+    };
+  try {
+    const r = await fetch(
+      `${ROUTERS[mode]}/${from.lon},${from.lat};${to.lon},${to.lat}?overview=simplified&geometries=geojson`,
+    );
+    const j = (await r.json()) as {
+      routes?: Array<{
+        duration: number;
+        distance: number;
+        geometry?: { coordinates: Array<[number, number]> };
+      }>;
+    };
+    const best = j.routes?.[0];
+    if (!best) throw new Error('no route');
+    const minutes = Math.max(1, Math.round(best.duration / 60));
+    const km = Math.round((best.distance / 1000) * 10) / 10;
+    const map: RouteMap = {
+      from: from.name,
+      to: to.name,
+      minutes,
+      km,
+      mode,
+      path: (best.geometry?.coordinates ?? []).slice(0, 400),
+    };
+    const arrive = new Date(Date.now() + minutes * 60_000).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return {
+      result: `Route to ${to.name}: about ${minutes} min, ${km} km (${mode}), arriving around ${arrive} if leaving now (no live traffic). A map is shown, with buttons to start navigation or open it in Google Maps.`,
+      actions,
+      map,
+    };
+  } catch {
+    return {
+      result: 'Couldn’t work out the route here; the Google Maps buttons are ready.',
+      actions,
+    };
+  }
+}
+/** The route drawn on a dark grid (no map tiles), like the PC's journey card. */
+function routeCard(m: RouteMap): HTMLElement {
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 420;
+  const H = 210;
+  const pad = 26;
+  const fig = el('figure', 'route');
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `Route to ${m.to}`);
+  const line = (x1: number, y1: number, x2: number, y2: number): void => {
+    const l = document.createElementNS(NS, 'line');
+    l.setAttribute('x1', String(x1));
+    l.setAttribute('y1', String(y1));
+    l.setAttribute('x2', String(x2));
+    l.setAttribute('y2', String(y2));
+    l.setAttribute('class', 'grid');
+    svg.appendChild(l);
+  };
+  for (let i = 0; i <= 8; i++) line((i * W) / 8, 0, (i * W) / 8, H);
+  for (let i = 0; i <= 4; i++) line(0, (i * H) / 4, W, (i * H) / 4);
+  const pts = m.path.length >= 2 ? m.path : [];
+  if (pts.length) {
+    const lat0 = pts.reduce((n, p) => n + p[1], 0) / pts.length;
+    const kx = Math.cos((lat0 * Math.PI) / 180);
+    const xs = pts.map((p) => p[0] * kx);
+    const ys = pts.map((p) => -p[1]);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const sc = Math.min(
+      (W - pad * 2) / Math.max(1e-6, maxX - minX),
+      (H - pad * 2) / Math.max(1e-6, maxY - minY),
+    );
+    const ox = (W - (maxX - minX) * sc) / 2;
+    const oy = (H - (maxY - minY) * sc) / 2;
+    const xy = pts.map((_, i) => [
+      ox + ((xs[i] ?? 0) - minX) * sc,
+      oy + ((ys[i] ?? 0) - minY) * sc,
+    ]);
+    const d = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x?.toFixed(1)},${y?.toFixed(1)}`).join(' ');
+    for (const cls of ['glow', 'path']) {
+      const p = document.createElementNS(NS, 'path');
+      p.setAttribute('d', d);
+      p.setAttribute('class', cls);
+      svg.appendChild(p);
+    }
+    for (const [pt, cls] of [
+      [xy[0], 'start'],
+      [xy[xy.length - 1], 'end'],
+    ] as const) {
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', String(pt?.[0] ?? 0));
+      c.setAttribute('cy', String(pt?.[1] ?? 0));
+      c.setAttribute('r', cls === 'end' ? '6' : '4.5');
+      c.setAttribute('class', cls);
+      svg.appendChild(c);
+    }
+  }
+  fig.appendChild(svg);
+  const how = m.mode === 'walking' ? 'walk' : m.mode === 'bicycling' ? 'cycle' : 'drive';
+  fig.appendChild(el('figcaption', undefined, `${m.to} · ${m.minutes} min ${how} · ${m.km} km`));
+  return fig;
+}
+
 /* ── Android app: phone powers ── */
 async function appTool(
   name: string,
@@ -2019,6 +2349,36 @@ async function appTool(
           : `No contact called ${o.name}. Ask the user for the number.`,
       };
     }
+    if (name === 'snapchat_message') {
+      const to = String(o.to ?? '')
+        .trim()
+        .slice(0, 60);
+      const text = String(o.text ?? '')
+        .trim()
+        .slice(0, 1000);
+      if (!to || !text) return { result: 'Need who it is for and the message.' };
+      const lc = to.toLowerCase();
+      const p =
+        S.people.find((x) => x.snap && x.name.toLowerCase() === lc) ??
+        S.people.find((x) => x.snap?.toLowerCase() === lc) ??
+        S.people.find((x) => x.snap && x.name.toLowerCase().startsWith(lc));
+      if (!p && !S.people.some((x) => x.snap))
+        return {
+          result:
+            "Snapchat names aren't set up yet. Tell the user to open People › Snapchat friends › Read my Snapchat friends and say who each nickname is.",
+        };
+      const nick = p?.snap ?? to;
+      return {
+        result: p
+          ? `Ready to send to ${p.name} (“${nick}” on Snapchat) as a Send button; nothing is sent until they confirm.`
+          : `No saved person called ${to} with a Snapchat name, so it will look for a chat named exactly “${to}”. Mention that, and that they can match nicknames in People › Snapchat friends.`,
+        action: {
+          label: `Send on Snapchat to ${p?.name ?? to}`,
+          sub: text,
+          snap: { name: nick, text },
+        },
+      };
+    }
     if (name === 'media_control') {
       const action = String(o.action ?? '') as Parameters<typeof Native.media>[0]['action'];
       await Native.media({ action });
@@ -2038,6 +2398,14 @@ async function appTool(
   return null;
 }
 
+let lastRead = '';
+function showPreview(lines: number, front: string): void {
+  const box = $('pwPreview');
+  box.hidden = false;
+  $('pwPreviewSum').textContent =
+    `What Alton read last time: ${lines} line${lines === 1 ? '' : 's'}${front ? ` (from ${front})` : ''}`;
+  $('pwPreviewText').textContent = lastRead.slice(0, 4000) || '(nothing)';
+}
 /** Open the chosen shift app, read its screen, and come back. */
 async function readShiftApp(): Promise<{ ok: boolean; text: string }> {
   if (!S.shiftApp)
@@ -2051,10 +2419,26 @@ async function readShiftApp(): Promise<{ ok: boolean; text: string }> {
       ok: false,
       text: 'Reading the shift app (Accessibility) is switched off. The user turns it on in Settings › Phone powers.',
     };
-  toast(`Opening ${S.shiftAppName || 'your shift app'} to read your rota…`);
+  const app = S.shiftAppName || 'your shift app';
+  toast(`Opening ${app} to read your rota…`);
   try {
-    const r = await Native.readApp({ package: S.shiftApp });
-    return { ok: !!r.text.trim(), text: r.text || 'The screen was empty.' };
+    const r = await Native.readApp({
+      package: S.shiftApp,
+      ...(S.shiftTab ? { tap: S.shiftTab } : {}),
+    });
+    lastRead = r.text;
+    showPreview(r.lines, r.front);
+    if (r.front && r.front !== S.shiftApp)
+      return {
+        ok: false,
+        text: `${app} didn't stay on screen (Alton saw ${r.front}). If it asks you to sign in or unlock, do that once, then try again.`,
+      };
+    if (!r.text.trim())
+      return {
+        ok: false,
+        text: `Alton opened ${app} but couldn't see any text on it. Some apps hide their text from screen readers; if so, use a screenshot instead (Share › Alton).`,
+      };
+    return { ok: true, text: r.text };
   } catch (e) {
     return { ok: false, text: `Couldn't read it: ${(e as Error).message}` };
   }
@@ -2140,6 +2524,11 @@ async function renderPowers(): Promise<void> {
   $('pwAlarms').classList.toggle('on', S.autoAlarms);
   $('pwAlarms').textContent = S.autoAlarms ? '✓' : '';
   $('pwApp').textContent = S.shiftAppName || 'Choose…';
+  const tab = $<HTMLInputElement>('pwTab');
+  if (document.activeElement !== tab) tab.value = S.shiftTab;
+  $<HTMLSelectElement>('pwAnnounce').value = S.announce;
+  $<HTMLInputElement>('pwQuietFrom').value = String(S.quietFrom);
+  $<HTMLInputElement>('pwQuietTo').value = String(S.quietTo);
   $('pwReadOut').classList.toggle('on', S.readOut);
   $('pwReadOut').textContent = S.readOut ? '✓' : '';
 }
@@ -2152,6 +2541,25 @@ function wirePowers(): void {
     toast('Choose “Digital assistant app”, then pick Alton.');
     void Native.openSettings({ which: 'assistant' });
   };
+  $<HTMLSelectElement>('pwAnnounce').onchange = async (e) => {
+    S.announce = (e.target as HTMLSelectElement).value as State['announce'];
+    save();
+    sendAnnounce();
+    if (S.announce !== 'off' && !(await powerStatus())?.messages)
+      toast('Also turn on “Read & reply to messages” above, so Alton can see them.');
+  };
+  for (const id of ['pwQuietFrom', 'pwQuietTo'] as const)
+    $<HTMLInputElement>(id).onchange = (e) => {
+      const n = Math.min(
+        23,
+        Math.max(0, Math.round(Number((e.target as HTMLInputElement).value) || 0)),
+      );
+      if (id === 'pwQuietFrom') S.quietFrom = n;
+      else S.quietTo = n;
+      save();
+      sendAnnounce();
+    };
+  sendAnnounce();
   $('pwReadOut').onclick = () => {
     S.readOut = !S.readOut;
     save();
@@ -2200,9 +2608,16 @@ function wirePowers(): void {
       box.textContent = 'Couldn’t list your apps.';
     }
   };
+  $<HTMLInputElement>('pwTab').onchange = (e) => {
+    S.shiftTab = (e.target as HTMLInputElement).value.trim().slice(0, 40);
+    save();
+  };
   $('pwRead').onclick = async () => {
     const r = await readShiftApp();
-    if (!r.ok) return toast(r.text);
+    if (!r.ok) {
+      $('pwPreview').setAttribute('open', '');
+      return toast(r.text);
+    }
     setView('chat');
     newChat(false);
     send(
@@ -2637,6 +3052,21 @@ function actionNode(a: PhoneAction): HTMLElement {
     };
   } else if (a.pickFor) {
     b.onclick = () => void pickContact(a.pickFor);
+  } else if (a.snap) {
+    const sn = a.snap;
+    b.onclick = async () => {
+      if (b.classList.contains('done')) return;
+      toast('Opening Snapchat to send it…');
+      try {
+        await Native.snapSend(sn);
+        b.classList.add('done');
+        const sub = b.querySelector('small');
+        if (sub) sub.textContent = `Sent ✓ ${sn.text}`;
+        toast('Sent on Snapchat.');
+      } catch (e) {
+        toast((e as Error).message);
+      }
+    };
   } else if (a.reply) {
     const r = a.reply;
     b.onclick = async () => {
@@ -2676,6 +3106,7 @@ function assistantNode(m: PhoneMessage, liveActivity?: string): HTMLElement {
   const body = el('div', 'md');
   body.innerHTML = md(m.text);
   d.appendChild(body);
+  if (m.map) d.appendChild(routeCard(m.map));
   if (m.actions?.length) {
     const box = el('div', 'actions');
     m.actions.forEach((a) => box.appendChild(actionNode(a)));
@@ -3194,7 +3625,82 @@ function renderShifts(): void {
   $<HTMLInputElement>('travel').value = S.travel ? String(S.travel) : '';
 }
 
+/* ── People › Snapchat friends: match Snapchat nicknames to who they are ── */
+let snapFound: string[] = [];
+function renderSnap(): void {
+  $('snapCard').hidden = !isApp;
+  if (!isApp) return;
+  const box = $('snapList');
+  box.textContent = '';
+  for (const p of S.people.filter((x) => x.snap)) {
+    const row = el('div', 'li');
+    const t = el('span', undefined, `${p.snap} → `);
+    t.style.flex = '1';
+    t.appendChild(el('b', undefined, p.name));
+    const x = el('button', 'x', '✕');
+    x.setAttribute('aria-label', `Forget ${p.snap}`);
+    x.onclick = () => {
+      S.people = S.people
+        .map((q) => (q === p ? { ...q, snap: undefined } : q))
+        .filter((q) => q.phone || q.email || q.snap);
+      save();
+      renderSnap();
+    };
+    row.append(t, x);
+    box.appendChild(row);
+  }
+  const known = new Set(S.people.map((x) => x.snap?.toLowerCase()).filter(Boolean));
+  const todo = $('snapTodo');
+  todo.textContent = '';
+  for (const nick of snapFound.filter((n) => !known.has(n.toLowerCase()))) {
+    const row = el('div', 'li');
+    row.style.flexWrap = 'wrap';
+    const t = el('b', undefined, nick);
+    t.style.flex = '1 1 100%';
+    const inp = el('input', 'input') as HTMLInputElement;
+    inp.placeholder = 'Who is this? (e.g. Sam)';
+    inp.style.flex = '1';
+    const ok = el('button', 'btn acc', 'Save');
+    const skip = el('button', 'btn', 'Skip');
+    ok.onclick = () => {
+      const who = inp.value.trim() || nick;
+      const i = S.people.findIndex((x) => x.name.toLowerCase() === who.toLowerCase());
+      if (i >= 0) S.people[i] = { ...(S.people[i] as Person), snap: nick };
+      else S.people.push({ name: who, snap: nick });
+      save();
+      renderSnap();
+    };
+    skip.onclick = () => {
+      snapFound = snapFound.filter((n) => n !== nick);
+      renderSnap();
+    };
+    row.append(t, inp, ok, skip);
+    todo.appendChild(row);
+  }
+}
+async function readSnapFriends(): Promise<void> {
+  const st = await powerStatus();
+  if (!st?.screenReader)
+    return toast(
+      'Turn on “Read my shift app” in Settings › Phone powers first (Snapchat uses the same permission).',
+    );
+  toast('Opening Snapchat to read your chat list…');
+  try {
+    const r = await Native.readApp({ package: 'com.snapchat.android', tap: 'Chat' });
+    snapFound = snapNames(r.text);
+    renderSnap();
+    toast(
+      snapFound.length
+        ? `Found ${snapFound.length} names: say who they are below.`
+        : 'Didn’t find any names.',
+    );
+  } catch (e) {
+    toast((e as Error).message);
+  }
+}
+
 function renderPeople(): void {
+  renderSnap();
   renderShifts();
   renderReminders();
   const box = $('peopleList');
@@ -4104,7 +4610,9 @@ function wire(): void {
   };
   wirePc();
   wireLook();
+  $('snapRead').onclick = () => void readSnapFriends();
   wireUi();
+  wireVoiceSource();
   wirePowers();
   wireDriving();
   // The background follows the time of day.

@@ -285,6 +285,12 @@ export function makePhoneRoutes(
           timeTint: st.timeTint,
         },
         personality: st.personality,
+        voice: {
+          engine: ctx.fishReady?.() ? 'fish' : 'system',
+          fishVoiceId: st.fishVoiceId,
+          fishModel: st.fishModel,
+          name: st.voiceName,
+        },
         at: Date.now(),
       };
       return ok({ payload, appUrl: st.phoneAppUrl });
@@ -355,6 +361,18 @@ export function makePhoneRoutes(
     if (a === 'agent' && b === 'pause' && method === 'POST') {
       ctx.pauseAgent?.(body.on === true);
       return ok({ ok: true });
+    }
+    // The PC's own voice for the phone app (Fish Audio; the key never leaves the PC).
+    if (a === 'tts' && method === 'POST') {
+      if (!ctx.fishReady?.() || !ctx.fishSpeak)
+        return bad('The PC isn’t using a Fish Audio voice.', 409);
+      const text = str(body.text, 1000).trim();
+      if (!text) return bad('Nothing to say');
+      try {
+        return { mp3: await ctx.fishSpeak(text) };
+      } catch (e) {
+        return bad(e instanceof Error ? e.message : 'Voice failed', 502);
+      }
     }
     if (a === 'screen' && method === 'GET') {
       if (!ctx.settings.get().screenAware)

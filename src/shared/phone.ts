@@ -9,6 +9,8 @@ export interface PhoneMessage {
   at: number;
   images?: string[];
   sources?: Array<{ url: string; title: string }>;
+  /** A route drawn in the chat (directions). */
+  map?: RouteMap;
   /** Buttons that open the phone's apps (text, call, directions…). */
   actions?: PhoneAction[];
   /** Answered by the PC's Alton (already in the PC's chat, so never sent back). */
@@ -31,6 +33,8 @@ export interface PhoneAction {
   alexa?: string;
   /** Android app: send this reply through the message's own notification (on tap). */
   reply?: { id: string; text: string };
+  /** Android app: send this on Snapchat to the friend shown as `name` (on tap / "send it"). */
+  snap?: { name: string; text: string };
 }
 
 export interface PhoneChat {
@@ -46,6 +50,36 @@ export interface Person {
   name: string;
   phone?: string;
   email?: string;
+  /** Their name as it shows in the user's Snapchat chat list (often a nickname). */
+  snap?: string;
+}
+
+/** A route for the chat's little map: [lon, lat] points, minutes and km. */
+export interface RouteMap {
+  from: string;
+  to: string;
+  minutes: number;
+  km: number;
+  mode: string;
+  path: Array<[number, number]>;
+}
+
+const SNAP_UI =
+  /^(chat|chats|stories|story|spotlight|map|camera|discover|search|add friends?|quick add|friends|groups?|my ai|team snapchat|new chat|new snap|new chats?|send|settings|profile|unread|best friends|recents?|edit|done|cancel|view|reply|more|all|snap map|for you|following|subscriptions|memories|send to|chat with friends|tap to .*|double tap.*|new message.*|typing.*|received.*|delivered.*|opened.*|sent.*|screenshot.*|replayed.*|saved.*|called.*|missed.*|streak.*|.*\bago)$/i;
+/** The friends' names in text read off Snapchat's Chat tab (drops buttons, times, statuses). */
+export function snapNames(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of text.split('\n')) {
+    const t = raw.trim();
+    if (t.length < 2 || t.length > 32) continue;
+    if (/[·•|]/.test(t)) continue;
+    if (/^\d+\s?(s|m|h|d|w|min|mins|hr|hrs|wk|wks)$/i.test(t)) continue;
+    if (/\d{1,2}:\d{2}/.test(t)) continue;
+    if (!/[\p{L}]/u.test(t)) continue;
+    if (SNAP_UI.test(t)) continue;
+    if (!out.includes(t)) out.push(t);
+  }
+  return out.slice(0, 150);
 }
 
 /** PC → phone (#sync=…): who Alton is and what it knows, plus recent chats. */
@@ -77,6 +111,8 @@ export interface SyncFromPc {
     motion?: number;
     timeTint?: boolean;
   };
+  /** How the PC speaks: Fish Audio (voice ID, not the key) or the system voice. */
+  voice?: { engine: 'fish' | 'system'; fishVoiceId: string; fishModel: string; name: string };
   /** The PC's personality (tone, humour, how it addresses you…). */
   personality?: import('./personalities').Personality;
   /** Voice corrections learnt on the PC. */

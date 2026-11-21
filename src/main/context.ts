@@ -48,6 +48,9 @@ export interface MainContext {
   startAgent?(task: string, opts?: import('./services/agent-runner').AgentOptions): unknown;
   stopAgent?(): void;
   pauseAgent?(on: boolean): void;
+  /** Speaks text in the PC's Fish Audio voice (MP3), when a Fish key is saved. */
+  fishSpeak?(text: string): Promise<Uint8Array>;
+  fishReady?(): boolean;
   agentAnswer?(id: string, answer: string | boolean): void;
   /** Recent notifications (suggestions, agent questions, sessions) for the phone companion. */
   notify(text: string): void;
