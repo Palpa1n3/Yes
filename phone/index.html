@@ -2254,6 +2254,27 @@
                   ></span
                 ><button class="btn" id="pwAssist" style="padding: 6px 10px">Set up</button>
               </div>
+              <h3 class="sub">Home-screen widgets</h3>
+              <p class="muted small">
+                Alton has four widgets: <b>Alton Clock</b>, <b>Alton Weather &amp; screen time</b>,
+                <b>Alton</b>, and <b>Alton Screen time</b>. To swipe between them like your others:
+                add one (long-press the home screen › Widgets › Alton), long-press it ›
+                <b>Create stack</b>, and add the others to it.
+              </p>
+              <div class="li">
+                <span style="flex: 1"
+                  >Screen time on the widgets<br /><small class="muted"
+                    >Usage access: switch on Alton</small
+                  ></span
+                ><button class="btn" id="pwUsage" style="padding: 6px 10px"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Earbud and watch batteries on the clock<br /><small class="muted"
+                    >Nearby devices permission</small
+                  ></span
+                ><button class="btn" id="pwBt" style="padding: 6px 10px"></button>
+              </div>
               <h3 class="sub">Watch heads-ups (Fitbit and other watches)</h3>
               <p class="muted small">
                 Notifications at the right moments, so your watch buzzes even with Alton closed. In
@@ -2351,24 +2372,31 @@
               </select>
               <p class="muted small" id="voiceSrcInfo"></p>
               <div id="fishKeyRow" hidden>
-                <label class="muted"
-                  >Fish Audio API key (optional: the same voice with the PC off; kept on this phone
-                  only)</label
-                >
-                <label class="muted"
-                  >Fish voice ID (blank = the one your PC uses; or paste the voice’s Fish Audio
-                  link) <input id="fishVoice" class="input" style="margin: 4px 0 8px"
-                /></label>
+                <h3 class="sub">1 · Which voice (optional)</h3>
+                <p class="muted small">
+                  Leave blank to use the same voice as your PC. To pick another, paste its ID or its
+                  link from the Fish Audio website.
+                </p>
+                <input id="fishVoice" class="input" style="margin-bottom: 10px" />
+                <h3 class="sub">2 · Your Fish Audio API key</h3>
+                <p class="muted small">
+                  From fish.audio › your account › <b>API Keys</b> (not the voice’s ID). Only needed
+                  for the voice with your PC off; kept on this phone only.
+                </p>
+                <p class="small" id="fishKeyState"></p>
                 <div class="row" style="margin: 4px 0 10px">
                   <input
                     id="fishKey"
                     class="input"
                     type="password"
-                    placeholder="Paste your Fish Audio key"
+                    placeholder="Paste your Fish Audio API key"
                     style="flex: 1"
                   />
                   <button class="btn" id="fishKeySave">Save</button>
                 </div>
+                <button class="btn full" id="fishKeyForget" hidden style="margin-bottom: 10px">
+                  Forget the saved key
+                </button>
               </div>
               <button class="btn full" id="voiceTest">Test the voice</button>
               <p class="muted small" id="voiceTestMsg" style="margin-bottom: 12px"></p>
@@ -2517,6 +2545,71 @@
                 <span style="flex: 1">Snow in December</span
                 ><button class="check" id="snowToggle"></button>
               </div>
+            </div>
+          </details>
+          <details class="grp" id="lockGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24">
+                  <path d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5zM12 15v2" /></svg></span
+              ><span class="gt"
+                ><b>Lock screen</b
+                ><small>Your picture with Alton’s spinning cloud and clock</small></span
+              >
+            </summary>
+            <div class="gb">
+              <p class="muted small" style="margin-top: 0">
+                An Alton live wallpaper: your own picture, with a small spinning data cloud and an
+                Alton clock where you choose. Samsung’s own clock stays (pick a small style for it
+                in the lock screen settings, or turn Alton’s clock off).
+              </p>
+              <h3 class="sub">1 · Your picture</h3>
+              <div class="row">
+                <button class="btn acc" id="lsPick" style="flex: 1">Choose from Gallery</button>
+                <button class="btn" id="lsNoPic">None</button>
+              </div>
+              <input type="file" id="lsFile" accept="image/*" hidden />
+              <h3 class="sub">2 · How it looks</h3>
+              <div class="steps two">
+                <label class="muted"
+                  >Avatar
+                  <select id="lsVariant" class="input">
+                    <option value="sphere">Gold sphere</option>
+                    <option value="cloud">Data cloud (blue)</option>
+                  </select></label
+                >
+                <label class="muted"
+                  >Size
+                  <select id="lsSize" class="input">
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                  </select></label
+                >
+                <label class="muted"
+                  >Where
+                  <select id="lsPos" class="input">
+                    <option value="shortcuts">In line with the call and camera buttons</option>
+                    <option value="top-right">Top right</option>
+                    <option value="top-left">Top left</option>
+                    <option value="top-middle">Middle of the screen</option>
+                    <option value="bottom">Bottom</option>
+                  </select></label
+                >
+              </div>
+              <div class="li">
+                <span style="flex: 1">Alton’s clock under it</span
+                ><button class="check" id="lsClock"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Only on the lock screen<br /><small class="muted"
+                    >Your home screen just shows the picture</small
+                  ></span
+                ><button class="check" id="lsLockOnly"></button>
+              </div>
+              <h3 class="sub">3 · Turn it on</h3>
+              <button class="btn acc full" id="lsSet">Set as my wallpaper</button>
+              <p class="muted small">Changes above show straight away once it’s set.</p>
             </div>
           </details>
           <details class="grp">

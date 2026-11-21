@@ -47,6 +47,7 @@ import org.json.JSONObject;
         @Permission(alias = "calendar", strings = { Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR }),
         @Permission(alias = "contacts", strings = { Manifest.permission.READ_CONTACTS }),
         @Permission(alias = "sms", strings = { Manifest.permission.SEND_SMS }),
+        @Permission(alias = "bluetooth", strings = { Manifest.permission.BLUETOOTH_CONNECT }),
     }
 )
 public class AltonNativePlugin extends Plugin {
@@ -89,6 +90,67 @@ public class AltonNativePlugin extends Plugin {
         call.resolve();
     }
 
+    /* ── Lock screen live wallpaper ── */
+
+    @PluginMethod
+    public void setWallpaper(PluginCall call) {
+        getContext()
+            .getSharedPreferences(AltonWallpaper.PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString("position", call.getString("position", "top-right"))
+            .putString("variant", call.getString("variant", "cloud"))
+            .putString("size", call.getString("size", "small"))
+            .putBoolean("clock", Boolean.TRUE.equals(call.getBoolean("clock", true)))
+            .putBoolean("lockOnly", Boolean.TRUE.equals(call.getBoolean("lockOnly", true)))
+            .putBoolean("calm", Boolean.TRUE.equals(call.getBoolean("calm", false)))
+            .apply();
+        call.resolve();
+    }
+
+    /** Saves the background picture (base64 JPEG), or removes it when empty. */
+    @PluginMethod
+    public void setWallpaperImage(PluginCall call) {
+        String data = call.getString("data", "");
+        java.io.File f = AltonWallpaper.imageFile(getContext());
+        try {
+            if (data == null || data.isEmpty()) {
+                if (f.exists() && !f.delete()) throw new java.io.IOException("delete");
+            } else {
+                byte[] bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT);
+                try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                    out.write(bytes);
+                }
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Couldn't save the picture.");
+        }
+    }
+
+    /** Opens Android's preview to set Alton as the wallpaper. */
+    @PluginMethod
+    public void openWallpaper(PluginCall call) {
+        Intent i = new Intent(android.app.WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER);
+        i.putExtra(
+            android.app.WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+            new android.content.ComponentName(getContext(), AltonWallpaper.class)
+        );
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            getContext().startActivity(i);
+            call.resolve();
+        } catch (Exception e) {
+            try {
+                Intent pick = new Intent(android.app.WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER);
+                pick.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(pick);
+                call.resolve();
+            } catch (Exception e2) {
+                call.reject("Couldn't open the wallpaper settings.");
+            }
+        }
+    }
+
     /** What the home-screen widget shows. */
     @PluginMethod
     public void setWidget(PluginCall call) {
@@ -99,10 +161,17 @@ public class AltonNativePlugin extends Plugin {
             .putString("line1", call.getString("line1", ""))
             .putString("line2", call.getString("line2", ""))
             .putString("line3", call.getString("line3", ""))
+            .putString("shift", call.getString("shift", ""))
+            .putString("place", call.getString("place", ""))
+            .putString("user", call.getString("user", ""))
             .apply();
-        try {
-            AltonWidget.refresh(getContext());
-        } catch (Exception ignored) {}
+        Double lat = call.getDouble("lat");
+        Double lon = call.getDouble("lon");
+        if (lat != null && lon != null)
+            WidgetKit.prefs(getContext()).edit().putFloat("lat", lat.floatValue()).putFloat("lon", lon.floatValue()).apply();
+        final Context ctx = getContext();
+        WidgetKit.refreshAll(ctx);
+        if (WidgetKit.weatherStale(ctx)) WidgetKit.fetchWeather(ctx, () -> WidgetKit.refreshAll(ctx));
         call.resolve();
     }
 
@@ -246,6 +315,8 @@ public class AltonNativePlugin extends Plugin {
         r.put("screenReader", ScreenReader.isEnabled(getContext()));
         r.put("calendar", getPermissionState("calendar") == PermissionState.GRANTED);
         r.put("contacts", getPermissionState("contacts") == PermissionState.GRANTED);
+        r.put("usage", WidgetKit.usageAllowed(getContext()));
+        r.put("bluetooth", WidgetKit.bluetoothAllowed(getContext()));
         call.resolve(r);
     }
 
@@ -256,6 +327,7 @@ public class AltonNativePlugin extends Plugin {
         if ("messages".equals(which)) i = new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS);
         else if ("screenReader".equals(which)) i = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
         else if ("assistant".equals(which)) i = new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS);
+        else if ("usage".equals(which)) i = WidgetKit.usageSettings();
         else i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getContext().getPackageName()));
         i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
@@ -269,7 +341,11 @@ public class AltonNativePlugin extends Plugin {
     @PluginMethod
     public void requestAccess(PluginCall call) {
         String alias = call.getString("which", "calendar");
-        if (!"calendar".equals(alias) && !"contacts".equals(alias)) {
+        if ("bluetooth".equals(alias) && Build.VERSION.SDK_INT < 31) {
+            call.resolve(new JSObject().put("granted", true));
+            return;
+        }
+        if (!"calendar".equals(alias) && !"contacts".equals(alias) && !"bluetooth".equals(alias)) {
             call.reject("Unknown permission");
             return;
         }
@@ -284,6 +360,7 @@ public class AltonNativePlugin extends Plugin {
     private void accessCallback(PluginCall call) {
         String alias = call.getString("which", "calendar");
         call.resolve(new JSObject().put("granted", getPermissionState(alias) == PermissionState.GRANTED));
+        WidgetKit.refreshAll(getContext());
     }
 
     /* ── Messages (needs Notification access) ── */

@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="8dp">
+
+  <LinearLayout
+    android:id="@+id/wx_root"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_weight="1"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/wx_icon"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="30sp" />
+
+        <TextView
+            android:id="@+id/wx_temp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#E6F4FF"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/wx_line"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:textColor="#E6F4FF"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/wx_place"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:textColor="#3FD0FF"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1.2"
+        android:gravity="center_vertical"
+        android:orientation="vertical">
+
+        <LinearLayout style="@style/WxRow"><TextView android:id="@+id/wx_d0" style="@style/WxDay" /><TextView android:id="@+id/wx_i0" style="@style/WxIcon" /><TextView android:id="@+id/wx_t0" style="@style/WxTemp" /></LinearLayout>
+        <LinearLayout style="@style/WxRow"><TextView android:id="@+id/wx_d1" style="@style/WxDay" /><TextView android:id="@+id/wx_i1" style="@style/WxIcon" /><TextView android:id="@+id/wx_t1" style="@style/WxTemp" /></LinearLayout>
+        <LinearLayout style="@style/WxRow"><TextView android:id="@+id/wx_d2" style="@style/WxDay" /><TextView android:id="@+id/wx_i2" style="@style/WxIcon" /><TextView android:id="@+id/wx_t2" style="@style/WxTemp" /></LinearLayout>
+        <LinearLayout style="@style/WxRow"><TextView android:id="@+id/wx_d3" style="@style/WxDay" /><TextView android:id="@+id/wx_i3" style="@style/WxIcon" /><TextView android:id="@+id/wx_t3" style="@style/WxTemp" /></LinearLayout>
+    </LinearLayout>
+  </LinearLayout>
+
+  <LinearLayout
+    android:id="@+id/ws_strip"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:layout_marginTop="6dp"
+    android:background="@drawable/widget_btn"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingEnd="6dp">
+
+    <TextView
+        android:id="@+id/ws_total"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="10dp"
+        android:textColor="#F2FAFF"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/ws_apps"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="#E6F4FF"
+        android:textSize="12sp" />
+
+    <ImageView
+        android:id="@+id/ws_chart"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:contentDescription="Screen time chart" />
+  </LinearLayout>
+</LinearLayout>

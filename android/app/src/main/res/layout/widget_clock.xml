@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="10dp">
+
+    <TextClock
+        android:id="@+id/ck_date"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:format12Hour="EEE, d MMM"
+        android:format24Hour="EEE, d MMM"
+        android:letterSpacing="0.08"
+        android:textAllCaps="true"
+        android:textColor="#3FD0FF"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <TextClock
+        android:id="@+id/ck_time"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:format12Hour="h:mm"
+        android:format24Hour="HH:mm"
+        android:textColor="#F2FAFF"
+        android:textSize="56sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/ck_alarm"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#BFD9EA"
+        android:textSize="12sp" />
+
+    <ImageView
+        android:id="@+id/ck_rings"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:layout_marginTop="4dp"
+        android:adjustViewBounds="true"
+        android:contentDescription="Battery levels"
+        android:scaleType="fitCenter" />
+</LinearLayout>

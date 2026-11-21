@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -30,6 +31,20 @@
 
         </activity>
 
+        <!-- Lock screen: Alton live wallpaper (your picture + small spinning cloud + clock) -->
+        <service
+            android:name=".AltonWallpaper"
+            android:exported="true"
+            android:label="Alton"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/wallpaper" />
+        </service>
+
         <!-- Home-screen widget -->
         <receiver
             android:name=".AltonWidget"
@@ -41,6 +56,40 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/alton_widget_info" />
+        </receiver>
+
+        <receiver
+            android:name=".AltonWeatherWidget"
+            android:exported="false"
+            android:label="Alton Weather &amp; screen time">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/weather_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".AltonClockWidget"
+            android:exported="false"
+            android:label="Alton Clock">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/clock_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".AltonScreenWidget"
+            android:exported="false"
+            android:label="Alton Screen time">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/screen_widget_info" />
         </receiver>
 
         <!-- Reads message notifications so Alton can read them out and reply (user switches on Notification access) -->
@@ -107,9 +156,17 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Battery of connected earbuds / watch on the clock widget -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- Screen time widget (you allow it in Settings › Usage access) -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
     <!-- Hands-free: send a text after you say "send it" -->
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.software.live_wallpaper" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 </manifest>

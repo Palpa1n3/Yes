@@ -192,6 +192,12 @@ interface State {
   announce: 'off' | 'headphones' | 'always';
   quietFrom: number;
   quietTo: number;
+  /** Lock screen live wallpaper (Android app): what to draw, where, and how big. */
+  lsVariant: 'cloud' | 'sphere';
+  lsPos: 'shortcuts' | 'top-right' | 'top-left' | 'top-middle' | 'bottom';
+  lsSize: 'small' | 'medium';
+  lsClock: boolean;
+  lsLockOnly: boolean;
   /** Show the real weather (rain, snow, storms, fog) on the background. */
   weatherFx: boolean;
   /** Background style, picture darkness (%), and interface options. */
@@ -299,6 +305,11 @@ const DEFAULTS: State = {
   quietFrom: 23,
   quietTo: 7,
   weatherFx: true,
+  lsVariant: 'sphere',
+  lsPos: 'shortcuts',
+  lsSize: 'small',
+  lsClock: false,
+  lsLockOnly: true,
   bg: 'aurora',
   bgDim: 60,
   uiText: 'm',
@@ -1545,6 +1556,11 @@ function renderVoiceSource(): void {
       ? `Your PC speaks with a Fish Audio voice. Through the PC it works whenever you're connected; with your own Fish key on this phone it works anywhere${ls.get(FISH_KEY) ? ' (key saved ✓)' : ''}.`
       : `Your PC uses a Windows voice${v.name ? ` (${v.name})` : ''}, which can't be copied to a phone. Pick the closest one above, or set up a Fish Audio voice on the PC to share it.`;
   $('fishKeyRow').hidden = S.voiceSource === 'phone' || S.voiceSource === 'pc';
+  const saved = ls.get(FISH_KEY) ?? '';
+  $('fishKeyState').textContent = saved
+    ? `Key saved ✓ (ends in …${saved.slice(-4)})`
+    : 'No key saved yet.';
+  $('fishKeyForget').hidden = !saved;
   const vid = $<HTMLInputElement>('fishVoice');
   if (document.activeElement !== vid) vid.value = S.fishVoiceId;
   vid.placeholder = S.pcVoice?.fishVoiceId || DEFAULT_FISH_VOICE;
@@ -1559,10 +1575,18 @@ function wireVoiceSource(): void {
   $('fishKeySave').onclick = () => {
     const k = $<HTMLInputElement>('fishKey').value.trim();
     if (k.length < 20) return toast('That doesn’t look like a Fish Audio API key.');
+    const voiceIds = [S.fishVoiceId, S.pcVoice?.fishVoiceId, DEFAULT_FISH_VOICE];
+    if (voiceIds.includes(k))
+      return toast('That’s a voice ID, not your API key. The key is on fish.audio › API Keys.');
     ls.set(FISH_KEY, k);
     $<HTMLInputElement>('fishKey').value = '';
     renderVoiceSource();
     toast('Saved on this phone only.');
+  };
+  $('fishKeyForget').onclick = () => {
+    ls.del(FISH_KEY);
+    renderVoiceSource();
+    toast('Key removed from this phone.');
   };
   $<HTMLInputElement>('fishVoice').onchange = (e) => {
     S.fishVoiceId = (e.target as HTMLInputElement).value.trim().replace(/^.*\//, '').slice(0, 64);
@@ -1590,6 +1614,23 @@ function wireVoiceSource(): void {
 }
 
 /* ── Home-screen widget (Android app): next shift, weather, next reminder ── */
+let widgetPlace = '';
+async function placeName(lat: number, lon: number): Promise<string> {
+  try {
+    const j = (await (
+      await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&zoom=14&lat=${lat}&lon=${lon}`,
+        {
+          headers: { 'accept-language': 'en' },
+        },
+      )
+    ).json()) as { address?: Record<string, string> };
+    const a = j.address ?? {};
+    return a.suburb ?? a.village ?? a.town ?? a.city_district ?? a.city ?? '';
+  } catch {
+    return '';
+  }
+}
 async function updateWidget(): Promise<void> {
   if (!isApp) return;
   const hm = (d: Date): string => d.toTimeString().slice(0, 5);
@@ -1610,9 +1651,18 @@ async function updateWidget(): Promise<void> {
   const line3 = rem
     ? `⏰ ${new Date(rem.at).toLocaleDateString() === new Date().toLocaleDateString() ? '' : `${new Date(rem.at).toLocaleDateString([], { weekday: 'short' })} `}${hm(new Date(rem.at))} ${rem.what}`
     : `Updated ${hm(new Date())}`;
-  await Native.setWidget({ title: S.name.toUpperCase(), line1, line2, line3 }).catch(
-    () => undefined,
-  );
+  const f = lastFix;
+  if (f && !widgetPlace) widgetPlace = await placeName(f.lat, f.lon);
+  await Native.setWidget({
+    title: S.name.toUpperCase(),
+    line1,
+    line2,
+    line3,
+    shift: next ? `💼 ${next.title} · ${describeShift(next).replace(/ \(.*$/, '')}` : '',
+    user: (S.userName || '').split(' ')[0] ?? '',
+    place: widgetPlace,
+    ...(f ? { lat: f.lat, lon: f.lon } : {}),
+  }).catch(() => undefined);
 }
 
 /* ── Notifications (reminders + watch heads-ups) that buzz the phone and a paired watch ── */
@@ -1762,6 +1812,71 @@ function sendAnnounce(): void {
   }).catch(() => undefined);
 }
 
+/* ── Lock screen: Alton live wallpaper (your picture + small spinning cloud + clock) ── */
+function sendWallpaper(): void {
+  if (!isApp) return;
+  void Native.setWallpaper({
+    position: S.lsPos,
+    variant: S.lsVariant,
+    size: S.lsSize,
+    clock: S.lsClock,
+    lockOnly: S.lsLockOnly,
+    calm: matchMedia('(prefers-reduced-motion: reduce)').matches,
+  }).catch(() => undefined);
+}
+function renderLock(): void {
+  $('lockGrp').hidden = !isApp;
+  if (!isApp) return;
+  $<HTMLSelectElement>('lsVariant').value = S.lsVariant;
+  $<HTMLSelectElement>('lsPos').value = S.lsPos;
+  $<HTMLSelectElement>('lsSize').value = S.lsSize;
+  for (const [id, on] of [
+    ['lsClock', S.lsClock],
+    ['lsLockOnly', S.lsLockOnly],
+  ] as const) {
+    $(id).classList.toggle('on', on);
+    $(id).textContent = on ? '✓' : '';
+  }
+}
+function wireLock(): void {
+  if (!isApp) return;
+  const set = (ch: Partial<State>): void => {
+    S = { ...S, ...ch };
+    save();
+    renderLock();
+    sendWallpaper();
+  };
+  $<HTMLSelectElement>('lsVariant').onchange = (e) =>
+    set({ lsVariant: (e.target as HTMLSelectElement).value as State['lsVariant'] });
+  $<HTMLSelectElement>('lsPos').onchange = (e) =>
+    set({ lsPos: (e.target as HTMLSelectElement).value as State['lsPos'] });
+  $<HTMLSelectElement>('lsSize').onchange = (e) =>
+    set({ lsSize: (e.target as HTMLSelectElement).value as State['lsSize'] });
+  $('lsClock').onclick = () => set({ lsClock: !S.lsClock });
+  $('lsLockOnly').onclick = () => set({ lsLockOnly: !S.lsLockOnly });
+  $('lsPick').onclick = () => $('lsFile').click();
+  $<HTMLInputElement>('lsFile').onchange = async (e) => {
+    const f = (e.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    try {
+      await Native.setWallpaperImage({ data: await shrink(f, 2400, 0.9) });
+      toast('Picture saved for the lock screen.');
+    } catch {
+      toast('Couldn’t use that picture.');
+    }
+  };
+  $('lsNoPic').onclick = () =>
+    void Native.setWallpaperImage({ data: '' }).then(() =>
+      toast('Picture removed (Alton’s dark blue instead).'),
+    );
+  $('lsSet').onclick = () => {
+    sendWallpaper();
+    toast('Tap “Set wallpaper” and choose “Lock screen” if it asks (or both).');
+    void Native.openWallpaper().catch((err: Error) => toast(err.message));
+  };
+  sendWallpaper();
+}
+
 /* ── Background style and interface options (this phone only) ── */
 const BG_KEY = 'alton-bg-photo';
 function applyUi(): void {
@@ -1802,6 +1917,7 @@ function wireUi(): void {
     applyUi();
     renderUiSettings();
     renderVoiceSource();
+    renderLock();
   };
   $<HTMLSelectElement>('bgPick').onchange = (e) => {
     const v = (e.target as HTMLSelectElement).value as State['bg'];
@@ -2949,6 +3065,8 @@ async function renderPowers(): Promise<void> {
   set('pwCal', !!st?.calendar, 'Allow');
   set('pwContacts', !!st?.contacts, 'Allow');
   set('pwScreen', !!st?.screenReader, 'Turn on');
+  set('pwUsage', !!st?.usage, 'Allow');
+  set('pwBt', !!st?.bluetooth, 'Allow');
   $('pwAlarms').classList.toggle('on', S.autoAlarms);
   $('pwAlarms').textContent = S.autoAlarms ? '✓' : '';
   $('pwApp').textContent = S.shiftAppName || 'Choose…';
@@ -2966,6 +3084,12 @@ function wirePowers(): void {
   $('pwMsgs').onclick = () => void Native.openSettings({ which: 'messages' });
   $('pwScreen').onclick = () => void Native.openSettings({ which: 'screenReader' });
   $('pwRestricted').onclick = () => void Native.openSettings({ which: 'app' });
+  $('pwUsage').onclick = () => void Native.openSettings({ which: 'usage' });
+  $('pwBt').onclick = async () => {
+    await Native.requestAccess({ which: 'bluetooth' }).catch(() => undefined);
+    void renderPowers();
+    void updateWidget();
+  };
   $('pwAssist').onclick = () => {
     toast('Choose “Digital assistant app”, then pick Alton.');
     void Native.openSettings({ which: 'assistant' });
@@ -5086,6 +5210,7 @@ function wire(): void {
   $('snapRead').onclick = () => void readSnapFriends();
   wireUi();
   wireVoiceSource();
+  wireLock();
   wireWatch();
   wirePowers();
   wireDriving();

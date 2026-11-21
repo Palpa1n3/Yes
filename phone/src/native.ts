@@ -306,12 +306,26 @@ export interface PowerStatus {
   screenReader: boolean;
   calendar: boolean;
   contacts: boolean;
+  usage?: boolean;
+  bluetooth?: boolean;
 }
 interface AltonNativePlugin {
   status(): Promise<PowerStatus>;
-  openSettings(o: { which: 'messages' | 'screenReader' | 'app' | 'assistant' }): Promise<void>;
-  requestAccess(o: { which: 'calendar' | 'contacts' }): Promise<{ granted: boolean }>;
+  openSettings(o: {
+    which: 'messages' | 'screenReader' | 'app' | 'assistant' | 'usage';
+  }): Promise<void>;
+  requestAccess(o: { which: 'calendar' | 'contacts' | 'bluetooth' }): Promise<{ granted: boolean }>;
   getMessages(): Promise<{ messages: AppMessage[] }>;
+  setWallpaper(o: {
+    position: string;
+    variant: string;
+    size: string;
+    clock: boolean;
+    lockOnly: boolean;
+    calm: boolean;
+  }): Promise<void>;
+  setWallpaperImage(o: { data: string }): Promise<void>;
+  openWallpaper(): Promise<void>;
   setAnnounce(o: {
     mode: 'off' | 'headphones' | 'always';
     quietFrom: number;
@@ -348,7 +362,17 @@ interface AltonNativePlugin {
   }): Promise<{ text: string; front: string; lines: number }>;
   snapSend(o: { name: string; text: string }): Promise<void>;
   takeAssist(): Promise<{ assist: boolean; mode: 'drive' | 'talk' }>;
-  setWidget(o: { title: string; line1: string; line2: string; line3: string }): Promise<void>;
+  setWidget(o: {
+    title: string;
+    line1: string;
+    line2: string;
+    line3: string;
+    shift?: string;
+    user?: string;
+    place?: string;
+    lat?: number;
+    lon?: number;
+  }): Promise<void>;
   keepScreenOn(o: { on: boolean }): Promise<void>;
   media(o: {
     action: 'next' | 'previous' | 'pause' | 'play' | 'play_pause' | 'volume_up' | 'volume_down';

@@ -38,7 +38,8 @@ public class AltonWidget extends AppWidgetProvider {
     private static void render(Context ctx, AppWidgetManager mgr, int id) {
         SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.alton_widget);
-        v.setTextViewText(R.id.w_title, p.getString("title", "ALTON"));
+        v.setTextViewText(R.id.w_title, WidgetKit.greeting(ctx));
+        v.setImageViewBitmap(R.id.w_avatar, WidgetKit.avatar(ctx.getResources().getDisplayMetrics().density));
         v.setTextViewText(R.id.w_line1, p.getString("line1", "Open Alton once to fill this in"));
         v.setTextViewText(R.id.w_line2, p.getString("line2", ""));
         v.setTextViewText(R.id.w_line3, p.getString("line3", ""));

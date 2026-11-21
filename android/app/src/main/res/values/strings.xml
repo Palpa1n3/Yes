@@ -6,5 +6,9 @@
     <string name="custom_url_scheme">com.alton.phone</string>
     <string name="screen_reader_label">Alton: read my shift app</string>
     <string name="screen_reader_description">Lets Alton read the rota on your shift app\'s screen when you ask it to add your shifts. It only reads while Alton has opened that app for you, and nothing leaves your phone except the rota text you ask about.</string>
-    <string name="widget_description">Your next shift, the weather, your next reminder, and Talk / Drive buttons</string>
+    <string name="widget_description">Alton: greeting, next shift, next reminder, and Talk / Drive buttons</string>
+    <string name="widget_weather_description">The weather now, the next four days, and today\'s screen time</string>
+    <string name="widget_clock_description">Date and time, with the battery of your phone and connected earbuds or watch</string>
+    <string name="widget_screen_description">Today\'s screen time and your top apps</string>
+    <string name="wallpaper_description">Your picture with Alton\'s spinning data cloud and a small clock</string>
 </resources>

@@ -35,6 +35,13 @@ Read this first in a new chat, then README.md for the feature list.
   or with a Fish key saved on the phone (native HTTP); `setAudioVoice` in native.ts plays MP3
   chunks and falls back to the phone's TTS. `Announcer.java` reads new messages out (from the
   notification listener, so even with the app closed): off / headphones-only / always, quiet hours.
+  Widgets (same 4×2 size so they stack on Samsung): `AltonClockWidget` (date, TextClock, phone +
+  Bluetooth device battery rings via `WidgetKit.batteryRow`), `AltonWeatherWidget` (forecast fetched
+  natively every 30 min from the saved location, plus a screen-time strip from UsageEvents),
+  `AltonScreenWidget`, and `AltonWidget` (avatar, greeting, shift, reminder, Talk/Drive).
+  Lock screen: `AltonWallpaper.java` (live wallpaper: the user's picture from `setWallpaperImage`,
+  a small spinning data cloud/sphere and a clock; position/size from `setWallpaper`; only animates
+  while visible). Samsung's own lock clock can't be hidden by apps.
   Home-screen widget: `AltonWidget.java` + `res/layout/alton_widget.xml`; the app fills it via
   `setWidget` (next shift, weather, next reminder); its Talk/Drive buttons open the app with an
   action that `MainActivity.modeFor` turns into "talk" or "drive". Watch heads-ups: pure planner in
