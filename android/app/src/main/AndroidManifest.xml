@@ -137,6 +137,10 @@
         <intent>
             <action android:name="android.intent.action.SET_ALARM" />
         </intent>
+        <!-- To see which keyboard app is in use (phone health check) -->
+        <intent>
+            <action android:name="android.view.InputMethod" />
+        </intent>
     </queries>
 
     <!-- Permissions -->

@@ -196,6 +196,7 @@ describe('Android app tools', () => {
       'delete_event',
       'find_contact',
       'snapchat_message',
+      'phone_diagnostics',
       'media_control',
       'read_shift_app',
     ]);

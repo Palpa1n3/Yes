@@ -46,6 +46,8 @@ function setup() {
     notes,
     routines: () => [],
     execute,
+    live: async () => Buffer.from([1]),
+    input: vi.fn(async () => undefined),
     screenshot: async () => null,
     macs: () => ['AA:BB:CC:DD:EE:FF'],
     sleep: vi.fn(),
@@ -184,5 +186,17 @@ describe('phone app API', () => {
     expect(ctx.startAgent).toHaveBeenCalledWith('open notepad');
     expect(((await call('GET', '/api/screen')) as { status: number }).status).toBe(403); // screen awareness off
     expect(await call('GET', '/api/nope')).toBeNull();
+  });
+});
+
+describe('remote control from the phone', () => {
+  it('is refused unless "Let my phone control this PC" is on', async () => {
+    const { call } = setup();
+    const live = (await call('GET', '/api/live')) as { status?: number };
+    expect(live.status).toBe(403);
+    const inp = (await call('POST', '/api/input', { type: 'click', x: 0.5, y: 0.5 })) as {
+      status?: number;
+    };
+    expect(inp.status).toBe(403);
   });
 });

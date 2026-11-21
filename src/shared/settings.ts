@@ -151,6 +151,7 @@ export function sanitizeSettings(raw: unknown): Settings {
       ? (r['openMicMinutes'] as number)
       : d.openMicMinutes,
     screenAware: bool('screenAware'),
+    phoneControl: bool('phoneControl'),
     clipboardHistory: bool('clipboardHistory'),
     healthAlerts: bool('healthAlerts'),
     gamingMode: bool('gamingMode'),

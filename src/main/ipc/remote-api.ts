@@ -1,3 +1,4 @@
+import { sanitizeInput, type RemoteInput } from '@shared/remote-input';
 import { phoneAvatarFor, THEME_ACCENT } from '@shared/looks';
 /** The phone app's API (everything after pairing): chats with live replies, notes, PC controls,
  *  routines, timers, Agent Mode and a look at the screen. Messages are answered by the same
@@ -53,6 +54,9 @@ export function makePhoneRoutes(
     routines(): Routine[];
     execute(cmd: CanonicalCommand): Promise<CommandResult>;
     screenshot(): Promise<Buffer | null>;
+    /** Remote control: a quick live frame, and mouse/keyboard input. */
+    live(): Promise<Buffer | null>;
+    input(cmd: RemoteInput): Promise<void>;
     /** MAC addresses of the network adapters (for Wake-on-LAN). */
     macs(): string[];
     sleep(): void;
@@ -373,6 +377,22 @@ export function makePhoneRoutes(
       } catch (e) {
         return bad(e instanceof Error ? e.message : 'Voice failed', 502);
       }
+    }
+    // ── Remote control (only when "Let my phone control this PC" is on) ──
+    if ((a === 'live' && method === 'GET') || (a === 'input' && method === 'POST')) {
+      if (!ctx.settings.get().phoneControl)
+        return bad(
+          'Remote control is off on the PC: turn on Settings › Privacy › “Let my phone control this PC”.',
+          403,
+        );
+      if (a === 'live') {
+        const jpeg = await d.live();
+        return jpeg ? { jpeg } : bad('Could not capture the screen', 500);
+      }
+      const cmd = sanitizeInput(body);
+      if (!cmd) return bad('Not a valid input');
+      await d.input(cmd);
+      return ok({ ok: true });
     }
     if (a === 'screen' && method === 'GET') {
       if (!ctx.settings.get().screenAware)

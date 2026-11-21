@@ -1148,6 +1148,95 @@
         padding: 4px 6px;
         margin: 2px 2px 0;
       }
+      /* ── Remote control ── */
+      .remote {
+        position: fixed;
+        inset: 0;
+        z-index: 97;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        padding: calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom));
+        gap: 6px;
+      }
+      .remote[hidden] {
+        display: none;
+      }
+      .rm-top {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        color: var(--ice);
+        font-size: 13px;
+      }
+      .rm-top span {
+        flex: 1;
+      }
+      .rm-view {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .rm-view img {
+        width: 100%;
+        height: auto;
+        max-height: 100%;
+        object-fit: contain;
+        touch-action: none;
+        user-select: none;
+        border-radius: 6px;
+        box-shadow: 0 0 0 1px rgba(63, 208, 255, 0.3);
+      }
+      .rm-view.zoom {
+        overflow: auto;
+        display: block;
+      }
+      .rm-view.zoom img {
+        width: 250%;
+        max-height: none;
+        touch-action: pan-x pan-y;
+      }
+      .rm-dot {
+        position: absolute;
+        width: 26px;
+        height: 26px;
+        margin: -13px 0 0 -13px;
+        border-radius: 50%;
+        border: 2px solid var(--accent);
+        pointer-events: none;
+        animation: rmPing 0.45s ease-out forwards;
+      }
+      @keyframes rmPing {
+        to {
+          transform: scale(1.8);
+          opacity: 0;
+        }
+      }
+      .rm-help {
+        text-align: center;
+        margin: 0;
+      }
+      .rm-keys {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 2px;
+      }
+      .rm-keys .btn {
+        flex: none;
+        padding: 8px 12px;
+      }
+      .rm-type {
+        position: absolute;
+        opacity: 0;
+        width: 1px;
+        height: 1px;
+        bottom: 0;
+      }
       /* ── Contact search sheet ── */
       .sheet {
         position: fixed;
@@ -1681,6 +1770,43 @@
         <div id="csList" class="cs-list"></div>
       </div>
     </div>
+    <div id="remote" class="remote" hidden>
+      <div class="rm-top">
+        <span id="rmStatus">Connecting…</span>
+        <button class="btn" id="rmZoom">Zoom</button>
+        <button class="btn" id="rmClose">Close</button>
+      </div>
+      <div id="rmView" class="rm-view">
+        <img id="rmImg" alt="Your PC screen" draggable="false" />
+      </div>
+      <p class="muted small rm-help">
+        Tap = click · tap twice = double-click · hold = right-click · hold then drag = drag · swipe
+        = scroll
+      </p>
+      <div class="rm-keys">
+        <button class="btn" id="rmKbd">⌨️ Type</button>
+        <button class="btn" data-k="enter">Enter</button>
+        <button class="btn" data-k="backspace">⌫</button>
+        <button class="btn" data-k="escape">Esc</button>
+        <button class="btn" data-k="tab">Tab</button>
+        <button class="btn" data-k="win">⊞ Win</button>
+        <button class="btn" data-k="alt+tab">Alt+Tab</button>
+        <button class="btn" data-k="ctrl+c">Copy</button>
+        <button class="btn" data-k="ctrl+v">Paste</button>
+        <button class="btn" data-k="ctrl+z">Undo</button>
+        <button class="btn" data-k="left">←</button>
+        <button class="btn" data-k="up">↑</button>
+        <button class="btn" data-k="down">↓</button>
+        <button class="btn" data-k="right">→</button>
+      </div>
+      <input
+        id="rmType"
+        class="rm-type"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+      />
+    </div>
     <div id="tint" class="tint" aria-hidden="true"></div>
     <canvas id="snow" class="snow" aria-hidden="true"></canvas>
     <div id="cam" class="cam" hidden>
@@ -2049,6 +2175,9 @@
                 >Volume
                 <input id="pcVol" type="range" min="0" max="100" step="5" style="width: 100%"
               /></label>
+              <button class="btn acc full" id="remoteBtn" style="margin: 6px 0 8px">
+                🖥️ Remote control (see and use your PC)
+              </button>
               <div class="row" style="margin-top: 6px">
                 <button class="btn" id="muteBtn" style="flex: 1">Mute</button>
                 <button class="btn" id="lockBtn" style="flex: 1">Lock</button>
@@ -2610,6 +2739,26 @@
               <h3 class="sub">3 · Turn it on</h3>
               <button class="btn acc full" id="lsSet">Set as my wallpaper</button>
               <p class="muted small">Changes above show straight away once it’s set.</p>
+            </div>
+          </details>
+          <details class="grp" id="healthGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6" /></svg></span
+              ><span class="gt"
+                ><b>Phone health</b><small>Why it’s slow, hot or draining</small></span
+              >
+            </summary>
+            <div class="gb">
+              <p class="muted small" style="margin-top: 0">
+                Checks memory, storage, battery, heat, power saving, your keyboard app and more, and
+                says what to fix. Allow Usage access (Phone powers) for the keyboard’s cache size.
+              </p>
+              <div class="row">
+                <button class="btn acc" id="healthRun" style="flex: 1">Check my phone</button>
+                <button class="btn" id="healthAsk" style="flex: 1">Ask Alton</button>
+              </div>
+              <div id="healthOut" style="margin-top: 10px"></div>
             </div>
           </details>
           <details class="grp">

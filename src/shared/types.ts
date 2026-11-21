@@ -190,6 +190,8 @@ export interface Settings {
   openMicMinutes: number;
   /** Screen awareness: keep a picture of the screen for Claude to look at when asked. */
   screenAware: boolean;
+  /** Let the paired phone see the screen live and control the mouse/keyboard. */
+  phoneControl: boolean;
   /** Remember recent copied text (memory only, cleared on quit). */
   clipboardHistory: boolean;
   /** Heads-up about heat, full drives, low memory, long uptime. */
@@ -357,6 +359,7 @@ export const DEFAULT_SETTINGS: Settings = {
   openMicHotkey: 'CommandOrControl+Alt+M',
   openMicMinutes: 5,
   screenAware: true,
+  phoneControl: false,
   clipboardHistory: true,
   healthAlerts: true,
   gamingMode: false,

@@ -42,6 +42,10 @@ Read this first in a new chat, then README.md for the feature list.
   Lock screen: `AltonWallpaper.java` (live wallpaper: the user's picture from `setWallpaperImage`,
   a small spinning data cloud/sphere and a clock; position/size from `setWallpaper`; only animates
   while visible). Samsung's own lock clock can't be hidden by apps.
+  Phone health: `Diagnostics.java` readings → `src/shared/diagnostics.ts` (`healthReport`: issues
+  with fixes) → the `phone_diagnostics` tool and Settings › Phone health.
+  Remote control: PC setting `phoneControl` (off by default; notice on the PC when used),
+  `/api/live` frames + `/api/input` (`src/shared/remote-input.ts`), phone overlay in the PC tab.
   Home-screen widget: `AltonWidget.java` + `res/layout/alton_widget.xml`; the app fills it via
   `setWidget` (next shift, weather, next reminder); its Talk/Drive buttons open the app with an
   action that `MainActivity.modeFor` turns into "talk" or "drive". Watch heads-ups: pure planner in

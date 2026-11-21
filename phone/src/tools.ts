@@ -331,6 +331,12 @@ export const APP_TOOLS: Anthropic.Tool[] = [
     input_schema: obj({ to: { type: 'string' }, text: { type: 'string' } }, ['to', 'text']),
   },
   {
+    name: 'phone_diagnostics',
+    description:
+      "Check the phone's health: memory, storage, battery (level, temperature, health), heat, power saving, network, time since the last restart, animation speed, the keyboard app (version, last update, cache size) and today's most-used apps. Use for a slow keyboard, lag, freezing, battery drain, overheating or \"what's wrong with my phone?\". Then explain the most likely cause in plain words and give step-by-step fixes for their Samsung, most likely first.",
+    input_schema: obj({}),
+  },
+  {
     name: 'media_control',
     description:
       'Control whatever is playing on the phone (Spotify, YouTube Music…): next or previous song, pause, play, volume up or down.',

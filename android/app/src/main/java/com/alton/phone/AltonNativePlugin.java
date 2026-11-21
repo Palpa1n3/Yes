@@ -90,6 +90,16 @@ public class AltonNativePlugin extends Plugin {
         call.resolve();
     }
 
+    /** Phone health check (battery, memory, storage, heat, network, keyboard app…). */
+    @PluginMethod
+    public void diagnostics(PluginCall call) {
+        try {
+            call.resolve(Diagnostics.collect(getContext()));
+        } catch (Exception e) {
+            call.reject("Couldn't check the phone.");
+        }
+    }
+
     /* ── Lock screen live wallpaper ── */
 
     @PluginMethod

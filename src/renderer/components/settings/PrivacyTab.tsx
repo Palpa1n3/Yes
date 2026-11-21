@@ -22,7 +22,13 @@ const ICON = { action: Zap, agent: Bot, routine: ListChecks, memory: Brain, sugg
 
 type Key = keyof Pick<
   Settings,
-  'screenAware' | 'clipboardHistory' | 'autoMemory' | 'initiative' | 'agentMode' | 'persistHistory'
+  | 'screenAware'
+  | 'phoneControl'
+  | 'clipboardHistory'
+  | 'autoMemory'
+  | 'initiative'
+  | 'agentMode'
+  | 'persistHistory'
 >;
 
 /** Privacy & permissions: everything Alton can see or do, in one place, plus what it did. */
@@ -39,6 +45,11 @@ export function PrivacyTab() {
       key: 'screenAware',
       label: 'See your screen',
       hint: 'One picture kept in memory on this PC; sent to Claude only when a question needs it.',
+    },
+    {
+      key: 'phoneControl',
+      label: 'Let my phone control this PC',
+      hint: 'Your paired phone can see this screen live and use the mouse and keyboard (over Tailscale, anywhere). A notice shows here whenever it does.',
     },
     {
       key: 'clipboardHistory',

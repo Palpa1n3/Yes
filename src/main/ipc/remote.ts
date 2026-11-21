@@ -1,4 +1,4 @@
-import { app } from 'electron';
+import { app, desktopCapturer, screen } from 'electron';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 import { IPC, type RemoteInfo } from '@shared/ipc';
@@ -11,6 +11,10 @@ import { handle, on } from './handle';
 import { ps } from '../services/system-actions';
 import { makePhoneRoutes } from './remote-api';
 import { grab } from './screen';
+import { WinInput } from '../services/agent-input-win';
+import { notifyUser } from '../holo';
+import { parseCombo } from '@shared/agent';
+import { toPhysical, type RemoteInput } from '@shared/remote-input';
 import type { ChatStore } from '../services/chat-store';
 import type { NotesStore } from '../services/notes-store';
 import type { Routine } from '@shared/routines';
@@ -59,9 +63,93 @@ export function registerRemoteIpc(
   let seq = 0;
   let error: string | null = null;
 
+  // ── Remote control from the phone ──
+  let liveDisplay: Electron.Display | null = null;
+  let input: WinInput | null = null;
+  let lastNotice = 0;
+  const noticeControl = (what: 'viewing' | 'controlling'): void => {
+    if (Date.now() - lastNotice < 5 * 60_000) return;
+    lastNotice = Date.now();
+    ctx.audit.add('action', `Your phone is ${what} this PC`);
+    notifyUser(
+      'Phone remote control',
+      `Your phone is ${what} this PC. Turn it off in Settings › Privacy if this isn't you.`,
+      'warn',
+    );
+  };
+  const remoteInput = async (cmd: RemoteInput): Promise<void> => {
+    if (process.platform !== 'win32') throw new Error('Remote control needs Windows');
+    noticeControl('controlling');
+    input ??= new WinInput();
+    const io = input;
+    const d = liveDisplay ?? screen.getPrimaryDisplay();
+    const at = (x: number, y: number): { x: number; y: number } => toPhysical(x, y, d);
+    const click = async (which: 'left' | 'right'): Promise<void> => {
+      await io.button(which, true);
+      await io.button(which, false);
+    };
+    switch (cmd.type) {
+      case 'move': {
+        const p = at(cmd.x, cmd.y);
+        await io.move(p.x, p.y);
+        return;
+      }
+      case 'click':
+      case 'right':
+      case 'double': {
+        const p = at(cmd.x, cmd.y);
+        await io.move(p.x, p.y);
+        await click(cmd.type === 'right' ? 'right' : 'left');
+        if (cmd.type === 'double') await click('left');
+        return;
+      }
+      case 'scroll': {
+        const p = at(cmd.x, cmd.y);
+        await io.move(p.x, p.y);
+        await io.wheel(cmd.dy, 0);
+        return;
+      }
+      case 'drag': {
+        const a = at(cmd.x, cmd.y);
+        const b = at(cmd.x2, cmd.y2);
+        await io.move(a.x, a.y);
+        await io.button('left', true);
+        for (let i = 1; i <= 10; i++)
+          await io.move(a.x + ((b.x - a.x) * i) / 10, a.y + ((b.y - a.y) * i) / 10);
+        await io.button('left', false);
+        return;
+      }
+      case 'key': {
+        const codes = parseCombo(cmd.keys);
+        if (!codes) throw new Error(`Unknown key ${cmd.keys}`);
+        for (const vk of codes) await io.key(vk, true);
+        for (const vk of [...codes].reverse()) await io.key(vk, false);
+        return;
+      }
+      case 'type':
+        await io.type(cmd.text);
+        return;
+    }
+  };
   const phone = makePhoneRoutes(ctx, {
     ...src.phone,
     screenshot: async () => (await grab().catch(() => null))?.jpeg ?? null,
+    live: async () => {
+      noticeControl('viewing');
+      const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+      liveDisplay = d;
+      const k = Math.min(1, 1100 / Math.max(d.size.width, d.size.height));
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: {
+          width: Math.round(d.size.width * k),
+          height: Math.round(d.size.height * k),
+        },
+      });
+      const s = sources.find((x) => x.display_id === String(d.id)) ?? sources[0];
+      return s && !s.thumbnail.isEmpty() ? s.thumbnail.toJPEG(55) : null;
+    },
+    input: (cmd) => remoteInput(cmd),
     macs,
     sleep: () =>
       void ps(

@@ -325,6 +325,7 @@ interface AltonNativePlugin {
     calm: boolean;
   }): Promise<void>;
   setWallpaperImage(o: { data: string }): Promise<void>;
+  diagnostics(): Promise<import('@shared/diagnostics').PhoneHealth>;
   openWallpaper(): Promise<void>;
   setAnnounce(o: {
     mode: 'off' | 'headphones' | 'always';

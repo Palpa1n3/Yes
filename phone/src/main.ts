@@ -43,6 +43,8 @@ import {
   isPcAddress,
   pairWithPc,
   pcApi,
+  pcInput,
+  pcLive,
   pcScreen,
   pcUpload,
   type PcConn,
@@ -106,6 +108,7 @@ import {
 } from '@shared/usage';
 import { APP_TOOLS, PHONE_TOOLS, WMO, nearbyLink, runPhoneTool, weatherSummary } from './tools';
 import { noteId, planHeadsUps } from '@shared/headsups';
+import { healthReport } from '@shared/diagnostics';
 import {
   DEFAULT_PROMPTS,
   expandPrompt,
@@ -2923,6 +2926,12 @@ async function appTool(
         },
       };
     }
+    if (name === 'phone_diagnostics') {
+      const r = healthReport(await Native.diagnostics());
+      return {
+        result: `${r.lines.join('\n')}\n\n${r.issues.length ? `Found:\n${r.issues.map((i) => `- ${i.what}. Fix: ${i.fix}`).join('\n')}` : 'Nothing obviously wrong.'}${(await powerStatus())?.usage ? '' : '\n(Usage access is off, so the keyboard’s cache size and screen time are missing: the user can allow it in Settings › Phone powers.)'}`,
+      };
+    }
     if (name === 'media_control') {
       const action = String(o.action ?? '') as Parameters<typeof Native.media>[0]['action'];
       await Native.media({ action });
@@ -4517,6 +4526,194 @@ function renderToday(): void {
 }
 let lastWeather = '';
 
+/* ── Remote control: the PC's screen live, tap to click, swipe to scroll, type ── */
+let remoteOn = false;
+let rmZoom = false;
+async function openRemote(): Promise<void> {
+  const c = conn();
+  if (!c) return toast('Connect to your PC first.');
+  remoteOn = true;
+  $('remote').hidden = false;
+  $('rmStatus').textContent = 'Connecting…';
+  const img = $<HTMLImageElement>('rmImg');
+  let frames = 0;
+  let since = performance.now();
+  while (remoteOn) {
+    const cc = conn();
+    if (!cc) {
+      $('rmStatus').textContent = 'Lost the connection to your PC.';
+      break;
+    }
+    try {
+      const blob = await pcLive(cc);
+      const url = URL.createObjectURL(blob);
+      const old = img.src;
+      img.src = url;
+      await img.decode().catch(() => undefined);
+      if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+      frames++;
+      const now = performance.now();
+      if (now - since > 2000) {
+        $('rmStatus').textContent = `Live · ${Math.round((frames * 1000) / (now - since))} fps`;
+        frames = 0;
+        since = now;
+      }
+    } catch (e) {
+      $('rmStatus').textContent = (e as Error).message;
+      if (e instanceof PcError && e.status === 403) break;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+}
+function closeRemote(): void {
+  remoteOn = false;
+  $('remote').hidden = true;
+  ($('rmType') as HTMLInputElement).blur();
+}
+function rmSend(cmd: Record<string, unknown>): void {
+  const c = conn();
+  if (!c) return;
+  void pcInput(c, cmd).catch((e: Error) => toast(e.message));
+}
+function wireRemote(): void {
+  const img = $<HTMLImageElement>('rmImg');
+  const pos = (e: PointerEvent): { x: number; y: number } => {
+    const r = img.getBoundingClientRect();
+    return {
+      x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)),
+    };
+  };
+  let start: { x: number; y: number; cx: number; cy: number } | null = null;
+  let moved = false;
+  let long = false;
+  let longTimer: ReturnType<typeof setTimeout> | null = null;
+  let scrollAcc = 0;
+  let lastY = 0;
+  let pendingClick: ReturnType<typeof setTimeout> | null = null;
+  const ripple = (e: PointerEvent): void => {
+    const d = el('i', 'rm-dot');
+    const v = $('rmView').getBoundingClientRect();
+    d.style.left = `${e.clientX - v.left + $('rmView').scrollLeft}px`;
+    d.style.top = `${e.clientY - v.top + $('rmView').scrollTop}px`;
+    $('rmView').appendChild(d);
+    setTimeout(() => d.remove(), 450);
+  };
+  img.addEventListener('pointerdown', (e) => {
+    const p = pos(e);
+    start = { ...p, cx: e.clientX, cy: e.clientY };
+    moved = false;
+    long = false;
+    scrollAcc = 0;
+    lastY = e.clientY;
+    longTimer = setTimeout(() => {
+      long = true;
+      if ('vibrate' in navigator) navigator.vibrate(20);
+    }, 550);
+  });
+  img.addEventListener('pointermove', (e) => {
+    if (!start) return;
+    if (!moved && Math.hypot(e.clientX - start.cx, e.clientY - start.cy) > 12) {
+      moved = true;
+      if (!long && longTimer) clearTimeout(longTimer);
+    }
+    // One-finger swipe scrolls the PC (unless zoomed in, where it pans the picture).
+    if (moved && !long && !rmZoom) {
+      scrollAcc += e.clientY - lastY;
+      lastY = e.clientY;
+      const notches = Math.trunc(scrollAcc / 40);
+      if (notches) {
+        scrollAcc -= notches * 40;
+        rmSend({ type: 'scroll', x: start.x, y: start.y, dy: notches });
+      }
+    }
+  });
+  img.addEventListener('pointerup', (e) => {
+    if (longTimer) clearTimeout(longTimer);
+    if (!start) return;
+    const p = pos(e);
+    const s = start;
+    start = null;
+    if (long && moved) return rmSend({ type: 'drag', x: s.x, y: s.y, x2: p.x, y2: p.y });
+    if (moved) return;
+    ripple(e);
+    if (long) return rmSend({ type: 'right', x: s.x, y: s.y });
+    // A second tap soon after = double-click.
+    if (pendingClick) {
+      clearTimeout(pendingClick);
+      pendingClick = null;
+      return rmSend({ type: 'double', x: s.x, y: s.y });
+    }
+    pendingClick = setTimeout(() => {
+      pendingClick = null;
+      rmSend({ type: 'click', x: s.x, y: s.y });
+    }, 260);
+  });
+  img.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.querySelectorAll<HTMLButtonElement>('#remote [data-k]').forEach((b) => {
+    b.onclick = () => rmSend({ type: 'key', keys: b.dataset.k });
+  });
+  const typer = $<HTMLInputElement>('rmType');
+  $('rmKbd').onclick = () => typer.focus();
+  typer.addEventListener('beforeinput', (e) => {
+    const ie = e as InputEvent;
+    if (ie.inputType === 'deleteContentBackward') rmSend({ type: 'key', keys: 'backspace' });
+    else if (ie.inputType === 'insertLineBreak') rmSend({ type: 'key', keys: 'enter' });
+    else if (ie.data) rmSend({ type: 'type', text: ie.data });
+    e.preventDefault();
+  });
+  typer.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      rmSend({ type: 'key', keys: 'enter' });
+      e.preventDefault();
+    }
+  });
+  $('rmZoom').onclick = () => {
+    rmZoom = !rmZoom;
+    $('rmView').classList.toggle('zoom', rmZoom);
+    $('rmZoom').textContent = rmZoom ? 'Fit' : 'Zoom';
+  };
+  $('rmClose').onclick = closeRemote;
+  $('remoteBtn').onclick = () => void openRemote();
+}
+
+/* ── Phone health check (Android app) ── */
+async function runHealth(): Promise<void> {
+  const box = $('healthOut');
+  box.textContent = 'Checking…';
+  try {
+    const r = healthReport(await Native.diagnostics());
+    box.textContent = '';
+    if (r.issues.length) {
+      box.appendChild(el('h3', 'sub', `Worth fixing (${r.issues.length})`));
+      for (const i of r.issues) {
+        const row = el('div', 'li');
+        row.style.flexDirection = 'column';
+        row.style.alignItems = 'stretch';
+        row.appendChild(el('b', undefined, `⚠️ ${i.what}`));
+        row.appendChild(el('small', 'muted', i.fix));
+        box.appendChild(row);
+      }
+    } else box.appendChild(el('p', undefined, '✓ Nothing obviously wrong.'));
+    box.appendChild(el('h3', 'sub', 'Readings'));
+    for (const l of r.lines) box.appendChild(el('div', 'muted small', l));
+  } catch (e) {
+    box.textContent = `Couldn’t check: ${(e as Error).message}`;
+  }
+}
+function wireHealth(): void {
+  $('healthGrp').hidden = !isApp;
+  if (!isApp) return;
+  $('healthRun').onclick = () => void runHealth();
+  $('healthAsk').onclick = () => {
+    setView('chat');
+    newChat(false);
+    send(
+      'Check my phone and tell me what’s slowing it down (my keyboard sometimes takes ages to pop up).',
+    );
+  };
+}
+
 /* ── PC tab ── */
 function renderPc(): void {
   const tickBtn = (id: string, on: boolean): void => {
@@ -5207,6 +5404,8 @@ function wire(): void {
   };
   wirePc();
   wireLook();
+  wireRemote();
+  wireHealth();
   $('snapRead').onclick = () => void readSnapFriends();
   wireUi();
   wireVoiceSource();

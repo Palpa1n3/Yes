@@ -124,3 +124,22 @@ export interface PcJob {
   error?: string;
   sources?: Array<{ url: string; title: string }>;
 }
+
+/** A quick live frame of the PC's screen (remote control). */
+export async function pcLive(c: PcConn): Promise<Blob> {
+  const r = await fetch(`${c.base}/api/live?t=${Date.now()}`, {
+    cache: 'no-store',
+    headers: { authorization: `Bearer ${c.token}` },
+    signal: timeout(10_000),
+  });
+  if (!r.ok) {
+    const j = (await r.json().catch(() => ({}))) as { error?: string };
+    throw new PcError(j.error || 'Couldn’t see the screen.', r.status);
+  }
+  return r.blob();
+}
+
+/** Mouse and keyboard on the PC (positions are 0–1 of its screen). */
+export function pcInput(c: PcConn, cmd: Record<string, unknown>): Promise<unknown> {
+  return pcApi(c, 'POST', '/api/input', cmd, 8000);
+}
