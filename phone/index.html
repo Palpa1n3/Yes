@@ -1309,6 +1309,14 @@
         padding: 10px 8px;
         font-size: 13px;
       }
+      .shift-pick {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .shift-pick:empty {
+        display: none;
+      }
       .cal-head {
         display: flex;
         align-items: center;
@@ -1926,11 +1934,14 @@
         padding: 4px;
         margin-bottom: 14px;
         border-radius: 14px;
-        background: rgba(8, 18, 28, 0.9);
+        background: rgba(6, 12, 20, 0.98);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
         border: 1px solid var(--line);
         position: sticky;
         top: 0;
-        z-index: 3;
+        z-index: 6;
       }
       .seg button {
         flex: 1;
@@ -2335,6 +2346,7 @@
               </div>
             </div>
             <p class="muted small" id="shGetMsg" style="margin-bottom: 0"></p>
+            <div id="shPick" class="shift-pick"></div>
           </div>
           <div class="card" data-in="shifts">
             <div class="cal-head">

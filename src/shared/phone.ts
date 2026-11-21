@@ -100,6 +100,8 @@ export interface SyncFromPc {
   /** Goals with progress, and quick notes (newest first). */
   goals?: Array<{ title: string; progress: number }>;
   notes?: string[];
+  /** Upcoming work shifts the PC knows (from its own rota/chats). */
+  shifts?: Array<{ title: string; start: string; end: string; location?: string; notes?: string }>;
   /** Saved prompts (/fix, /summarize...). */
   prompts?: Array<{ name: string; text: string }>;
   /** The PC's look: accent colour (#rrggbb) and avatar. */

@@ -113,6 +113,19 @@ describe('phone-only app sync', () => {
   });
 });
 
+describe('shifts reach the phone', () => {
+  it("sends the PC's upcoming shifts in the sync", async () => {
+    const { call, ctx } = setup();
+    const d = new Date(Date.now() + 2 * 86_400_000);
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    ctx.shifts.merge([{ title: 'Tesco', start: `${day}T07:00`, end: `${day}T15:00` }]);
+    const s = (await call('GET', '/api/sync', {}, 'pc=http://192.168.1.5:47615')) as {
+      json: { payload: { shifts?: Array<{ title: string; start: string }> } };
+    };
+    expect(s.json.payload.shifts?.map((x) => x.start)).toEqual([`${day}T07:00`]);
+  });
+});
+
 describe('phone app API', () => {
   it('lists, creates, renames and deletes chats', async () => {
     const { call } = setup();

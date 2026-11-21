@@ -282,6 +282,7 @@ export function makePhoneRoutes(
           .state()
           .notes.slice(0, 30)
           .map((n) => n.text.slice(0, 2000)),
+        shifts: ctx.shifts.upcoming(),
         prompts: st.prompts,
         voiceFixes: st.voiceFixes,
         look: {

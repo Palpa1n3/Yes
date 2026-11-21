@@ -53,6 +53,10 @@ Read this first in a new chat, then README.md for the feature list.
   phone calendar by keywords `S.shiftWords` via `shiftsFromCalendar`, typed in via `manualShift`;
   tap a shift to edit), a month calendar (`monthGrid`, colour by `shiftKind`), month hours/pay,
   share rota (`rotaText`), add all to calendar. Saved shifts now kept 5 weeks back for the calendar.
+  The PC now sends `shifts` (its `ShiftStore.upcoming()`) in `/api/sync`; the phone merges them.
+  "From my shift app" sets `phoneOnlyNext` so that one message is answered on the phone (the PC
+  can't read phone apps). "From my calendar" shows the calendar's event names to tap when the
+  words match nothing.
   Backgrounds: 15 CSS-only (`body[data-bg]`), `drift` animates (off for reduced motion).
   Phone health: `Diagnostics.java` readings → `src/shared/diagnostics.ts` (`healthReport`: issues
   with fixes) → the `phone_diagnostics` tool and Settings › Phone health.

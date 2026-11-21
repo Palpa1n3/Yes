@@ -97,6 +97,7 @@ import {
   daysOff,
   manualShift,
   mergeShifts,
+  cleanShifts,
   monthGrid,
   monthHours,
   rotaText,
@@ -473,6 +474,7 @@ function applyFromPc(d: SyncFromPc): void {
     pcUrl: d.pcUrl || S.pcUrl,
     macs: d.macs?.length ? d.macs : S.macs,
     goals: d.goals ?? S.goals,
+    shifts: d.shifts?.length ? mergeShifts(S.shifts, cleanShifts(d.shifts)) : S.shifts,
     notes: [...S.newNotes, ...(d.notes ?? S.notes)],
     prompts: d.prompts && !S.promptsMine ? sanitizePrompts(d.prompts) : S.prompts,
     voiceFixes: (d.voiceFixes ?? []).reduce((acc, f) => addFix(acc, f), S.voiceFixes),
@@ -942,7 +944,10 @@ function send(text?: string, expanded = false, typed?: string): void {
   save();
   renderMsgs('Thinking…');
   // While driving, the phone answers itself so texts can be confirmed by voice.
-  if (usePcNow() && !driving) void askPc(c, imgs);
+  // Some jobs need this phone itself (reading its apps): the phone answers those.
+  const here = phoneOnlyNext;
+  phoneOnlyNext = false;
+  if (usePcNow() && !driving && !here) void askPc(c, imgs);
   else
     void ask(
       c,
@@ -4349,6 +4354,8 @@ let calMonth = (() => {
 })();
 let calSel = ymd(new Date());
 let editing: Shift | null = null;
+/** The next message is answered on the phone, not the PC (e.g. reading the shift app). */
+let phoneOnlyNext = false;
 
 function renderShiftNext(): void {
   const box = $('shiftNext');
@@ -4491,8 +4498,26 @@ async function shiftsFromMyCalendar(): Promise<void> {
       to: from.getTime() + 56 * 86_400_000,
     });
     const found = shiftsFromCalendar(events, S.shiftWords);
+    const pick = $('shPick');
+    pick.textContent = '';
     if (!found.length) {
-      msg.textContent = `No events with “${S.shiftWords}” in the name in the next 8 weeks. Change the words above to match what your shifts are called.`;
+      // Show what is in the calendar so the right name can be tapped.
+      const names = [...new Set(events.filter((e) => !e.allDay).map((e) => e.title.trim()))]
+        .filter(Boolean)
+        .slice(0, 16);
+      msg.textContent = names.length
+        ? `Nothing called “${S.shiftWords}” in the next 8 weeks. Which of these are your shifts? Tap one:`
+        : 'Your calendar has no timed events in the next 8 weeks.';
+      for (const n of names) {
+        const b = el('button', 'chip', n);
+        b.onclick = () => {
+          S.shiftWords = n;
+          save();
+          $<HTMLInputElement>('shWords').value = n;
+          void shiftsFromMyCalendar();
+        };
+        pick.appendChild(b);
+      }
       return;
     }
     const before = new Set(S.shifts.map(shiftKey));
@@ -4514,7 +4539,10 @@ function wireShiftsTab(): void {
       return;
     }
     setView('chat');
-    send('Read my shift app and add all my upcoming shifts.');
+    phoneOnlyNext = true;
+    send(
+      'Use the read_shift_app tool to read my shift app now, then add every upcoming shift with add_shifts.',
+    );
   };
   $('shGetPic').onclick = () => {
     setView('chat');
