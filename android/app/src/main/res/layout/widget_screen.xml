@@ -3,34 +3,19 @@
     android:id="@+id/st_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
+    android:background="@drawable/widget_pill"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:paddingStart="18dp"
-    android:paddingEnd="12dp"
-    android:paddingTop="8dp"
-    android:paddingBottom="8dp">
+    android:paddingStart="22dp"
+    android:paddingEnd="10dp">
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="vertical">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Screen time"
-            android:textColor="#BFD9EA"
-            android:textSize="13sp" />
-
-        <TextView
-            android:id="@+id/st_total"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#F2FAFF"
-            android:textSize="28sp"
-            android:textStyle="bold" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Screen time" android:textColor="#B3FFFFFF" android:textSize="13sp" />
+        <TextView android:id="@+id/st_total" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:textSize="30sp" android:textStyle="bold" />
     </LinearLayout>
 
     <LinearLayout
@@ -38,7 +23,6 @@
         android:layout_height="wrap_content"
         android:layout_weight="1.1"
         android:orientation="vertical">
-
         <TextView android:id="@+id/st_a0" style="@style/StApp" />
         <TextView android:id="@+id/st_a1" style="@style/StApp" />
         <TextView android:id="@+id/st_a2" style="@style/StApp" />

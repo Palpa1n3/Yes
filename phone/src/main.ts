@@ -191,6 +191,13 @@ interface State {
   watchLeave: boolean;
   watchMorning: boolean;
   morningHour: number;
+  /** Alarms Alton sets are also said out loud to Alexa (and shift alarms too, if wanted). */
+  alarmAlexa: boolean;
+  shiftAlexa: boolean;
+  /** How to reach Alexa: typed in the Alexa app (Android app) or said out loud to the Echo. */
+  alexaVia: 'app' | 'speak';
+  /** The Echo's name as it shows in the Alexa app ('' = Alexa decides). */
+  alexaDevice: string;
   /** Read new messages out loud (Android app): off, with headphones/car Bluetooth, or always. */
   announce: 'off' | 'headphones' | 'always';
   quietFrom: number;
@@ -304,6 +311,10 @@ const DEFAULTS: State = {
   watchLeave: true,
   watchMorning: true,
   morningHour: 7,
+  alarmAlexa: true,
+  shiftAlexa: false,
+  alexaVia: 'app',
+  alexaDevice: '',
   announce: 'off',
   quietFrom: 23,
   quietTo: 7,
@@ -2747,6 +2758,56 @@ function routeCard(m: RouteMap): HTMLElement {
   return fig;
 }
 
+/* ── Alexa: typed into the Alexa app (silent, works anywhere), or said out loud ── */
+function alexaDo(command: string): void {
+  if (isApp && S.alexaVia === 'app') {
+    const text = `${command}${S.alexaDevice ? ` on ${S.alexaDevice}` : ''}`;
+    toast('Opening the Alexa app…');
+    void Native.alexaType({ text }).then(
+      () => toast(`Sent to Alexa: “${text}”`),
+      (e: Error) => {
+        toast(`${e.message} Saying it out loud instead.`);
+        tellAlexa(command);
+      },
+    );
+    return;
+  }
+  tellAlexa(command);
+}
+
+/* ── Alarms: the phone's Clock app, and Alexa ── */
+async function setAlarmEverywhere(
+  hour: number,
+  minute: number,
+  label: string,
+  alexa: boolean,
+): Promise<string> {
+  const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  const done: string[] = [];
+  if (isApp) {
+    try {
+      await Native.setAlarm({ hour, minute, label: label || 'Alton' });
+      done.push(`set on the phone for ${time}`);
+    } catch (e) {
+      done.push(`couldn’t set it on the phone (${(e as Error).message})`);
+    }
+  } else {
+    location.href = androidAlarmLink(hour, minute, label || 'Alton alarm');
+    done.push('the Clock app opened with it filled in (tap Save)');
+  }
+  if (alexa) {
+    // Give the phone a moment, then say it to the Echo.
+    setTimeout(() => alexaDo(`set an alarm for ${spokenTime(time)}`), 600);
+    done.push(
+      isApp && S.alexaVia === 'app'
+        ? 'sent to Alexa through the Alexa app'
+        : 'Alexa told out loud (works when the phone is near the Echo, volume up)',
+    );
+  }
+  toast(`⏰ ${time}: ${done.join('; ')}`);
+  return `Alarm ${time}: ${done.join('; ')}. Don't promise Alexa definitely heard it.`;
+}
+
 /* ── Android app: phone powers ── */
 async function appTool(
   name: string,
@@ -2932,6 +2993,18 @@ async function appTool(
         result: `${r.lines.join('\n')}\n\n${r.issues.length ? `Found:\n${r.issues.map((i) => `- ${i.what}. Fix: ${i.fix}`).join('\n')}` : 'Nothing obviously wrong.'}${(await powerStatus())?.usage ? '' : '\n(Usage access is off, so the keyboard’s cache size and screen time are missing: the user can allow it in Settings › Phone powers.)'}`,
       };
     }
+    if (name === 'set_alarm') {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(String(o.time ?? '').trim());
+      if (!m) return { result: 'Time must be HH:MM (24-hour).' };
+      const alexa = typeof o.alexa === 'boolean' ? o.alexa : S.alarmAlexa;
+      const r = await setAlarmEverywhere(
+        Number(m[1]),
+        Number(m[2]),
+        String(o.label ?? '').slice(0, 60),
+        alexa,
+      );
+      return { result: r };
+    }
     if (name === 'media_control') {
       const action = String(o.action ?? '') as Parameters<typeof Native.media>[0]['action'];
       await Native.media({ action });
@@ -3052,6 +3125,7 @@ async function autoShiftAlarms(): Promise<void> {
   if (ms <= 60_000 || ms > 20 * 3600_000 || S.alarmsSet.includes(key)) return;
   try {
     await Native.setAlarm({ hour: a.hour, minute: a.minute, label: `Work · ${n.shift.title}` });
+    if (S.shiftAlexa) setTimeout(() => alexaDo(`set an alarm for ${spokenTime(a.time)}`), 800);
     S.alarmsSet = [...S.alarmsSet, key].slice(-60);
     save();
     toast(`⏰ Alarm set for ${a.time} (${n.shift.title}, ${n.when})`);
@@ -3085,6 +3159,16 @@ async function renderPowers(): Promise<void> {
   $<HTMLSelectElement>('pwAnnounce').value = S.announce;
   $<HTMLInputElement>('pwQuietFrom').value = String(S.quietFrom);
   $<HTMLInputElement>('pwQuietTo').value = String(S.quietTo);
+  $<HTMLSelectElement>('pwAlexaVia').value = S.alexaVia;
+  const dev = $<HTMLInputElement>('pwAlexaDev');
+  if (document.activeElement !== dev) dev.value = S.alexaDevice;
+  for (const [id, on] of [
+    ['pwAlexa', S.alarmAlexa],
+    ['pwShiftAlexa', S.shiftAlexa],
+  ] as const) {
+    $(id).classList.toggle('on', on);
+    $(id).textContent = on ? '✓' : '';
+  }
   $('pwReadOut').classList.toggle('on', S.readOut);
   $('pwReadOut').textContent = S.readOut ? '✓' : '';
 }
@@ -3122,6 +3206,25 @@ function wirePowers(): void {
       sendAnnounce();
     };
   sendAnnounce();
+  $<HTMLSelectElement>('pwAlexaVia').onchange = (e) => {
+    S.alexaVia = (e.target as HTMLSelectElement).value as State['alexaVia'];
+    save();
+  };
+  $<HTMLInputElement>('pwAlexaDev').onchange = (e) => {
+    S.alexaDevice = (e.target as HTMLInputElement).value.trim().slice(0, 40);
+    save();
+  };
+  $('pwAlexaTest').onclick = () => alexaDo('what time is it');
+  $('pwAlexa').onclick = () => {
+    S.alarmAlexa = !S.alarmAlexa;
+    save();
+    void renderPowers();
+  };
+  $('pwShiftAlexa').onclick = () => {
+    S.shiftAlexa = !S.shiftAlexa;
+    save();
+    void renderPowers();
+  };
   $('pwReadOut').onclick = () => {
     S.readOut = !S.readOut;
     save();
@@ -5540,6 +5643,26 @@ function wire(): void {
     mo.observe($(id), { attributes: true, attributeFilter: ['hidden'] });
   dot();
   $('tdPcOpen').onclick = () => setView('pc');
+  // Today › Alarm: phone and/or Alexa
+  const tick = (id: string, on: boolean): void => {
+    $(id).classList.toggle('on', on);
+    $(id).textContent = on ? '✓' : '';
+  };
+  let alPhone = true;
+  let alAlexa = S.alarmAlexa;
+  tick('alPhone', alPhone);
+  tick('alAlexa', alAlexa);
+  $('alPhone').onclick = () => tick('alPhone', (alPhone = !alPhone));
+  $('alAlexa').onclick = () => tick('alAlexa', (alAlexa = !alAlexa));
+  $('alSet').onclick = async () => {
+    const v = $<HTMLInputElement>('alTime').value;
+    const m = /^(\d{2}):(\d{2})$/.exec(v);
+    if (!m) return toast('Pick a time first.');
+    if (!alPhone && !alAlexa) return toast('Choose the phone, Alexa, or both.');
+    const label = $<HTMLInputElement>('alLabel').value.trim();
+    if (alPhone) await setAlarmEverywhere(Number(m[1]), Number(m[2]), label, alAlexa);
+    else alexaDo(`set an alarm for ${spokenTime(v)}`);
+  };
   $('tdPlay').onclick = () => void pcAct('media_control', 'play_pause');
   $('tdWeatherBtn').onclick = async () => {
     if (await refreshWeather(true)) return renderToday();

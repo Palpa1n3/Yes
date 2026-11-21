@@ -25,10 +25,9 @@ public class AltonClockWidget extends AppWidgetProvider {
         RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_clock);
         float density = ctx.getResources().getDisplayMetrics().density;
         v.setImageViewBitmap(R.id.ck_rings, WidgetKit.batteryRow(ctx, density));
-        String alarm = WidgetKit.nextAlarm(ctx);
-        v.setTextViewText(R.id.ck_alarm, alarm.isEmpty() ? "" : "⏰ " + alarm);
-        v.setOnClickPendingIntent(R.id.ck_time, WidgetKit.openIntent(ctx, new Intent(AlarmClock.ACTION_SHOW_ALARMS), 21));
-        v.setOnClickPendingIntent(R.id.ck_rings, WidgetKit.openApp(ctx, null, 22));
+        // Like the clock it replaces: the time opens your alarms; the batteries open battery settings.
+        v.setOnClickPendingIntent(R.id.ck_clock, WidgetKit.openIntent(ctx, new Intent(AlarmClock.ACTION_SHOW_ALARMS), 21));
+        v.setOnClickPendingIntent(R.id.ck_rings, WidgetKit.openIntent(ctx, new Intent(Intent.ACTION_POWER_USAGE_SUMMARY), 22));
         mgr.updateAppWidget(id, v);
     }
 }

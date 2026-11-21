@@ -192,8 +192,16 @@ export const PHONE_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'set_alarm',
-    description: 'Set an alarm in the phone’s Clock app (24-hour HH:MM).',
-    input_schema: obj({ time: { type: 'string' }, label: { type: 'string' } }, ['time']),
+    description:
+      'Set an alarm (24-hour HH:MM): in the phone’s Clock app, and (in the Android app, if the user wants) on their Alexa too, by saying it out loud to their Echo. Use alexa false if they only want the phone.',
+    input_schema: obj(
+      {
+        time: { type: 'string' },
+        label: { type: 'string' },
+        alexa: { type: 'boolean', description: 'Also tell Alexa (default: the user’s setting).' },
+      },
+      ['time'],
+    ),
   },
   {
     name: 'share',

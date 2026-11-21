@@ -137,6 +137,12 @@
         <intent>
             <action android:name="android.intent.action.SET_ALARM" />
         </intent>
+        <!-- Widgets open the apps they replace: Samsung/Google Weather, Digital Wellbeing -->
+        <package android:name="com.sec.android.daemonapp" />
+        <package android:name="com.google.android.apps.weather" />
+        <package android:name="com.samsung.android.forest" />
+        <package android:name="com.google.android.apps.wellbeing" />
+        <package android:name="com.amazon.dee.app" />
         <!-- To see which keyboard app is in use (phone health check) -->
         <intent>
             <action android:name="android.view.InputMethod" />

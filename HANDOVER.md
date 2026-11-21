@@ -51,6 +51,9 @@ Read this first in a new chat, then README.md for the feature list.
   (falls back to thumbnails if the stream can't start). `/api/screens` lists monitors.
   Project updates from the phone: `services/project-update.ts` (unpack zip → robocopy into
   `projectDir` → git add/commit/push; fixed steps, execFile, no shell) via `/api/project/update`.
+  Alarms: `setAlarmEverywhere` (phone Clock silently + Alexa). Alexa via `alexaType` (accessibility:
+  opens the Alexa app, taps its keyboard button, types "… on <Echo name>", sends) or out loud
+  (`tellAlexa`), chosen in Phone powers; falls back to out loud if the app route fails.
   Home-screen widget: `AltonWidget.java` + `res/layout/alton_widget.xml`; the app fills it via
   `setWidget` (next shift, weather, next reminder); its Talk/Drive buttons open the app with an
   action that `MainActivity.modeFor` turns into "talk" or "drive". Watch heads-ups: pure planner in

@@ -2,45 +2,44 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
     android:gravity="center"
     android:orientation="vertical"
-    android:padding="10dp">
+    android:padding="6dp">
 
-    <TextClock
-        android:id="@+id/ck_date"
+    <LinearLayout
+        android:id="@+id/ck_clock"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:format12Hour="EEE, d MMM"
-        android:format24Hour="EEE, d MMM"
-        android:letterSpacing="0.08"
-        android:textAllCaps="true"
-        android:textColor="#3FD0FF"
-        android:textSize="15sp"
-        android:textStyle="bold" />
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
 
-    <TextClock
-        android:id="@+id/ck_time"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:format12Hour="h:mm"
-        android:format24Hour="HH:mm"
-        android:textColor="#F2FAFF"
-        android:textSize="56sp"
-        android:textStyle="bold" />
+        <TextClock
+            android:id="@+id/ck_date"
+            style="@style/WText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="EEE, d MMM"
+            android:format24Hour="EEE, d MMM"
+            android:textAllCaps="true"
+            android:textSize="17sp"
+            android:textStyle="bold" />
 
-    <TextView
-        android:id="@+id/ck_alarm"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textColor="#BFD9EA"
-        android:textSize="12sp" />
+        <TextClock
+            android:id="@+id/ck_time"
+            style="@style/WText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:format12Hour="h:mm:ss"
+            android:format24Hour="HH:mm:ss"
+            android:textSize="54sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <ImageView
         android:id="@+id/ck_rings"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:layout_marginTop="4dp"
+        android:layout_height="72dp"
+        android:layout_marginTop="10dp"
         android:adjustViewBounds="true"
         android:contentDescription="Battery levels"
         android:scaleType="fitCenter" />

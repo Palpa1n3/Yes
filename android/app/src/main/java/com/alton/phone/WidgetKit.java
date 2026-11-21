@@ -75,6 +75,32 @@ final class WidgetKit {
         return PendingIntent.getActivity(ctx, code, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
+    /** Opens the first of these apps that's installed (like the widget it replaces), else fallback. */
+    static PendingIntent launchFirst(Context ctx, String[] pkgs, Intent fallback, int code) {
+        PackageManager pm = ctx.getPackageManager();
+        for (String p : pkgs) {
+            Intent i = pm.getLaunchIntentForPackage(p);
+            if (i != null) return openIntent(ctx, i, code);
+        }
+        return fallback != null ? openIntent(ctx, fallback, code) : openApp(ctx, null, code);
+    }
+
+    static final String[] WEATHER_APPS = { "com.sec.android.daemonapp", "com.google.android.apps.weather" };
+    static final String[] WELLBEING_APPS = { "com.samsung.android.forest", "com.google.android.apps.wellbeing" };
+
+    static PendingIntent weatherTap(Context ctx, int code) {
+        return launchFirst(
+            ctx,
+            WEATHER_APPS,
+            new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/search?q=weather")),
+            code
+        );
+    }
+
+    static PendingIntent wellbeingTap(Context ctx, int code) {
+        return launchFirst(ctx, WELLBEING_APPS, null, code);
+    }
+
     /* ── Weather (Open-Meteo, from the location the app last saved) ── */
 
     static String wmoText(int c) {
@@ -257,27 +283,28 @@ final class WidgetKit {
         Canvas cv = new Canvas(b);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStyle(Paint.Style.STROKE);
-        p.setStrokeWidth(5 * density);
+        p.setStrokeWidth(4 * density);
         p.setStrokeCap(Paint.Cap.ROUND);
         Paint t = new Paint(Paint.ANTI_ALIAS_FLAG);
         t.setTextAlign(Paint.Align.CENTER);
+        t.setShadowLayer(4 * density, 0, density, Color.argb(150, 0, 0, 0));
         float r = 24 * density;
         for (int i = 0; i < 4; i++) {
             float cx = cell * i + cell / 2f;
             float cy = 30 * density;
             RectF rr = new RectF(cx - r, cy - r, cx + r, cy + r);
-            p.setColor(Color.argb(80, 160, 190, 210));
+            p.setColor(Color.argb(90, 255, 255, 255));
             cv.drawArc(rr, 135, 270, false, p);
             if (i >= levels.size()) continue;
             int pct = levels.get(i);
-            p.setColor(pct <= 15 ? Color.rgb(255, 77, 94) : pct <= 30 ? Color.rgb(255, 181, 71) : Color.rgb(61, 220, 132));
+            p.setColor(pct <= 15 ? Color.rgb(255, 77, 94) : pct <= 30 ? Color.rgb(255, 181, 71) : Color.rgb(76, 217, 100));
             if (pct > 0) cv.drawArc(rr, 135, 270 * Math.min(100, pct) / 100f, false, p);
             t.setTextSize(18 * density);
             cv.drawText(icons.get(i), cx, cy + 7 * density, t);
             t.setColor(Color.WHITE);
             t.setTextSize(13 * density);
             t.setFakeBoldText(true);
-            cv.drawText(pct < 0 ? "–" : pct + "%", cx, h - 4 * density, t);
+            cv.drawText(pct < 0 ? "–" : String.valueOf(pct), cx, h - 4 * density, t);
             t.setFakeBoldText(false);
         }
         return b;

@@ -121,6 +121,27 @@ public class ScreenReader extends AccessibilityService {
         return null;
     }
 
+    /** Taps the first short item whose text or description contains one of these words. */
+    public boolean tapContaining(String[] words) {
+        AccessibilityNodeInfo n = findContaining(getRootInActiveWindow(), words, 0);
+        while (n != null && !n.isClickable()) n = n.getParent();
+        return n != null && n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+    }
+
+    private AccessibilityNodeInfo findContaining(AccessibilityNodeInfo n, String[] words, int depth) {
+        if (n == null || depth > 40) return null;
+        for (CharSequence cs : new CharSequence[] { n.getText(), n.getContentDescription() }) {
+            if (cs == null || cs.length() > 40) continue;
+            String s = cs.toString().toLowerCase();
+            for (String w : words) if (s.contains(w)) return n;
+        }
+        for (int i = 0; i < n.getChildCount(); i++) {
+            AccessibilityNodeInfo f = findContaining(n.getChild(i), words, depth + 1);
+            if (f != null) return f;
+        }
+        return null;
+    }
+
     /** Types into the first text box on screen. */
     public boolean typeText(String text) {
         AccessibilityNodeInfo box = findEditable(getRootInActiveWindow(), 0);

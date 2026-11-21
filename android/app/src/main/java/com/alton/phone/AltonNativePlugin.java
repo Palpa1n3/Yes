@@ -785,6 +785,81 @@ public class AltonNativePlugin extends Plugin {
         main.postDelayed(step[0], 3000);
     }
 
+    /**
+     * Types a request to Alexa in the Alexa app ("set an alarm for 6:30 a.m. on Bedroom Echo"):
+     * opens the app, taps its keyboard button, types, sends, and comes back to Alton.
+     */
+    @PluginMethod
+    public void alexaType(final PluginCall call) {
+        final String text = call.getString("text", "").trim();
+        final Context ctx = getContext();
+        final String pkg = "com.amazon.dee.app";
+        if (text.isEmpty()) {
+            call.reject("Nothing to send.");
+            return;
+        }
+        if (!ScreenReader.isEnabled(ctx) || ScreenReader.get() == null) {
+            call.reject("Turn on “Read my shift app” in Phone powers first (the Alexa app uses the same permission).");
+            return;
+        }
+        Intent launch = ctx.getPackageManager().getLaunchIntentForPackage(pkg);
+        if (launch == null) {
+            call.reject("The Alexa app isn't installed.");
+            return;
+        }
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        ctx.startActivity(launch);
+        final int[] stage = { 0, 0 };
+        final Runnable[] step = new Runnable[1];
+        step[0] = () -> {
+            ScreenReader sr = ScreenReader.get();
+            if (sr == null) {
+                endSnap(call, ctx, "Screen reading was switched off.");
+                return;
+            }
+            switch (stage[0]) {
+                case 0: // the Alexa app is open (it can take a while)
+                    if (!pkg.equals(sr.frontPackage()) && stage[1]++ < 5) {
+                        main.postDelayed(step[0], 1500);
+                        return;
+                    }
+                    stage[0] = 1;
+                    stage[1] = 0;
+                    main.postDelayed(step[0], 1500);
+                    return;
+                case 1: // its keyboard ("type to Alexa") button
+                    if (sr.tapContaining(new String[] { "keyboard", "type to alexa", "type a message", "type" })) {
+                        stage[0] = 2;
+                        stage[1] = 0;
+                        main.postDelayed(step[0], 1500);
+                        return;
+                    }
+                    if (stage[1]++ < 3) {
+                        main.postDelayed(step[0], 1500);
+                        return;
+                    }
+                    endSnap(call, ctx, "Couldn't find the Alexa app's keyboard button.");
+                    return;
+                case 2: // type the request
+                    if (!sr.typeText(text)) {
+                        if (stage[1]++ < 2) {
+                            main.postDelayed(step[0], 1200);
+                            return;
+                        }
+                        endSnap(call, ctx, "Couldn't find where to type in the Alexa app.");
+                        return;
+                    }
+                    stage[0] = 3;
+                    main.postDelayed(step[0], 700);
+                    return;
+                default: // send, give Alexa a moment to act, then back to Alton
+                    final boolean sent = sr.pressSend();
+                    main.postDelayed(() -> endSnap(call, ctx, sent ? null : "Typed it, but couldn't press send in the Alexa app."), 2500);
+            }
+        };
+        main.postDelayed(step[0], 2500);
+    }
+
     private void endSnap(PluginCall call, Context ctx, String err) {
         Intent back = new Intent(ctx, MainActivity.class);
         back.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);

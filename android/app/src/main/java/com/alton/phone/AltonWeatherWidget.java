@@ -35,7 +35,7 @@ public class AltonWeatherWidget extends AppWidgetProvider {
 
     private static void render(Context ctx, AppWidgetManager mgr, int id) {
         RemoteViews v = new RemoteViews(ctx.getPackageName(), R.layout.widget_weather);
-        v.setOnClickPendingIntent(R.id.wx_root, WidgetKit.openApp(ctx, null, 11));
+        v.setOnClickPendingIntent(R.id.wx_root, WidgetKit.weatherTap(ctx, 11));
         JSONObject w = WidgetKit.weather(ctx);
         String place = WidgetKit.prefs(ctx).getString("place", "");
         v.setTextViewText(R.id.wx_place, place.isEmpty() ? "" : "📍 " + place);
@@ -62,8 +62,8 @@ public class AltonWeatherWidget extends AppWidgetProvider {
                     if (i >= days.length()) break;
                     JSONObject d = days.getJSONObject(i);
                     v.setTextViewText(DAY[i], d.optString("d"));
-                    v.setTextViewText(ICON[i], WidgetKit.wmoIcon(d.optInt("c"), true));
-                    v.setTextViewText(TEMP[i], d.optInt("hi") + "°  " + d.optInt("lo") + "°");
+                    v.setTextViewText(ICON[i], WidgetKit.wmoIcon(d.optInt("c"), true) + " " + WidgetKit.wmoIcon(d.optInt("c"), false));
+                    v.setTextViewText(TEMP[i], d.optInt("hi") + "° " + d.optInt("lo") + "°");
                 }
             }
         } catch (Exception ignored) {}
@@ -87,11 +87,11 @@ public class AltonWeatherWidget extends AppWidgetProvider {
             int at = sb.length();
             sb.append("▍");
             sb.setSpan(new android.text.style.ForegroundColorSpan(cols[i]), at, at + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            sb.append(" ").append(st.names.get(i)).append(i < st.names.size() - 1 ? "   " : "");
+            sb.append(" ").append(st.names.get(i)).append(i < st.names.size() - 1 ? "\n" : "");
         }
         v.setTextViewText(R.id.ws_apps, sb);
         float density = ctx.getResources().getDisplayMetrics().density;
         v.setImageViewBitmap(R.id.ws_chart, WidgetKit.donut(st.times, st.total, density));
-        v.setOnClickPendingIntent(R.id.ws_strip, WidgetKit.openApp(ctx, null, 14));
+        v.setOnClickPendingIntent(R.id.ws_strip, WidgetKit.wellbeingTap(ctx, 14));
     }
 }

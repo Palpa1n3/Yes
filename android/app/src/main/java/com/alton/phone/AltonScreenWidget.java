@@ -48,7 +48,7 @@ public class AltonScreenWidget extends AppWidgetProvider {
         }
         float density = ctx.getResources().getDisplayMetrics().density;
         v.setImageViewBitmap(R.id.st_chart, WidgetKit.donut(st.times, st.total, density));
-        v.setOnClickPendingIntent(R.id.st_root, WidgetKit.openApp(ctx, null, 32));
+        v.setOnClickPendingIntent(R.id.st_root, WidgetKit.wellbeingTap(ctx, 32));
         mgr.updateAppWidget(id, v);
     }
 }
