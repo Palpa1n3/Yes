@@ -102,10 +102,22 @@ export function summarise(days: DayUsage[], budget: number, now = new Date()): U
   };
 }
 
-/** "$0.42", "under 1¢". */
+/** Anthropic bills in US dollars; Alton shows pounds. A fixed, slightly cautious rate (costs are
+ *  estimates anyway; the Anthropic console has the exact bill). */
+export const USD_TO_GBP = 0.76;
+export const usdToGbp = (usd: number): number => usd * USD_TO_GBP;
+export const gbpToUsd = (gbp: number): number => gbp / USD_TO_GBP;
+/** A limit typed in pounds, kept in dollars (2 decimals). */
+export const budgetFromGbp = (gbp: number): number =>
+  gbp > 0 ? Math.round(gbpToUsd(gbp) * 100) / 100 : 0;
+/** A dollar limit shown back in whole pounds. */
+export const budgetInGbp = (usd: number): number => (usd > 0 ? Math.round(usdToGbp(usd)) : 0);
+
+/** A dollar cost shown in pounds: "£0.32", "under 1p". */
 export function fmtUsd(n: number): string {
-  if (n > 0 && n < 0.01) return 'under 1¢';
-  return `$${n.toFixed(n < 10 ? 2 : 0)}`;
+  const p = usdToGbp(n);
+  if (p > 0 && p < 0.01) return 'under 1p';
+  return `£${p.toFixed(p < 10 ? 2 : 0)}`;
 }
 
 /** Which budget warning (if any) a new month total crosses: 80% and 100%. */

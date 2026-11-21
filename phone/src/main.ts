@@ -7,6 +7,7 @@ import {
   decodeSync,
   chatsToSend,
   mergeChatHistory,
+  needsPhone,
   mergeLists,
   snapNames,
   type RouteMap,
@@ -113,6 +114,8 @@ import {
   budgetCrossed,
   costOf,
   fmtUsd,
+  budgetFromGbp,
+  budgetInGbp,
   spendLevel,
   summarise,
   type DayUsage,
@@ -631,7 +634,7 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
         if (crossed)
           toast(
             crossed === 100
-              ? `You've reached this month's limit ($${S.budget}) on this phone.`
+              ? `You've reached this month's limit (${fmtUsd(S.budget)}) on this phone.`
               : `80% of this month's limit used on this phone.`,
           );
       }
@@ -945,8 +948,10 @@ function send(text?: string, expanded = false, typed?: string): void {
   renderMsgs('Thinking…');
   // While driving, the phone answers itself so texts can be confirmed by voice.
   // Some jobs need this phone itself (reading its apps): the phone answers those.
-  const here = phoneOnlyNext;
+  // Once a chat has done a phone-only job, its follow-ups ("do it again") stay on the phone too.
+  const here = isApp && (phoneOnlyNext || phoneChats.has(c.id) || needsPhone(t));
   phoneOnlyNext = false;
+  if (here) phoneChats.add(c.id);
   if (usePcNow() && !driving && !here) void askPc(c, imgs);
   else
     void ask(
@@ -4356,6 +4361,8 @@ let calSel = ymd(new Date());
 let editing: Shift | null = null;
 /** The next message is answered on the phone, not the PC (e.g. reading the shift app). */
 let phoneOnlyNext = false;
+/** Chats that use this phone's own powers (answered here, not on the PC). */
+const phoneChats = new Set<string>();
 
 function renderShiftNext(): void {
   const box = $('shiftNext');
@@ -5562,7 +5569,7 @@ function renderSettings(): void {
   const u = summarise(S.usage, S.budget);
   $('spendToday').textContent = fmtUsd(u.today);
   $('spendMonth').textContent = fmtUsd(u.month);
-  $<HTMLInputElement>('budget').value = String(S.budget || '');
+  $<HTMLInputElement>('budget').value = S.budget ? String(budgetInGbp(S.budget)) : '';
 }
 
 async function checkKey(k: string): Promise<string | null> {
@@ -6000,7 +6007,7 @@ function wire(): void {
     renderPeople();
   };
   $<HTMLInputElement>('budget').onchange = (e) => {
-    S.budget = Math.max(0, Math.round(Number((e.target as HTMLInputElement).value) || 0));
+    S.budget = budgetFromGbp(Math.max(0, Number((e.target as HTMLInputElement).value) || 0));
     save();
     renderSettings();
     renderSpend();

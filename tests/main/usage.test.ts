@@ -2,7 +2,15 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { addUsage, budgetCrossed, costOf, fmtUsd, summarise } from '@shared/usage';
+import {
+  addUsage,
+  budgetCrossed,
+  budgetFromGbp,
+  budgetInGbp,
+  costOf,
+  fmtUsd,
+  summarise,
+} from '@shared/usage';
 import { UsageTracker } from '../../src/main/services/usage-tracker';
 
 describe('spending estimates', () => {
@@ -48,8 +56,10 @@ describe('spending estimates', () => {
     expect(s.today).toBeCloseTo(0.5);
     expect(s.month).toBeCloseTo(1);
     expect(s.byFeature).toEqual({ chat: 0.75, research: 0.25 });
-    expect(fmtUsd(0.004)).toBe('under 1¢');
-    expect(fmtUsd(1.234)).toBe('$1.23');
+    expect(fmtUsd(0.004)).toBe('under 1p');
+    expect(fmtUsd(1.234)).toBe('£0.94');
+    expect(fmtUsd(100)).toBe('£76');
+    expect(budgetInGbp(budgetFromGbp(5))).toBe(5);
   });
 
   it('warns once at 80% and once at 100% of the limit', () => {

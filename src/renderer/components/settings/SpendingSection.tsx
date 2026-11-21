@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fmtUsd, type UsageSummary } from '@shared/usage';
+import { budgetFromGbp, budgetInGbp, fmtUsd, type UsageSummary } from '@shared/usage';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { Field, Section, Toggle } from './controls';
 
@@ -77,19 +77,21 @@ export function SpendingSection() {
       )}
       <Field
         label="Monthly limit"
-        hint="Alton warns you at 80% and 100% of this (in US dollars, like your Anthropic bill). These are estimates from each reply's size; your Anthropic console shows the exact bill, and you can set a hard limit there (console.anthropic.com › Limits). 0 = no warnings."
+        hint="Alton warns you at 80% and 100% of this (in pounds; Anthropic bills in US dollars, so costs are converted at about $1 = £0.76). These are estimates from each reply's size; your Anthropic console shows the exact bill, and you can set a hard limit there (console.anthropic.com › Limits). 0 = no warnings."
       >
         <span className="flex items-center gap-1 font-mono text-[12px] text-text-muted">
-          $
+          £
           <input
             type="number"
             min={0}
             max={10000}
-            defaultValue={s.monthlyBudget}
+            defaultValue={budgetInGbp(s.monthlyBudget)}
             onBlur={(e) =>
-              void update({ monthlyBudget: Math.max(0, Math.round(Number(e.target.value) || 0)) })
+              void update({
+                monthlyBudget: budgetFromGbp(Math.max(0, Number(e.target.value) || 0)),
+              })
             }
-            aria-label="Monthly limit in dollars"
+            aria-label="Monthly limit in pounds"
             className="h-8 w-20 rounded-[6px] border border-line bg-panel-raised px-2 text-text-primary focus:border-accent focus:outline-none"
           />
         </span>

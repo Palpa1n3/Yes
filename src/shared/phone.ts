@@ -377,3 +377,11 @@ export function reminderIcs(title: string, startMs: number, minutesBefore = 0): 
     '',
   ].join('\r\n');
 }
+
+/** Requests only this phone can do (its apps, texts, calendar, alarms): the phone's Alton answers
+ *  these even when the PC is connected, because the PC can't reach the phone's apps. */
+export function needsPhone(text: string): boolean {
+  return /\b(shift app|rota|my schedule|snap(chat)?|whats ?app|text (him|her|them|mum|dad|my)|my (texts|messages|notifications|calendar|contacts)|alarm|phone (battery|health|storage|diagnostics)|alexa)\b/i.test(
+    text,
+  );
+}

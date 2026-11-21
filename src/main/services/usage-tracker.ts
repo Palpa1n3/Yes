@@ -6,6 +6,7 @@ import {
   addUsage,
   budgetCrossed,
   costOf,
+  fmtUsd,
   summarise,
   type DayUsage,
   type Usage,
@@ -48,8 +49,8 @@ export class UsageTracker {
     if (crossed)
       this.d.warn?.(
         crossed === 100
-          ? `You've reached your Claude spending limit for this month ($${this.d.budget()}). Settings › AI shows the details.`
-          : `Heads up: you've used 80% of this month's Claude limit ($${after.toFixed(2)} of $${this.d.budget()}).`,
+          ? `You've reached your Claude spending limit for this month (${fmtUsd(this.d.budget())}). Settings › AI shows the details.`
+          : `Heads up: you've used 80% of this month's Claude limit (${fmtUsd(after)} of ${fmtUsd(this.d.budget())}).`,
       );
     this.save();
     return usd;

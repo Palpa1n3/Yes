@@ -692,19 +692,44 @@ public class AltonNativePlugin extends Plugin {
                     }
                     main.post(step[0]);
                     return;
-                default: // read, waiting a little if it's still loading, then scroll for more
+                default: // read, waiting until the rota has loaded, then scroll for more
                     int before = lines.size();
-                    sr.collectApp(pkg, lines);
-                    if (lines.size() < 6 && st[1]++ < 3) {
-                        main.postDelayed(step[0], 2000);
-                        return;
-                    }
+                    if (st[2] == 0) {
+                        // First page: read it fresh each try until it looks loaded (times or
+                        // dates on screen, no "Loading…"), up to ~25 s for slow shift apps.
+                        lines.clear();
+                        sr.collectApp(pkg, lines);
+                        boolean loaded = looksLoaded(lines);
+                        if (!loaded && st[1] == 6 && (tapFirst == null || tapFirst.isEmpty())) {
+                            // Still nothing: it may have opened on a home page. Try its schedule tab.
+                            for (String t : new String[] { "Schedule", "My schedule", "Rota", "My shifts", "Shifts" })
+                                if (sr.tapText(t)) break;
+                        }
+                        if (!loaded && st[1]++ < 12) {
+                            main.postDelayed(step[0], 2000);
+                            return;
+                        }
+                        before = 0;
+                    } else sr.collectApp(pkg, lines);
                     st[2]++;
                     if (st[2] < 8 && lines.size() > before && sr.scrollDown()) main.postDelayed(step[0], 1300);
                     else finishRead(call, ctx, lines, null, seen[0]);
             }
         };
         main.postDelayed(step[0], 2000);
+    }
+
+    /** Does the screen look like a loaded rota: some times or dates, and no loading message? */
+    static boolean looksLoaded(Set<String> lines) {
+        int hits = 0;
+        java.util.regex.Pattern time = java.util.regex.Pattern.compile("\\b\\d{1,2}[:.]\\d{2}\\b|\\b\\d{1,2}\\s?(am|pm)\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Pattern day = java.util.regex.Pattern.compile("\\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\\b|\\b\\d{1,2}(st|nd|rd|th)?\\s(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)", java.util.regex.Pattern.CASE_INSENSITIVE);
+        for (String l : lines) {
+            String t = l.toLowerCase();
+            if (t.contains("loading") || t.contains("please wait")) return false;
+            if (time.matcher(l).find() || day.matcher(l).find()) hits++;
+        }
+        return hits >= 2;
     }
 
     /**

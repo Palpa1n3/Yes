@@ -57,6 +57,10 @@ Read this first in a new chat, then README.md for the feature list.
   "From my shift app" sets `phoneOnlyNext` so that one message is answered on the phone (the PC
   can't read phone apps). "From my calendar" shows the calendar's event names to tap when the
   words match nothing.
+  Phone-only jobs: `needsPhone(text)` (shift app, rota, texts, Snapchat, alarms, Alexa…) and any
+  chat that already did one (`phoneChats`) are answered on the phone even with the PC connected.
+  `readApp` re-reads the first page every 2 s until `looksLoaded` (2+ times/dates, no "Loading"),
+  up to ~25 s, trying a Schedule/Rota/Shifts tab halfway if no tab is set.
   Backgrounds: 15 CSS-only (`body[data-bg]`), `drift` animates (off for reduced motion).
   Phone health: `Diagnostics.java` readings → `src/shared/diagnostics.ts` (`healthReport`: issues
   with fixes) → the `phone_diagnostics` tool and Settings › Phone health.

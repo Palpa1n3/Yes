@@ -231,3 +231,15 @@ describe('Snapchat chat list', () => {
     expect(snapNames(screen)).toEqual(['Big Dawg 🐶', 'Mumma bear', 'Gaz']);
   });
 });
+
+describe('needsPhone', () => {
+  it('keeps phone-only jobs on the phone', async () => {
+    const { needsPhone } = await import('../src/shared/phone');
+    expect(needsPhone('Read my shift app again')).toBe(true);
+    expect(needsPhone('what is on my rota')).toBe(true);
+    expect(needsPhone('set an alarm for 6')).toBe(true);
+    expect(needsPhone('message Sam on Snapchat')).toBe(true);
+    expect(needsPhone('free up space on drive D')).toBe(false);
+    expect(needsPhone('what is the weather')).toBe(false);
+  });
+});
