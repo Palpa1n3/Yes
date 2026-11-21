@@ -103,6 +103,14 @@
                 android:resource="@xml/battery_widget_info" />
         </receiver>
 
+        <!-- Workplace arrival alert, and setting it up again after a restart -->
+        <receiver android:name=".PlaceReceiver" android:exported="false" />
+        <receiver android:name=".BootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Reads message notifications so Alton can read them out and reply (user switches on Notification access) -->
         <service
             android:name=".MessageListener"
@@ -171,6 +179,13 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- "When I get to work": the workplace alert works with the app closed (user picks "Allow all the time") -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Keeps the screen on while the rota is read during charging -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- One-tap updates: open Android's Install screen for the new version (you still confirm) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Reminders on time, and the shift alarm buttons (they open the Clock app filled in) -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.VIBRATE" />

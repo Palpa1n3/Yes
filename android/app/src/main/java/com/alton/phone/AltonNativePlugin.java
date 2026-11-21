@@ -209,6 +209,75 @@ public class AltonNativePlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * Updates the app in one tap: downloads the new APK (GitHub releases only) into the cache and
+     * opens Android's Install screen for it. Android always asks the user to confirm the install.
+     */
+    @PluginMethod
+    public void installUpdate(final PluginCall call) {
+        final String url = call.getString("url", "");
+        final Context ctx = getContext();
+        if (!url.startsWith("https://github.com/") || !url.endsWith(".apk")) {
+            call.reject("Not an Alton update link.");
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 26 && !ctx.getPackageManager().canRequestPackageInstalls()) {
+            Intent s = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + ctx.getPackageName()));
+            s.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                ctx.startActivity(s);
+            } catch (Exception ignored) {}
+            call.reject("ALLOW: Turn on “Allow from this source” for Alton, then tap Update again.");
+            return;
+        }
+        new Thread(() -> {
+            java.io.File out = new java.io.File(ctx.getCacheDir(), "alton-update.apk");
+            try {
+                java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                c.setInstanceFollowRedirects(true);
+                c.setConnectTimeout(20_000);
+                c.setReadTimeout(60_000);
+                // GitHub sends release files from another host: follow the redirect by hand if needed.
+                int code = c.getResponseCode();
+                for (int hops = 0; (code == 301 || code == 302 || code == 307 || code == 308) && hops < 5; hops++) {
+                    String next = c.getHeaderField("Location");
+                    c.disconnect();
+                    c = (java.net.HttpURLConnection) new java.net.URL(next).openConnection();
+                    c.setConnectTimeout(20_000);
+                    c.setReadTimeout(60_000);
+                    code = c.getResponseCode();
+                }
+                if (code != 200) throw new Exception("Download failed (" + code + ")");
+                try (java.io.InputStream in = c.getInputStream(); java.io.FileOutputStream fo = new java.io.FileOutputStream(out)) {
+                    byte[] buf = new byte[64 * 1024];
+                    int n;
+                    while ((n = in.read(buf)) > 0) fo.write(buf, 0, n);
+                }
+                c.disconnect();
+                Uri uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", out);
+                Intent i = new Intent(Intent.ACTION_VIEW);
+                i.setDataAndType(uri, "application/vnd.android.package-archive");
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                main.post(() -> {
+                    try {
+                        ctx.startActivity(i);
+                        call.resolve();
+                    } catch (Exception e) {
+                        call.reject("Couldn't open the installer.");
+                    }
+                });
+            } catch (Exception e) {
+                main.post(() -> call.reject("Couldn't download the update: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void musicActive(PluginCall call) {
+        AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+        call.resolve(new JSObject().put("active", am != null && am.isMusicActive()));
+    }
+
     @PluginMethod
     public void media(PluginCall call) {
         String action = call.getString("action", "");
@@ -371,6 +440,97 @@ public class AltonNativePlugin extends Plugin {
         String alias = call.getString("which", "calendar");
         call.resolve(new JSObject().put("granted", getPermissionState(alias) == PermissionState.GRANTED));
         WidgetKit.refreshAll(getContext());
+    }
+
+    /* ── Shift app read by itself while charging ── */
+
+    @PluginMethod
+    public void setAutoRota(PluginCall call) {
+        AutoRota.prefs(getContext())
+            .edit()
+            .putBoolean("on", Boolean.TRUE.equals(call.getBoolean("on", false)))
+            .putString("pkg", call.getString("package", ""))
+            .putString("tap", call.getString("tap", ""))
+            .putString("next", call.getString("next", ""))
+            .putInt("weeks", Math.max(1, Math.min(4, call.getInt("weeks", 2))))
+            .apply();
+        call.resolve();
+    }
+
+    /** What the last automatic read saw (then forgets it), and when it last ran. */
+    @PluginMethod
+    public void takeAutoRota(PluginCall call) {
+        android.content.SharedPreferences p = AutoRota.prefs(getContext());
+        JSObject r = new JSObject();
+        r.put("text", p.getString("text", ""));
+        r.put("at", p.getLong("at", 0));
+        r.put("last", p.getLong("last", 0));
+        p.edit().remove("text").remove("at").apply();
+        call.resolve(r);
+    }
+
+    /* ── Places: "when I get to work" ── */
+
+    /** Saves the workplace (name, lat, lon, radius m) and what to show there, and starts watching. */
+    @PluginMethod
+    public void setPlace(PluginCall call) {
+        Context ctx = getContext();
+        android.content.SharedPreferences.Editor e = PlaceAlerts.prefs(ctx).edit();
+        Double lat = call.getDouble("lat");
+        Double lon = call.getDouble("lon");
+        if (lat != null && lon != null) {
+            e.putLong("lat", Double.doubleToRawLongBits(lat)).putLong("lon", Double.doubleToRawLongBits(lon));
+            e.putInt("radius", Math.max(80, Math.min(500, call.getInt("radius", 150))));
+        }
+        if (call.getString("name") != null) e.putString("name", call.getString("name"));
+        if (call.getString("listLabel") != null) e.putString("listLabel", call.getString("listLabel"));
+        com.getcapacitor.JSArray items = call.getArray("items");
+        if (items != null) e.putString("items", items.toString());
+        e.commit();
+        boolean on = PlaceAlerts.register(ctx);
+        call.resolve(new JSObject().put("watching", on));
+    }
+
+    /** A one-off "remind me at work" note, shown next time they arrive. */
+    @PluginMethod
+    public void addPlaceNote(PluginCall call) {
+        String text = call.getString("text", "").trim();
+        if (text.isEmpty()) {
+            call.reject("Nothing to remember.");
+            return;
+        }
+        android.content.SharedPreferences p = PlaceAlerts.prefs(getContext());
+        try {
+            org.json.JSONArray notes = new org.json.JSONArray(p.getString("notes", "[]"));
+            if (notes.length() < 30) notes.put(text.length() > 200 ? text.substring(0, 200) : text);
+            p.edit().putString("notes", notes.toString()).apply();
+            call.resolve();
+        } catch (Exception ex) {
+            call.reject("Couldn't save it.");
+        }
+    }
+
+    @PluginMethod
+    public void placeStatus(PluginCall call) {
+        try {
+            call.resolve(JSObject.fromJSONObject(PlaceAlerts.status(getContext())));
+        } catch (Exception e) {
+            call.reject("Couldn't read it.");
+        }
+    }
+
+    @PluginMethod
+    public void clearPlace(PluginCall call) {
+        PlaceAlerts.clear(getContext());
+        call.resolve();
+    }
+
+    /** Shows the arrival notification now (to check it looks right). */
+    @PluginMethod
+    public void testPlace(PluginCall call) {
+        PlaceAlerts.prefs(getContext()).edit().putLong("shown", 0).apply();
+        PlaceAlerts.onChange(getContext(), true);
+        call.resolve();
     }
 
     /* ── Messages (needs Notification access) ── */
@@ -662,89 +822,9 @@ public class AltonNativePlugin extends Plugin {
         }
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ctx.startActivity(launch);
-        final Set<String> lines = ScreenReader.newLines();
         final String nextName = call.getString("next", "");
         final int weeks = Math.max(1, Math.min(4, call.getInt("weeks", 2)));
-        // stage, tries in this stage, pages read this week, weeks read
-        final int[] st = { 0, 0, 0, 0 };
-        final String[] seen = { "" };
-        final String[] note = { null };
-        final Runnable[] step = new Runnable[1];
-        step[0] = () -> {
-            ScreenReader sr = ScreenReader.get();
-            if (sr == null) {
-                finishRead(call, ctx, lines, "Screen reading was switched off.", seen[0]);
-                return;
-            }
-            seen[0] = sr.frontPackage();
-            switch (st[0]) {
-                case 0: // wait for the app to be in front (splash screens, sign-in)
-                    if (!pkg.equals(seen[0]) && st[1]++ < 8) {
-                        main.postDelayed(step[0], 1500);
-                        return;
-                    }
-                    st[0] = 1;
-                    st[1] = 0;
-                    main.postDelayed(step[0], 2500);
-                    return;
-                case 1: { // go to the schedule tab (the one set in Phone powers, else "Schedule")
-                    boolean tapped = false;
-                    if (tapFirst != null && !tapFirst.isEmpty()) tapped = sr.tapText(tapFirst);
-                    if (!tapped)
-                        for (String t : new String[] { "Schedule", "My schedule", "Rota", "My rota", "My shifts", "Shifts" })
-                            if (sr.tapText(t)) {
-                                tapped = true;
-                                break;
-                            }
-                    // Not there yet (still loading)? Try again a few times.
-                    if (!tapped && st[1]++ < 3) {
-                        main.postDelayed(step[0], 2000);
-                        return;
-                    }
-                    st[0] = 2;
-                    st[1] = 0;
-                    main.postDelayed(step[0], tapped ? 2500 : 500);
-                    return;
-                }
-                case 2: { // read this week: wait until it has loaded, then scroll down for the rest
-                    Set<String> page = ScreenReader.newLines();
-                    sr.collectApp(pkg, page);
-                    if (st[2] == 0 && !looksLoaded(page) && st[1]++ < 12) {
-                        main.postDelayed(step[0], 2000);
-                        return;
-                    }
-                    int before = lines.size();
-                    lines.addAll(page);
-                    st[2]++;
-                    if (st[2] < 8 && (st[2] == 1 || lines.size() > before) && sr.scrollDown()) {
-                        main.postDelayed(step[0], 1300);
-                        return;
-                    }
-                    st[3]++;
-                    st[0] = 3;
-                    main.post(step[0]);
-                    return;
-                }
-                default: // next week: back to the top, then the date bar's "next"
-                    if (st[3] >= weeks) {
-                        finishRead(call, ctx, lines, note[0], seen[0]);
-                        return;
-                    }
-                    sr.scrollToTop();
-                    if (!sr.tapNextWeek(nextName)) {
-                        note[0] = "Read this week only: couldn't find the button for the next week. "
-                            + "Set its name in Settings › Phone powers.";
-                        finishRead(call, ctx, lines, note[0], seen[0]);
-                        return;
-                    }
-                    lines.add("— next week —");
-                    st[0] = 2;
-                    st[1] = 0;
-                    st[2] = 0;
-                    main.postDelayed(step[0], 2500);
-            }
-        };
-        main.postDelayed(step[0], 2000);
+        AppReader.run(ctx, pkg, tapFirst, nextName, weeks, (lines, err, front) -> finishRead(call, ctx, lines, err, front));
     }
 
     /** Does the screen look like a loaded rota: some times or dates, and no loading message? */

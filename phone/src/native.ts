@@ -367,6 +367,35 @@ interface AltonNativePlugin {
     weeks?: number;
   }): Promise<{ text: string; front: string; lines: number; note?: string }>;
   snapSend(o: { name: string; text: string }): Promise<void>;
+  /** Workplace alert: where it is (optional), its name, and the list to show on arrival. */
+  setPlace(o: {
+    name?: string;
+    lat?: number;
+    lon?: number;
+    radius?: number;
+    items?: string[];
+    listLabel?: string;
+  }): Promise<{ watching: boolean }>;
+  addPlaceNote(o: { text: string }): Promise<void>;
+  placeStatus(): Promise<{
+    set: boolean;
+    name: string;
+    here: boolean;
+    since: number;
+    notes: string[];
+    background: boolean;
+  }>;
+  clearPlace(): Promise<void>;
+  /** Read the shift app by itself while charging (see AutoRota.java). */
+  setAutoRota(o: {
+    on: boolean;
+    package: string;
+    tap?: string;
+    next?: string;
+    weeks?: number;
+  }): Promise<void>;
+  takeAutoRota(): Promise<{ text: string; at: number; last: number }>;
+  testPlace(): Promise<void>;
   /** WhatsApp: open the chat with the text and press Send (number without "+"). */
   waSend(o: { phone: string; text: string }): Promise<void>;
   takeAssist(): Promise<{ assist: boolean; mode: 'drive' | 'talk' }>;
@@ -382,6 +411,10 @@ interface AltonNativePlugin {
     lon?: number;
   }): Promise<void>;
   keepScreenOn(o: { on: boolean }): Promise<void>;
+  /** Is music (or any media) playing right now? */
+  musicActive(): Promise<{ active: boolean }>;
+  /** Download the new APK and open the Install screen (rejects "ALLOW: …" if not allowed yet). */
+  installUpdate(o: { url: string }): Promise<void>;
   media(o: {
     action: 'next' | 'previous' | 'pause' | 'play' | 'play_pause' | 'volume_up' | 'volume_down';
   }): Promise<void>;

@@ -217,11 +217,11 @@ export function weekHours(shifts: Shift[], day = new Date()): number {
   return Math.round(h * 100) / 100;
 }
 
-/** Keep saved shifts tidy: newer copies replace older ones, old ones (over 5 weeks ago) go. */
+/** Keep saved shifts tidy: newer copies replace older ones, old ones (over 10 weeks ago) go. */
 export function mergeShifts(saved: Shift[], incoming: Shift[], now = new Date()): Shift[] {
   const byKey = new Map(saved.map((s) => [shiftKey(s), s]));
   for (const s of incoming) byKey.set(shiftKey(s), s);
-  const cutoff = now.getTime() - 35 * 86_400_000;
+  const cutoff = now.getTime() - 70 * 86_400_000;
   return [...byKey.values()]
     .filter((s) => (parts(s.end)?.getTime() ?? 0) > cutoff)
     .sort((a, b) => a.start.localeCompare(b.start))
@@ -449,4 +449,126 @@ export function rotaText(shifts: Shift[], now = new Date()): string {
   const up = upcomingShifts(shifts, now);
   if (!up.length) return 'No shifts coming up.';
   return ['My shifts:', ...up.map((s) => `• ${describeShift(s)} ${s.title}`)].join('\n');
+}
+
+/* ── Paydays ── */
+
+/** How often pay comes: every 7, 14 or 28 days, or the same date each month (0). */
+export type PayCycle = 7 | 14 | 28 | 0;
+
+const dayDate = (ymdStr: string): Date | null => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymdStr);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+};
+const addDays = (d: Date, n: number): Date =>
+  new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const addMonths = (d: Date, n: number, day: number): Date => {
+  const last = new Date(d.getFullYear(), d.getMonth() + n + 1, 0).getDate();
+  return new Date(d.getFullYear(), d.getMonth() + n, Math.min(day, last));
+};
+
+/** Paydays from `from` to `to` (inclusive), counting forwards and backwards from one known payday. */
+export function paydays(known: string, cycle: PayCycle, from: Date, to: Date): string[] {
+  const k = dayDate(known);
+  if (!k) return [];
+  const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const b = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  const out: string[] = [];
+  if (cycle === 0) {
+    const months = (a.getFullYear() - k.getFullYear()) * 12 + (a.getMonth() - k.getMonth()) - 1;
+    for (let i = months; i < months + 400; i++) {
+      const d = addMonths(k, i, k.getDate());
+      if (d > b) break;
+      if (d >= a) out.push(ymd(d));
+    }
+    return out;
+  }
+  const diff = Math.round((a.getTime() - k.getTime()) / 86_400_000);
+  let d = addDays(k, Math.floor(diff / cycle) * cycle);
+  while (d <= b) {
+    if (d >= a) out.push(ymd(d));
+    d = addDays(d, cycle);
+  }
+  return out;
+}
+
+/** The next payday on or after `now`. */
+export function nextPayday(known: string, cycle: PayCycle, now = new Date()): string | null {
+  return paydays(known, cycle, now, addDays(now, 40))[0] ?? null;
+}
+
+/** The shifts a payday pays for: the period (one cycle long) ending `lagDays` before payday. */
+export function payPeriod(
+  payday: string,
+  cycle: PayCycle,
+  lagDays = 0,
+): { start: string; end: string } | null {
+  const p = dayDate(payday);
+  if (!p) return null;
+  const end = addDays(p, -lagDays); // exclusive
+  const start = cycle === 0 ? addMonths(end, -1, end.getDate()) : addDays(end, -cycle);
+  return { start: ymd(start), end: ymd(end) };
+}
+
+/** Hours and pay (before tax) for the shifts in a pay period. */
+export function periodPay(
+  shifts: Shift[],
+  period: { start: string; end: string },
+  rate: number,
+  unpaidBreakMin = 0,
+): { hours: number; gross: number; shifts: number } {
+  const inside = shifts.filter((s) => {
+    const d = s.start.slice(0, 10);
+    return d >= period.start && d < period.end;
+  });
+  const hours = inside.reduce((n, s) => n + paidHours(s, unpaidBreakMin), 0);
+  return {
+    hours: Math.round(hours * 100) / 100,
+    gross: rate > 0 ? Math.round(hours * rate * 100) / 100 : 0,
+    shifts: inside.length,
+  };
+}
+
+/** A rough UK take-home: 20% income tax and 8% National Insurance above £12,570 a year,
+ *  spread over the pay period (standard tax code, no pension or student loan). */
+export function ukTakeHome(gross: number, cycle: PayCycle): number {
+  const periodsPerYear = cycle === 0 ? 12 : 364 / cycle;
+  const free = 12_570 / periodsPerYear;
+  const taxable = Math.max(0, gross - free);
+  return Math.round((gross - taxable * 0.2 - taxable * 0.08) * 100) / 100;
+}
+
+/* ── At work: what to show when you get there / before you leave ── */
+
+/** Unticked items from the chosen lists (by name, any case), first list first. */
+export function workItems(
+  lists: Array<{ name: string; items: Array<{ text: string; done: boolean }> }>,
+  chosen: string[],
+): string[] {
+  const want = chosen.map((c) => c.toLowerCase());
+  return lists
+    .filter((l) => want.includes(l.name.toLowerCase()))
+    .flatMap((l) => l.items.filter((i) => !i.done).map((i) => i.text))
+    .slice(0, 40);
+}
+
+/** "Before you leave" notes: `leadMin` minutes before each shift ends (0 = as it ends), next 2 weeks. */
+export function shiftEndNotes(
+  shifts: Shift[],
+  items: string[],
+  place: string,
+  leadMin = 15,
+  now = new Date(),
+): Array<{ key: string; title: string; body: string; at: number }> {
+  if (!items.length) return [];
+  const until = now.getTime() + 14 * 86_400_000;
+  return upcomingShifts(shifts, now)
+    .map((s) => ({ s, end: parts(s.end)?.getTime() ?? 0 }))
+    .filter(({ end }) => end - leadMin * 60_000 > now.getTime() && end < until)
+    .map(({ s, end }) => ({
+      key: `workend:${s.start}`,
+      title: `🛒 Before you leave ${place}`,
+      body: items.join(', '),
+      at: end - leadMin * 60_000,
+    }));
 }

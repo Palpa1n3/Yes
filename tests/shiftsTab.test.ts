@@ -73,3 +73,35 @@ describe('shifts tab helpers', () => {
     expect(rotaText([], new Date())).toBe('No shifts coming up.');
   });
 });
+
+describe('at work', () => {
+  it('lists what is left and plans before-you-leave notes', async () => {
+    const { workItems, shiftEndNotes } = await import('../src/shared/shifts');
+    const lists = [
+      {
+        name: 'Shopping',
+        items: [
+          { text: 'Milk', done: false },
+          { text: 'Eggs', done: true },
+        ],
+      },
+      { name: 'To-do', items: [{ text: 'Call bank', done: false }] },
+    ];
+    expect(workItems(lists, ['shopping'])).toEqual(['Milk']);
+    const now = new Date(2026, 10, 21, 8);
+    const notes = shiftEndNotes(
+      [sh('2026-11-21T09:00', '2026-11-21T17:00'), sh('2026-12-20T09:00', '2026-12-20T17:00')],
+      ['Milk'],
+      'Morrisons',
+      15,
+      now,
+    );
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.title).toBe('🛒 Before you leave Morrisons');
+    expect(new Date(notes[0]?.at ?? 0).getHours()).toBe(16);
+    expect(new Date(notes[0]?.at ?? 0).getMinutes()).toBe(45);
+    expect(shiftEndNotes([sh('2026-11-21T09:00', '2026-11-21T17:00')], [], 'x', 15, now)).toEqual(
+      [],
+    );
+  });
+});

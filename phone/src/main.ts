@@ -106,6 +106,14 @@ import {
   shiftsFromCalendar,
   SHIFT_KIND_LABEL,
   ymd,
+  workItems,
+  shiftEndNotes,
+  nextPayday,
+  paydays,
+  payPeriod,
+  periodPay,
+  ukTakeHome,
+  type PayCycle,
   type Shift,
   type ShiftAlarmRule,
 } from '@shared/shifts';
@@ -255,6 +263,15 @@ interface State {
   shiftAppName: string;
   /** A tab to tap after opening it (where the rota is), e.g. "Schedule". */
   shiftTab: string;
+  /** "At work": where (set on the phone), which lists to show, and the before-you-leave note. */
+  /** Read the shift app by itself while charging. */
+  autoRota: boolean;
+  autoRotaLast: number;
+  workName: string;
+  workSet: boolean;
+  workLists: string[];
+  workEnd: boolean;
+  workEndLead: number;
   /** Send texts/WhatsApp/Snapchat/replies straight away (no tap). */
   autoMessages: boolean;
   /** The rota app's "next week" button, and how many weeks to read. */
@@ -286,6 +303,11 @@ interface State {
   /** Hourly pay (0 = don't show pay) and unpaid break per long shift, in minutes. */
   payRate: number;
   unpaidBreak: number;
+  /** A known payday ("2026-12-11"), how often pay comes, and how many days before payday the paid period ends. */
+  payNext: string;
+  payCycle: PayCycle;
+  payLag: number;
+  paydaysAdded: string[];
   /** Minutes to get to work, for "leave by". */
   travel: number;
   /** Words that mark a calendar event as a shift (From my calendar). */
@@ -372,6 +394,13 @@ const DEFAULTS: State = {
   shiftApp: '',
   shiftAppName: '',
   shiftTab: '',
+  autoRota: true,
+  autoRotaLast: 0,
+  workName: '',
+  workSet: false,
+  workLists: ['Shopping'],
+  workEnd: true,
+  workEndLead: 0,
   autoMessages: true,
   shiftNext: '',
   shiftWeeks: 2,
@@ -390,6 +419,10 @@ const DEFAULTS: State = {
   shiftCardsDone: [],
   payRate: 0,
   unpaidBreak: 0,
+  payNext: '',
+  payCycle: 28,
+  payLag: 0,
+  paydaysAdded: [],
   travel: 0,
   shiftWords: 'shift, work',
   lastBackup: 0,
@@ -420,7 +453,29 @@ const ls = {
 };
 let S: State = { ...DEFAULTS, ...(JSON.parse(ls.get(KEY) ?? '{}') as Partial<State>) };
 let apiKey = ls.get('alton-key') ?? '';
-const save = (): void => ls.set(KEY, JSON.stringify(S));
+const save = (): void => {
+  ls.set(KEY, JSON.stringify(S));
+  queueWorkSync();
+};
+/** Keep the "at work" list on the phone side up to date (a moment after changes settle). */
+let workSyncTimer = 0;
+function queueWorkSync(): void {
+  if (!isApp || !S.workSet) return;
+  clearTimeout(workSyncTimer);
+  workSyncTimer = window.setTimeout(() => {
+    const items = workItems(S.lists, S.workLists);
+    const key = JSON.stringify(items);
+    if (key === lastWorkItems) return;
+    lastWorkItems = key;
+    void Native.setPlace({ items, listLabel: S.workLists.join(' & ') || 'Shopping' }).catch(
+      () => undefined,
+    );
+    void scheduleWatch();
+  }, 2500);
+}
+let lastWorkItems = '';
+/** Whether the phone says we're at work right now (for Claude). */
+let atWork: { here: boolean; since: number } = { here: false, since: 0 };
 let chatId: string | null = S.chats[0]?.id ?? null;
 let research = false;
 let busy: AbortController | null = null;
@@ -540,6 +595,9 @@ function systemText(): string {
       : 'On the phone you can get things ready with your tools: texts and WhatsApp messages, calls, emails, directions, places nearby, calendar events, timers/alarms (Android), sharing and links. Each becomes a button the user taps and then confirms; never say a message was sent or a call made. If you do not know who someone is, ask, or use the contact button. You can also check where the user is (get_location) and the local weather (get_weather).',
     'Write for a phone screen: short paragraphs, bullet points when useful. You can search the web when it helps.',
     `Current local date and time: ${now.toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })} (${Intl.DateTimeFormat().resolvedOptions().timeZone}).`,
+    atWork.here
+      ? `The user's phone says they are at work (${S.workName || 'work'}) right now. Their ${S.workLists.join(' & ') || 'shopping'} list: ${workItems(S.lists, S.workLists).join(', ') || 'empty'}.`
+      : '',
     shiftLine(),
     S.people.length ? `People the user has saved: ${S.people.map((p) => p.name).join(', ')}.` : '',
     S.memories.length
@@ -1055,10 +1113,14 @@ function shiftLine(): string {
       ? ` They earn ${money(S.payRate)} an hour${S.unpaidBreak ? ` with a ${S.unpaidBreak}-minute unpaid break on long shifts` : ''}.`
       : '';
   const travel = S.travel ? ` It takes them about ${S.travel} minutes to get to work.` : '';
+  const pd = payInfo();
+  const payday = pd
+    ? ` Next payday: ${pd.label} (${pd.when}).${pd.gross > 0 ? ` From the shifts saved for that pay period (${pd.hours}h) it should be about ${money(pd.gross)} before tax, roughly ${money(pd.net)} after tax and NI (a rough estimate).` : ''}`
+    : '';
   return n
-    ? `${now}Next work shift: ${n.when === 'later' ? '' : `${n.when}, `}${describeShift(n.shift)} ${n.shift.title}. Mention it in briefings.${rate}${travel}`
-    : S.shifts.length
-      ? `${now}No other work shift in the next two days.${rate}`
+    ? `${now}Next work shift: ${n.when === 'later' ? '' : `${n.when}, `}${describeShift(n.shift)} ${n.shift.title}. Mention it in briefings.${rate}${travel}${payday}`
+    : S.shifts.length || pd
+      ? `${now}No other work shift in the next two days.${rate}${payday}`
       : '';
 }
 
@@ -1227,7 +1289,7 @@ function renderShiftCard(): void {
     el(
       'p',
       'muted sc-tip',
-      'The phone button opens Clock with the time filled in: tap Save (Samsung may add it next to your existing alarm). Alarm times: People › Shifts.',
+      'The phone button opens Clock with the time filled in: tap Save (Samsung may add it next to your existing alarm). Alarm times: Work › Alarms, pay & travel.',
     ),
   );
 }
@@ -1566,9 +1628,20 @@ async function checkUpdate(manual = false): Promise<void> {
 }
 async function applyUpdate(): Promise<void> {
   if (isApp) {
-    // A new app version is a new APK: download it, then tap it to install over this one.
-    toast('Downloading the new version: open it from your notifications to install.');
-    location.href = apkUrl;
+    // A new app version is a new APK: Alton downloads it and opens the Install screen.
+    toast('Downloading the update…');
+    try {
+      await Native.installUpdate({ url: apkUrl });
+      toast('Tap Install to finish updating.');
+    } catch (e) {
+      const m = (e as Error).message;
+      if (m.startsWith('ALLOW: ')) toast(m.slice(7));
+      else {
+        // Fall back to the browser download.
+        toast(`${m} Downloading it in the browser instead.`);
+        location.href = apkUrl;
+      }
+    }
     return;
   }
   $('updateBar').textContent = 'Updating…';
@@ -1855,6 +1928,14 @@ async function scheduleWatch(): Promise<void> {
     extras,
   );
   for (const u of ups) notes.push({ id: noteId(u.key), title: u.title, body: u.body, at: u.at });
+  if (S.workEnd)
+    for (const u of shiftEndNotes(
+      S.shifts,
+      workItems(S.lists, S.workLists),
+      S.workName || 'work',
+      S.workEndLead,
+    ))
+      notes.push({ id: noteId(u.key), title: u.title, body: u.body, at: u.at });
   await scheduleNotes(notes);
   void updateWidget();
 }
@@ -1870,8 +1951,8 @@ function renderWatch(): void {
   $<HTMLInputElement>('wEveHour').value = String(S.eveHour);
   $<HTMLInputElement>('wMorningHour').value = String(S.morningHour);
   $('wLeaveNote').textContent = S.travel
-    ? `${S.travel} min journey (from People › Shifts)`
-    : 'Set “Travel to work” in People › Shifts first';
+    ? `${S.travel} min journey (from Work › Alarms, pay & travel)`
+    : 'Set “Travel to work” in Work › Alarms, pay & travel first';
 }
 function wireWatch(): void {
   if (!isApp) return;
@@ -2072,8 +2153,14 @@ let drvRecog: Recog | null = null;
 let drvStopAvatar: () => void = () => undefined;
 let drvPending: { run: () => Promise<string> } | null = null;
 const WAKE = ['alton', 'halton', 'alden', 'elton', 'olton', 'walton', 'all ten', 'alt on'];
+/** With music on, only the name itself wakes it (song lyrics can sound like the others). */
+const WAKE_STRICT = ['alton', 'halton'];
+/** Music playing while driving (checked each time it starts listening). */
+let drvMusic = false;
+/** Music Alton paused to hear an answer, to start again afterwards. */
+let drvResume = false;
 function wakeMatch(t: string): string | null {
-  const names = [...new Set([S.name.toLowerCase(), ...WAKE])].map((n) =>
+  const names = [...new Set([S.name.toLowerCase(), ...(drvMusic ? WAKE_STRICT : WAKE)])].map((n) =>
     n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
   );
   const m = new RegExp(`^(?:hey |ok |okay )?(?:${names.join('|')})\\b[\\s,.!?]*`, 'i').exec(
@@ -2096,6 +2183,22 @@ function driveListen(needWake: boolean): void {
     setTimeout(() => driveListen(needWake), 700);
     return;
   }
+  // Music on: it would hear the song as an answer. Waiting for "Alton…" it just listens for the
+  // name; waiting for an answer ("send it?"), it pauses the music until you've spoken.
+  void Native.musicActive()
+    .then((m) => m.active)
+    .catch(() => false)
+    .then(async (active) => {
+      drvMusic = active;
+      if (active && !needWake) {
+        await Native.media({ action: 'pause' }).catch(() => undefined);
+        drvResume = true;
+        drvMusic = false;
+      }
+      if (driving) driveStart(needWake);
+    });
+}
+function driveStart(needWake: boolean): void {
   const W = window as unknown as {
     SpeechRecognition?: new () => Recog;
     webkitSpeechRecognition?: new () => Recog;
@@ -2116,6 +2219,11 @@ function driveListen(needWake: boolean): void {
   r.onend = () => {
     drvRecog = null;
     $('dvTalk').classList.remove('live');
+    if (drvResume) {
+      // Answer heard (or not): music back on.
+      drvResume = false;
+      void Native.media({ action: 'play' }).catch(() => undefined);
+    }
     if (driving) void driveHeard(applyFixes(heard, S.voiceFixes), needWake);
   };
   r.start();
@@ -3090,6 +3198,19 @@ async function appTool(
         },
       };
     }
+    if (name === 'remind_at_work') {
+      const text = String(o.text ?? '').trim();
+      if (!text) return { result: 'Nothing to remind them of.' };
+      if (!S.workSet)
+        return {
+          result:
+            'Their workplace is not set yet: tell them to open Work › At work list and tap “I’m there now” while at work.',
+        };
+      await Native.addPlaceNote({ text });
+      return {
+        result: `Saved: they'll see "${text}" when they next arrive at ${S.workName || 'work'}.`,
+      };
+    }
     if (name === 'phone_diagnostics') {
       const r = healthReport(await Native.diagnostics());
       return {
@@ -3140,7 +3261,7 @@ async function readShiftApp(): Promise<{ ok: boolean; text: string }> {
   if (!S.shiftApp)
     return {
       ok: false,
-      text: 'No shift app chosen yet: the user picks it in Settings › Phone powers.',
+      text: 'No shift app chosen yet: the user picks it in Work › Your shift app.',
     };
   const st = await powerStatus();
   if (!st?.screenReader)
@@ -3243,9 +3364,73 @@ async function autoShiftAlarms(): Promise<void> {
 }
 
 /* Settings › Phone powers */
+/** Tell the phone side what to read while charging (app, tab, next-week button, weeks). */
+async function pushAutoRota(): Promise<void> {
+  if (!isApp) return;
+  await Native.setAutoRota({
+    on: S.autoRota && !!S.shiftApp,
+    package: S.shiftApp,
+    tap: S.shiftTab,
+    next: S.shiftNext,
+    weeks: S.shiftWeeks || 2,
+  }).catch(() => undefined);
+}
+
+/** The phone read the shift app by itself: add the shifts (answered on the phone). */
+let autoRotaBusy = false;
+async function takeAutoRota(): Promise<void> {
+  if (!isApp || autoRotaBusy || busy || !apiKey) return;
+  autoRotaBusy = true;
+  try {
+    const r = await Native.takeAutoRota();
+    if (r.last) S.autoRotaLast = r.last;
+    if (!r.text.trim()) return;
+    setView('chat');
+    newChat(false);
+    phoneOnlyNext = true;
+    send(
+      `My shift app was read automatically while my phone was charging. Here is what it shows. Add my shifts and tell me in one or two lines if anything changed (new, moved or removed shifts):\n\n${r.text.slice(0, 12000)}`,
+    );
+  } catch {
+    /* not available */
+  } finally {
+    autoRotaBusy = false;
+  }
+}
+
+async function renderWork(): Promise<void> {
+  const name = $<HTMLInputElement>('wkName');
+  if (document.activeElement !== name) name.value = S.workName;
+  const lists = $<HTMLInputElement>('wkLists');
+  if (document.activeElement !== lists) lists.value = S.workLists.join(', ');
+  $('wkEnd').classList.toggle('on', S.workEnd);
+  $('wkEnd').textContent = S.workEnd ? '✓' : '';
+  $<HTMLSelectElement>('wkLead').value = String(S.workEndLead);
+  $('wkLead').hidden = !S.workEnd;
+  const ps = await Native.placeStatus().catch(() => null);
+  if (ps) atWork = { here: ps.here, since: ps.since };
+  const bg = $<HTMLButtonElement>('wkBg');
+  bg.textContent = ps?.background ? 'On ✓' : 'Allow';
+  bg.classList.toggle('acc', !ps?.background);
+  $('wkMsg').textContent = !S.workSet
+    ? 'Not set yet: at work, tap “I’m there now”.'
+    : `${ps?.here ? '📍 You’re at' : 'Watching for'} ${S.workName || 'work'}.${ps?.notes.length ? ` ${ps.notes.length} reminder${ps.notes.length > 1 ? 's' : ''} waiting: ${ps.notes.join('; ')}` : ''}`;
+}
+
 async function renderPowers(): Promise<void> {
   $('powersGrp').hidden = !isApp;
+  $('workAppCard').hidden = !isApp;
+  $('workAtCard').hidden = !isApp;
+  $('phoneHead').hidden = !isApp;
   if (!isApp) return;
+  void renderWork();
+  $('pwAutoRota').classList.toggle('on', S.autoRota);
+  $('pwAutoRota').textContent = S.autoRota ? '✓' : '';
+  $('pwAutoRotaNote').textContent = !S.shiftApp
+    ? 'Choose your shift app above first.'
+    : S.autoRotaLast
+      ? `Last read by itself: ${new Date(S.autoRotaLast).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+      : 'Not run yet: plug your phone in and leave it on the home screen.';
   const st = await powerStatus();
   const set = (id: string, on: boolean, offLabel: string): void => {
     const b = $<HTMLButtonElement>(id);
@@ -3381,6 +3566,7 @@ function wirePowers(): void {
           S.shiftApp = a.package;
           S.shiftAppName = a.name;
           save();
+          void pushAutoRota();
           box.hidden = true;
           void renderPowers();
           toast(`Shift app: ${a.name}`);
@@ -3394,15 +3580,30 @@ function wirePowers(): void {
   $<HTMLInputElement>('pwTab').onchange = (e) => {
     S.shiftTab = (e.target as HTMLInputElement).value.trim().slice(0, 40);
     save();
+    void pushAutoRota();
   };
   $<HTMLInputElement>('pwNext').onchange = (e) => {
     S.shiftNext = (e.target as HTMLInputElement).value.trim().slice(0, 40);
     save();
+    void pushAutoRota();
   };
   $<HTMLSelectElement>('pwWeeks').onchange = (e) => {
     S.shiftWeeks = Number((e.target as HTMLSelectElement).value) || 2;
     save();
+    void pushAutoRota();
   };
+  $('pwAutoRota').onclick = () => {
+    S.autoRota = !S.autoRota;
+    save();
+    void pushAutoRota();
+    void renderPowers();
+  };
+  // Pick up a rota read while charging, whenever Alton comes to the front.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) setTimeout(() => void takeAutoRota(), 800);
+  });
+  void pushAutoRota();
+  setTimeout(() => void takeAutoRota(), 1500);
   $('pwRead').onclick = async () => {
     const r = await readShiftApp();
     if (!r.ok) {
@@ -3418,7 +3619,99 @@ function wirePowers(): void {
   // Back from Android's settings: show what changed.
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && view === 'set') void renderPowers();
+    if (!document.hidden && S.workSet)
+      void Native.placeStatus()
+        .then((ps) => (atWork = { here: ps.here, since: ps.since }))
+        .catch(() => undefined);
   });
+  // At work: name, "I'm there now", always-on location, lists, test, forget.
+  $<HTMLInputElement>('wkName').onchange = (e) => {
+    S.workName = (e.target as HTMLInputElement).value.trim().slice(0, 40);
+    save();
+    if (S.workSet) void Native.setPlace({ name: S.workName || 'work' });
+  };
+  $<HTMLInputElement>('wkLists').onchange = (e) => {
+    const v = (e.target as HTMLInputElement).value
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, 5);
+    S.workLists = v.length ? v : ['Shopping'];
+    lastWorkItems = '';
+    save();
+    void renderWork();
+  };
+  $<HTMLSelectElement>('wkLead').onchange = (e) => {
+    const v = Number((e.target as HTMLSelectElement).value);
+    S.workEndLead = v === 15 || v === 30 ? v : 0;
+    save();
+    void scheduleWatch();
+  };
+  $('wkEnd').onclick = () => {
+    S.workEnd = !S.workEnd;
+    save();
+    void scheduleWatch();
+    void renderWork();
+  };
+  $('wkHere').onclick = () => {
+    $('wkMsg').textContent = 'Finding where you are…';
+    if (!navigator.geolocation) return void ($('wkMsg').textContent = 'Location isn’t available.');
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        void (async () => {
+          const r = await Native.setPlace({
+            name: S.workName || 'work',
+            lat: p.coords.latitude,
+            lon: p.coords.longitude,
+            radius: Math.max(120, Math.min(300, Math.round(p.coords.accuracy * 2))),
+            items: workItems(S.lists, S.workLists),
+            listLabel: S.workLists.join(' & ') || 'Shopping',
+          });
+          S.workSet = true;
+          if (!S.workName) S.workName = 'work';
+          save();
+          await renderWork();
+          toast(
+            r.watching
+              ? `Saved. Alton will show your list when you get to ${S.workName}.`
+              : 'Saved. Now tap Allow and pick “Allow all the time” so it works with Alton closed.',
+          );
+        })();
+      },
+      () => ($('wkMsg').textContent = 'Couldn’t get your location: allow Location for Alton.'),
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
+    );
+  };
+  $('wkBg').onclick = () => {
+    toast('Permissions › Location › “Allow all the time”');
+    void Native.openSettings({ which: 'app' });
+  };
+  $('wkTest').onclick = async () => {
+    if (!S.workSet) return toast('Set your workplace first (“I’m there now”).');
+    lastWorkItems = '';
+    await Native.setPlace({
+      items: workItems(S.lists, S.workLists),
+      listLabel: S.workLists.join(' & ') || 'Shopping',
+    });
+    await Native.testPlace();
+    toast(
+      workItems(S.lists, S.workLists).length
+        ? 'Check your notifications.'
+        : `Your ${S.workLists.join(' & ')} list is empty, so there’s nothing to show yet.`,
+    );
+  };
+  $('wkClear').onclick = async () => {
+    await Native.clearPlace().catch(() => undefined);
+    S.workSet = false;
+    save();
+    void scheduleWatch();
+    void renderWork();
+  };
+  // Proximity alerts don't survive an app update: set it up again on start.
+  if (S.workSet) {
+    lastWorkItems = '';
+    queueWorkSync();
+  }
   void autoShiftAlarms();
   setInterval(() => void autoShiftAlarms(), 30 * 60_000);
 }
@@ -4395,6 +4688,7 @@ async function pickContact(forName?: string): Promise<void> {
 }
 function renderShifts(): void {
   renderShiftNext();
+  renderPayCard();
   renderCalendar();
   $('shGetApp').hidden = !isApp;
   $('shGetCal').hidden = !isApp;
@@ -4447,6 +4741,10 @@ function renderShifts(): void {
   $<HTMLInputElement>('payRate').value = S.payRate ? String(S.payRate) : '';
   $<HTMLInputElement>('unpaidBreak').value = S.unpaidBreak ? String(S.unpaidBreak) : '';
   $<HTMLInputElement>('travel').value = S.travel ? String(S.travel) : '';
+  $<HTMLInputElement>('payNext').value = S.payNext;
+  $<HTMLSelectElement>('payCycle').value = String(S.payCycle);
+  $<HTMLInputElement>('payLag').value = S.payLag ? String(S.payLag) : '';
+  $('payToCal').hidden = !isApp || !S.payNext;
 }
 
 /* ── Shifts tab: next shift, month calendar, getting shifts in ── */
@@ -4460,6 +4758,77 @@ let editing: Shift | null = null;
 let phoneOnlyNext = false;
 /** Chats that use this phone's own powers (answered here, not on the PC). */
 const phoneChats = new Set<string>();
+
+/** The next payday and what it should pay, from the saved shifts. */
+function payInfo(): {
+  day: string;
+  label: string;
+  when: string;
+  hours: number;
+  gross: number;
+  net: number;
+  period: { start: string; end: string };
+  shifts: number;
+} | null {
+  if (!S.payNext) return null;
+  const day = nextPayday(S.payNext, S.payCycle);
+  const period = day ? payPeriod(day, S.payCycle, S.payLag) : null;
+  if (!day || !period) return null;
+  const p = periodPay(S.shifts, period, S.payRate, S.unpaidBreak);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((new Date(`${day}T00:00`).getTime() - today.getTime()) / 86_400_000);
+  return {
+    day,
+    label: new Date(`${day}T12:00`).toLocaleDateString('en-GB', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    }),
+    when: days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`,
+    hours: p.hours,
+    gross: p.gross,
+    net: ukTakeHome(p.gross, S.payCycle),
+    period,
+    shifts: p.shifts,
+  };
+}
+
+function renderPayCard(): void {
+  const box = $('payCard');
+  box.textContent = '';
+  const pd = payInfo();
+  if (!pd) {
+    box.append(
+      el('div', 'lbl', 'Payday'),
+      el(
+        'div',
+        'muted',
+        'Set your next payday and pay rate in “Alarms, pay & travel” below, and Alton works out each pay.',
+      ),
+    );
+    return;
+  }
+  const dm = (x: string): string =>
+    new Date(`${x}T12:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const lastDay = new Date(`${pd.period.end}T12:00`);
+  lastDay.setDate(lastDay.getDate() - 1);
+  box.append(el('div', 'lbl', `💷 Payday ${pd.when}`), el('div', 'when', pd.label));
+  if (S.payRate > 0) {
+    box.append(
+      el('div', 'big', `≈ ${money(pd.net)}`),
+      el('div', 'muted', `after tax & NI (rough) · ${money(pd.gross)} before tax`),
+    );
+  } else box.append(el('div', 'muted', 'Add your pay per hour below to see how much.'));
+  const meta = el('div', 'meta');
+  for (const c of [
+    `${pd.hours}h`,
+    `${pd.shifts} shift${pd.shifts === 1 ? '' : 's'}`,
+    `Shifts ${dm(pd.period.start)} – ${dm(ymd(lastDay))}`,
+  ])
+    meta.appendChild(el('span', undefined, c));
+  box.appendChild(meta);
+}
 
 function renderShiftNext(): void {
   const box = $('shiftNext');
@@ -4510,6 +4879,9 @@ function renderCalendar(): void {
   grid.textContent = '';
   for (const d of ['M', 'T', 'W', 'T', 'F', 'S', 'S']) grid.appendChild(el('div', 'dow', d));
   const today = ymd(new Date());
+  const pays = new Set(
+    S.payNext ? paydays(S.payNext, S.payCycle, new Date(y, m - 1, 20), new Date(y, m + 1, 12)) : [],
+  );
   for (const week of monthGrid(y, m, S.shifts))
     for (const d of week) {
       const b = el('button');
@@ -4517,11 +4889,13 @@ function renderCalendar(): void {
         d.inMonth ? '' : 'out',
         d.date === today ? 'today' : '',
         d.date === calSel ? 'sel' : '',
+        pays.has(d.date) ? 'payday' : '',
       ]
         .filter(Boolean)
         .join(' ');
       b.appendChild(el('span', undefined, String(d.day)));
       const first = d.shifts[0];
+      if (pays.has(d.date)) b.appendChild(el('span', 'pay', '💷'));
       if (first) {
         b.appendChild(el('i', `k-${shiftKind(first)}`));
         b.appendChild(el('small', undefined, first.start.slice(11, 16)));
@@ -4545,6 +4919,7 @@ function renderCalendar(): void {
   $('calDay').textContent = sel.length
     ? `${label}: ${sel.map((s) => `${s.title} ${s.start.slice(11, 16)}–${s.end.slice(11, 16)}`).join(', ')}`
     : `${label}: day off`;
+  if (pays.has(calSel)) $('calDay').textContent += ' · 💷 Payday';
   const hrs = monthHours(S.shifts, y, m);
   const pre = `${y}-${String(m + 1).padStart(2, '0')}-`;
   const stats: Array<[string, string]> = [
@@ -4638,8 +5013,7 @@ async function shiftsFromMyCalendar(): Promise<void> {
 function wireShiftsTab(): void {
   $('shGetApp').onclick = () => {
     if (!S.shiftApp) {
-      $('shGetMsg').textContent =
-        'First pick your shift app in Settings › Phone powers › Read my shift app.';
+      $('shGetMsg').textContent = 'First pick your shift app below in Your shift app.';
       return;
     }
     setView('chat');
@@ -5685,7 +6059,7 @@ async function checkKey(k: string): Promise<string | null> {
 /* ── Wiring ── */
 function setView(v: string): void {
   view = v;
-  for (const x of ['chat', 'today', 'people', 'pc', 'set'])
+  for (const x of ['chat', 'today', 'work', 'people', 'pc', 'set'])
     $(`${x}View`).classList.toggle('on', x === v);
   document
     .querySelectorAll('nav.tabs button')
@@ -5699,12 +6073,18 @@ function setView(v: string): void {
         : S.name
       : v === 'today'
         ? 'Today'
-        : v === 'people'
-          ? 'People & lists'
-          : v === 'pc'
-            ? 'PC'
-            : 'Settings';
+        : v === 'work'
+          ? 'Work'
+          : v === 'people'
+            ? 'Lists'
+            : v === 'pc'
+              ? 'PC'
+              : 'Settings';
   if (v === 'people') renderPeople();
+  if (v === 'work') {
+    renderShifts();
+    void renderPowers();
+  }
   if (v === 'today') renderToday();
   if (v === 'pc') renderPc();
   if (v === 'set') {
@@ -5893,6 +6273,53 @@ function wire(): void {
     save();
     renderShifts();
   };
+  $<HTMLInputElement>('payNext').onchange = (e) => {
+    S.payNext = (e.target as HTMLInputElement).value;
+    save();
+    renderShifts();
+  };
+  $<HTMLSelectElement>('payCycle').onchange = (e) => {
+    const v = Number((e.target as HTMLSelectElement).value);
+    S.payCycle = (v === 7 || v === 14 || v === 0 ? v : 28) as PayCycle;
+    save();
+    renderShifts();
+  };
+  $('payLag').onchange = () => {
+    S.payLag = Math.round(num('payLag', 60));
+    save();
+    renderShifts();
+  };
+  $('payToCal').onclick = async () => {
+    if (!S.payNext) return;
+    const from = new Date();
+    const to = new Date(from.getFullYear() + 1, from.getMonth(), from.getDate());
+    const days = paydays(S.payNext, S.payCycle, from, to).filter(
+      (d) => !S.paydaysAdded.includes(d),
+    );
+    if (!days.length) return toast('Your paydays are already in your calendar.');
+    const st = await powerStatus();
+    if (!st?.calendar) {
+      const r = await Native.requestAccess({ which: 'calendar' }).catch(() => ({ granted: false }));
+      if (!r.granted) return toast('Allow Calendar in Settings › Phone powers first.');
+    }
+    try {
+      const { added } = await Native.addEvents({
+        events: days.map((d) => ({
+          title: '💷 Payday',
+          start: new Date(`${d}T09:00`).getTime(),
+          end: new Date(`${d}T09:15`).getTime(),
+          location: '',
+          notes: 'Added by Alton',
+          remindMinutes: 0,
+        })),
+      });
+      S.paydaysAdded = [...new Set([...S.paydaysAdded, ...days])].slice(-60);
+      save();
+      toast(`Added ${added} payday${added === 1 ? '' : 's'} to your calendar.`);
+    } catch (e) {
+      toast((e as Error).message);
+    }
+  };
   $('travel').onchange = () => {
     S.travel = Math.round(num('travel', 300));
     save();
@@ -6043,9 +6470,11 @@ function wire(): void {
     ls.set('alton-seg', k);
   };
   document.querySelectorAll<HTMLButtonElement>('.seg button').forEach((b) => {
-    b.onclick = () => seg(b.dataset.seg ?? 'people');
+    b.onclick = () => seg(b.dataset.seg ?? 'lists');
   });
-  seg(ls.get('alton-seg') ?? 'people');
+  // (Shifts moved to their own Work tab.)
+  const savedSeg = ls.get('alton-seg');
+  seg(savedSeg && savedSeg !== 'shifts' ? savedSeg : 'lists');
   // A dot on Today when the shift card or the backup reminder wants attention.
   const dot = (): void => {
     const on = !$('shiftCard').hidden || !$('backupNudge').hidden;
@@ -6056,6 +6485,7 @@ function wire(): void {
     mo.observe($(id), { attributes: true, attributeFilter: ['hidden'] });
   dot();
   $('tdPcOpen').onclick = () => setView('pc');
+  $('tdWorkOpen').onclick = () => setView('work');
   // Today › Alarm: phone and/or Alexa
   const tick = (id: string, on: boolean): void => {
     $(id).classList.toggle('on', on);

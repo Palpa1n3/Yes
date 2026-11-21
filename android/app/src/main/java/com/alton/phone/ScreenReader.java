@@ -17,6 +17,14 @@ import java.util.Set;
 public class ScreenReader extends AccessibilityService {
 
     private static ScreenReader instance;
+    /** When the user last touched something (clicks, scrolls, typing, switching apps). */
+    static volatile long lastActivity = 0;
+    private final android.content.BroadcastReceiver power = new android.content.BroadcastReceiver() {
+        @Override
+        public void onReceive(Context c, android.content.Intent i) {
+            AutoRota.onPowerConnected(c.getApplicationContext());
+        }
+    };
 
     public static boolean isEnabled(Context ctx) {
         String flat = Settings.Secure.getString(ctx.getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
@@ -32,16 +40,27 @@ public class ScreenReader extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         instance = this;
+        // The charger going in is when the rota can be read by itself (see AutoRota).
+        android.content.IntentFilter f = new android.content.IntentFilter(android.content.Intent.ACTION_POWER_CONNECTED);
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(power, f, Context.RECEIVER_NOT_EXPORTED);
+            else registerReceiver(power, f);
+        } catch (Exception ignored) {}
     }
 
     @Override
     public boolean onUnbind(android.content.Intent intent) {
         instance = null;
+        try {
+            unregisterReceiver(power);
+        } catch (Exception ignored) {}
         return super.onUnbind(intent);
     }
 
     @Override
-    public void onAccessibilityEvent(AccessibilityEvent event) {}
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (!AutoRota.running) lastActivity = System.currentTimeMillis();
+    }
 
     @Override
     public void onInterrupt() {}

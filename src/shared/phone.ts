@@ -390,7 +390,7 @@ export function needsPhone(text: string): boolean {
     /\bsend (it|this|that|them|him|her|a|the|my)\b/.test(t) ||
     /\b(tell|let) \w+ (know|that|i\b|i'm|im\b)/.test(t) ||
     // This phone's own apps and settings
-    /\b(shift app|rota|my schedule|my (calendar|contacts|notifications)|alarm|alexa|phone (battery|health|storage|diagnostics))\b/.test(
+    /\b(at work|get to work|shift app|rota|my schedule|my (calendar|contacts|notifications)|alarm|alexa|phone (battery|health|storage|diagnostics))\b/.test(
       t,
     )
   );

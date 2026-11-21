@@ -199,6 +199,7 @@ describe('Android app tools', () => {
       'phone_diagnostics',
       'media_control',
       'read_shift_app',
+      'remind_at_work',
     ]);
   });
 });
@@ -243,6 +244,7 @@ describe('needsPhone', () => {
     expect(needsPhone('Send it to Will')).toBe(true);
     expect(needsPhone('tell Sam I am running late')).toBe(true);
     expect(needsPhone('let mum know I am home')).toBe(true);
+    expect(needsPhone('remind me at work to buy bin bags')).toBe(true);
     expect(needsPhone('free up space on drive D')).toBe(false);
     expect(needsPhone('what is the weather')).toBe(false);
   });

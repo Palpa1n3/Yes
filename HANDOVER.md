@@ -70,6 +70,29 @@ Read this first in a new chat, then README.md for the feature list.
   message actions (reply, Snapchat, sms: link → `sendSms`, wa.me link → native `waSend`, which opens
   the chat and presses Send via the accessibility service) are sent inside the tool loop, the tool
   result becomes "SENT …" and the action gets `done` (shown as Sent ✓). Calls/emails stay buttons.
+  Payday (Shifts › Alarms, pay & travel): `payNext` (a known payday), `payCycle` (7/14/28 days or
+  0 = monthly), `payLag` (paid period ends N days before payday). `paydays`/`nextPayday`/`payPeriod`/
+  `periodPay`/`ukTakeHome` in shifts.ts; Shifts tab payday card, 💷 on the calendar, the Claude
+  context line, and "Add the next year of paydays to my calendar". Shifts are kept 10 weeks back.
+  Layout (0.49): tabs Chat · Today · Work · Lists · PC · Settings. Work = shifts, payday, calendar,
+  get-my-shifts, Your shift app (moved from Phone powers) and At work list. Lists (`peopleView`, title
+  "Lists") has segments Lists · Notes · People; Reminders sit under Lists. Settings has three
+  headings: About you & Alton · Phone · Account & data.
+  One-tap app updates: the update banner calls native `installUpdate` (GitHub .apk links only):
+  downloads to the cache, opens the Install screen via the FileProvider (REQUEST_INSTALL_PACKAGES;
+  first time it opens "Install unknown apps" for Alton). Falls back to the browser download.
+  Rota while charging (`autoRota`, Phone powers): `ScreenReader` listens for ACTION_POWER_CONNECTED and
+  tracks `lastActivity` (clicks/scrolls/typing/window changes); `AutoRota` waits until the phone is
+  unlocked, on the home screen (or Alton), nothing playing, untouched 15 s, then holds a screen wake
+  lock and runs `AppReader` (shared with `readApp`), saves the text and returns to Alton; JS
+  `takeAutoRota` on resume sends it to Claude (phone-only) to add the shifts. Once per 20 h, or
+  sooner after the shift app posts a notification (`MessageListener` → `AutoRota.notePosted`).
+  At work (Settings › Phone powers › At work): "I'm there now" saves the spot natively
+  (`setPlace`; `PlaceAlerts` uses `LocationManager.addProximityAlert`, `PlaceReceiver`; `BootReceiver`
+  re-registers after a restart; needs background location). Arriving posts a notification with
+  unticked items from `workLists` (pushed by `queueWorkSync` after `save()`) plus one-off notes from the
+  `remind_at_work` tool. `shiftEndNotes` adds "Before you leave" notes 15 min before shift ends.
+  `atWork` feeds the Claude context.
   Backgrounds: 15 CSS-only (`body[data-bg]`), `drift` animates (off for reduced motion).
   Phone health: `Diagnostics.java` readings → `src/shared/diagnostics.ts` (`healthReport`: issues
   with fixes) → the `phone_diagnostics` tool and Settings › Phone health.

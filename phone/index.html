@@ -1278,6 +1278,17 @@
         width: 100%;
         text-align: left;
       }
+      .set-h {
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 18px 4px 8px;
+        font-weight: 600;
+      }
+      .set-h:first-of-type {
+        margin-top: 6px;
+      }
       /* ── Shifts tab ── */
       .shift-hero:empty {
         display: none;
@@ -1350,6 +1361,19 @@
         justify-content: center;
         gap: 2px;
         padding: 0;
+      }
+      .cal-grid button.payday {
+        box-shadow: inset 0 0 0 2px rgba(61, 220, 132, 0.7);
+      }
+      .cal-grid button .pay {
+        font-size: 10px;
+        line-height: 1;
+      }
+      .pay-card .big {
+        font-size: 30px;
+        font-weight: 700;
+        color: #3ddc84;
+        margin: 4px 0 0;
       }
       .cal-grid button.out {
         opacity: 0.35;
@@ -2260,6 +2284,9 @@
           <div class="card" id="tdWork">
             <div class="lbl"><span class="dot"></span>Work</div>
             <div id="tdShifts"></div>
+            <button class="btn full" id="tdWorkOpen" style="margin-top: 8px">
+              Shifts &amp; pay
+            </button>
           </div>
           <div class="card" id="tdRemCard">
             <div class="lbl"><span class="dot"></span>Coming up</div>
@@ -2283,41 +2310,10 @@
             </div>
           </div>
         </section>
-        <section id="peopleView" class="view" data-seg="people">
-          <div class="seg" role="tablist">
-            <button data-seg="people" class="on">People</button
-            ><button data-seg="lists">Lists</button><button data-seg="shifts">Shifts</button
-            ><button data-seg="notes">Notes</button>
-          </div>
-          <div class="card" data-in="people">
-            <div class="lbl"><span class="dot"></span>People</div>
-            <p class="muted" style="margin-top: 0">
-              Who “text Mum” or “call Sam” means. Only kept on this phone.
-            </p>
-            <button class="btn acc full" id="pickContact">Add from my contacts</button>
-            <div class="row" style="margin-top: 10px">
-              <input class="input" id="pName" placeholder="Name (e.g. Mum)" /><input
-                class="input"
-                id="pPhone"
-                placeholder="Number"
-                inputmode="tel"
-              />
-            </div>
-            <button class="btn full" id="pAdd" style="margin-top: 8px">Add</button>
-            <div id="peopleList" style="margin-top: 8px"></div>
-          </div>
-          <div class="card" data-in="people" id="snapCard" hidden>
-            <div class="lbl"><span class="dot"></span>Snapchat friends</div>
-            <p class="muted" style="margin-top: 0">
-              So “message Sam on Snap” works with your nicknames: Alton reads the names in your
-              Snapchat chats and you say who each one is.
-            </p>
-            <button class="btn acc full" id="snapRead">Read my Snapchat friends</button>
-            <div id="snapTodo" style="margin-top: 8px"></div>
-            <div id="snapList" style="margin-top: 8px"></div>
-          </div>
-          <div class="card shift-hero" data-in="shifts" id="shiftNext"></div>
-          <div class="card" data-in="shifts">
+        <section id="workView" class="view">
+          <div class="card shift-hero" id="shiftNext"></div>
+          <div class="card shift-hero pay-card" id="payCard"></div>
+          <div class="card">
             <div class="lbl"><span class="dot"></span>Get my shifts</div>
             <div class="shift-get">
               <button class="btn acc" id="shGetApp">📲 From my shift app</button>
@@ -2348,7 +2344,7 @@
             <p class="muted small" id="shGetMsg" style="margin-bottom: 0"></p>
             <div id="shPick" class="shift-pick"></div>
           </div>
-          <div class="card" data-in="shifts">
+          <div class="card">
             <div class="cal-head">
               <button class="icon" id="calPrev" aria-label="Previous month">‹</button>
               <b id="calTitle"></b>
@@ -2357,12 +2353,13 @@
             <div id="calGrid" class="cal-grid"></div>
             <div class="cal-key">
               <span><i class="k-early"></i>Early</span><span><i class="k-day"></i>Day</span
-              ><span><i class="k-late"></i>Late</span><span><i class="k-night"></i>Night</span>
+              ><span><i class="k-late"></i>Late</span><span><i class="k-night"></i>Night</span
+              ><span>💷 Payday</span>
             </div>
             <div id="calDay" class="muted small"></div>
             <div class="row stats shift-stats" id="shiftStats"></div>
           </div>
-          <div class="card" data-in="shifts">
+          <div class="card">
             <div class="lbl"><span class="dot"></span>Coming up</div>
             <p class="muted" style="margin-top: 0" id="shiftHours"></p>
             <div id="shiftWeek" style="margin: 4px 0 8px"></div>
@@ -2402,18 +2399,174 @@
                   <input class="input" id="travel" inputmode="numeric" placeholder="e.g. 25"
                 /></label>
               </div>
+              <h3 class="sub">Payday</h3>
+              <div class="row" style="gap: 8px; align-items: flex-end">
+                <label class="muted" style="flex: 1.3"
+                  >Next payday <input class="input" id="payNext" type="date"
+                /></label>
+                <label class="muted" style="flex: 1"
+                  >Paid every
+                  <select class="input" id="payCycle">
+                    <option value="7">Week</option>
+                    <option value="14">2 weeks</option>
+                    <option value="28">4 weeks</option>
+                    <option value="0">Month</option>
+                  </select></label
+                >
+              </div>
+              <label class="muted" style="display: block; margin-top: 8px"
+                >Each payday pays for shifts up to this many days before it (0 = up to payday)
+                <input class="input" id="payLag" inputmode="numeric" placeholder="e.g. 7"
+              /></label>
+              <button class="btn full" id="payToCal" style="margin-top: 8px">
+                Add the next year of paydays to my calendar
+              </button>
             </details>
           </div>
+          <div class="card" id="workAppCard" hidden>
+            <div class="lbl"><span class="dot"></span>Your shift app</div>
+            <div class="li">
+              <span style="flex: 1"
+                >Your shift app<br /><small class="muted"
+                  >The app Alton opens to read your rota</small
+                ></span
+              ><button class="btn" id="pwApp" style="padding: 6px 10px"></button>
+            </div>
+            <div id="pwAppList" hidden style="max-height: 260px; overflow-y: auto"></div>
+            <label class="muted" style="display: block; margin-top: 6px"
+              >If your rota isn’t on the first screen: the tab or button to tap first (e.g.
+              Schedule, Rota, My shifts)
+              <input
+                class="input"
+                id="pwTab"
+                placeholder="Blank = Alton tries Schedule, Rota, My shifts"
+            /></label>
+            <div class="row" style="gap: 8px; margin-top: 6px; align-items: flex-end">
+              <label class="muted" style="flex: 2"
+                >The button for the next week (blank = Alton finds the arrow next to the dates)
+                <input class="input" id="pwNext" placeholder="e.g. Next week"
+              /></label>
+              <label class="muted" style="flex: 1"
+                >Weeks to read
+                <select class="input" id="pwWeeks">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                </select></label
+              >
+            </div>
+            <details class="mini" id="pwPreview" hidden>
+              <summary id="pwPreviewSum">What Alton read last time</summary>
+              <pre
+                id="pwPreviewText"
+                class="muted small"
+                style="white-space: pre-wrap; max-height: 260px; overflow-y: auto"
+              ></pre>
+            </details>
+            <div class="li">
+              <span style="flex: 1"
+                >Update my rota by itself while charging<br /><small class="muted"
+                  >Once a day (or when the shift app sends a notification): when you plug in and
+                  leave the phone on the home screen, Alton reads the rota without you</small
+                ></span
+              ><button class="check" id="pwAutoRota"></button>
+            </div>
+            <p class="muted small" id="pwAutoRotaNote" style="margin-top: 0"></p>
+            <button class="btn acc full" id="pwRead" style="margin-top: 8px">
+              Read my rota now
+            </button>
+          </div>
+          <div class="card" id="workAtCard" hidden>
+            <div class="lbl"><span class="dot"></span>At work list</div>
+            <p class="muted small" style="margin-top: 0">
+              When you get to work, Alton shows your shopping list (and anything you asked it to
+              remind you of there). It can also show it when each shift ends.
+            </p>
+            <div class="row" style="gap: 8px">
+              <input
+                class="input"
+                id="wkName"
+                placeholder="Where you work, e.g. Morrisons"
+                style="flex: 1"
+              />
+              <button class="btn acc" id="wkHere">I'm there now</button>
+            </div>
+            <p class="muted small" id="wkMsg"></p>
+            <div class="li">
+              <span style="flex: 1"
+                >Works with Alton closed<br /><small class="muted" id="wkBgNote"
+                  >Location › Allow all the time</small
+                ></span
+              ><button class="btn" id="wkBg" style="padding: 6px 10px">Allow</button>
+            </div>
+            <div class="li">
+              <span style="flex: 1"
+                >Also when a shift ends<br /><small class="muted"
+                  >“Before you leave: milk, bread…”</small
+                ></span
+              ><button class="check" id="wkEnd"></button>
+            </div>
+            <label class="muted" style="display: block; margin-top: 6px"
+              >When
+              <select class="input" id="wkLead">
+                <option value="0">Right when my shift ends</option>
+                <option value="15">15 minutes before it ends</option>
+                <option value="30">30 minutes before it ends</option>
+              </select></label
+            >
+            <label class="muted" style="display: block; margin-top: 6px"
+              >Lists to show (comma-separated)
+              <input class="input" id="wkLists" placeholder="Shopping"
+            /></label>
+            <div class="row" style="gap: 8px; margin-top: 8px">
+              <button class="btn" id="wkTest" style="flex: 1">Show me what it looks like</button>
+              <button class="btn" id="wkClear" style="flex: 1">Forget my workplace</button>
+            </div>
+          </div>
+        </section>
+        <section id="peopleView" class="view" data-seg="lists">
+          <div class="seg" role="tablist">
+            <button data-seg="lists" class="on">Lists</button><button data-seg="notes">Notes</button
+            ><button data-seg="people">People</button>
+          </div>
           <div class="card" data-in="people">
+            <div class="lbl"><span class="dot"></span>People</div>
+            <p class="muted" style="margin-top: 0">
+              Who “text Mum” or “call Sam” means. Only kept on this phone.
+            </p>
+            <button class="btn acc full" id="pickContact">Add from my contacts</button>
+            <div class="row" style="margin-top: 10px">
+              <input class="input" id="pName" placeholder="Name (e.g. Mum)" /><input
+                class="input"
+                id="pPhone"
+                placeholder="Number"
+                inputmode="tel"
+              />
+            </div>
+            <button class="btn full" id="pAdd" style="margin-top: 8px">Add</button>
+            <div id="peopleList" style="margin-top: 8px"></div>
+          </div>
+          <div class="card" data-in="people" id="snapCard" hidden>
+            <div class="lbl"><span class="dot"></span>Snapchat friends</div>
+            <p class="muted" style="margin-top: 0">
+              So “message Sam on Snap” works with your nicknames: Alton reads the names in your
+              Snapchat chats and you say who each one is.
+            </p>
+            <button class="btn acc full" id="snapRead">Read my Snapchat friends</button>
+            <div id="snapTodo" style="margin-top: 8px"></div>
+            <div id="snapList" style="margin-top: 8px"></div>
+          </div>
+          <div class="card" data-in="lists">
+            <div class="lbl"><span class="dot"></span>Lists</div>
+            <div id="lists"></div>
+          </div>
+          <div class="card" data-in="lists">
             <div class="lbl"><span class="dot"></span>Reminders</div>
             <div id="reminderList"></div>
             <button class="btn full" id="notifyAllow" style="margin-top: 8px">
               Also notify me in Alton
             </button>
-          </div>
-          <div class="card" data-in="lists">
-            <div class="lbl"><span class="dot"></span>Lists</div>
-            <div id="lists"></div>
           </div>
           <div class="card" data-in="lists">
             <div class="lbl"><span class="dot"></span>Goals</div>
@@ -2606,290 +2759,73 @@
             <div class="pav" id="setInitial">A</div>
             <div><b id="setName">You</b><small class="muted" id="setSub"></small></div>
           </div>
-          <details class="grp" open>
+          <h2 class="set-h">About you &amp; Alton</h2>
+          <details class="grp">
             <summary>
               <span class="gi"
                 ><svg viewBox="0 0 24 24">
-                  <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z" /></svg></span
-              ><span class="gt"
-                ><b>Claude &amp; spending</b><small>Model, saver mode, monthly limit</small></span
-              >
+                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" /></svg></span
+              ><span class="gt"><b>You</b><small>Name, country</small></span>
             </summary>
             <div class="gb">
-              <label class="muted">Model</label>
-              <select id="model" class="input" style="margin: 4px 0 6px">
-                <option value="claude-haiku-5-5">Haiku 5.5 · fastest, cheapest</option>
-                <option value="claude-sonnet-5-5">Sonnet 5.5 · smarter</option>
-                <option value="claude-opus-5-5">Opus 5.5 · smartest</option>
-              </select>
-              <div class="li">
-                <span style="flex: 1"
-                  >Saver mode<br /><small class="muted"
-                    >Cheapest model, shorter memory of the chat, fewer web searches</small
-                  ></span
-                ><button class="check" id="saverToggle"></button>
-              </div>
-              <div class="row stats" style="margin: 12px 0 4px">
-                <div><b id="spendToday">£0.00</b><small class="muted">Today</small></div>
-                <div><b id="spendMonth">£0.00</b><small class="muted">This month</small></div>
-              </div>
-              <label class="muted" style="display: block; margin-top: 8px"
-                >Warn me above (£ a month, blank = no warning)
-                <input
-                  id="budget"
-                  class="input"
-                  inputmode="numeric"
-                  placeholder="e.g. 5"
-                  style="margin-top: 4px"
-              /></label>
-              <p class="muted small">
-                Estimates from each reply's size; the PC tracks its own spending. Set a hard limit
-                at console.anthropic.com › Limits.
-              </p>
-              <button class="btn full" id="keyChange">Change Claude key</button>
+              <label class="muted">Your first name</label
+              ><input id="userName" class="input" style="margin: 4px 0 10px" />
+              <label class="muted">Country code for phone numbers</label
+              ><input
+                id="country"
+                class="input"
+                inputmode="numeric"
+                style="margin-top: 4px"
+                placeholder="44"
+              />
             </div>
           </details>
-          <details class="grp" id="powersGrp" hidden>
+          <details class="grp">
             <summary>
               <span class="gi"
-                ><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z" /></svg></span
+                ><svg viewBox="0 0 24 24">
+                  <path d="M4 5h16v11H8l-4 4zM8 10h.01M12 10h.01M16 10h.01" /></svg></span
               ><span class="gt"
-                ><b>Phone powers</b
-                ><small>Messages, calendar, contacts, alarms, shift app</small></span
+                ><b>Personality</b><small>Name, tone, humour, how it talks to you</small></span
               >
             </summary>
             <div class="gb">
               <div class="li">
                 <span style="flex: 1"
-                  >Read &amp; reply to messages<br /><small class="muted"
-                    >Texts, WhatsApp and more. Turn on <b>Alton</b> in Notification access. Replies
-                    are only sent when you tap Send.</small
+                  >Same personality as my PC<br /><small class="muted"
+                    >Off: set it up differently on this phone</small
                   ></span
-                ><button class="btn" id="pwMsgs" style="padding: 6px 10px"></button>
+                ><button class="check" id="matchPersToggle"></button>
               </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Calendar<br /><small class="muted"
-                    >Shifts go straight in, and “what’s on today?”</small
-                  ></span
-                ><button class="btn" id="pwCal" style="padding: 6px 10px"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Contacts<br /><small class="muted">So “text Sam” finds Sam’s number</small></span
-                ><button class="btn" id="pwContacts" style="padding: 6px 10px"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Shift alarms by themselves<br /><small class="muted"
-                    >The night before a shift, Alton sets (or switches on) the Clock alarm for
-                    it</small
-                  ></span
-                ><button class="check" id="pwAlarms"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Send messages by themselves<br /><small class="muted"
-                    >Texts, WhatsApp, Snapchat and replies go as soon as you ask, no tapping. Alton
-                    says who it sent what to.</small
-                  ></span
-                ><button class="check" id="pwAutoMsg"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Read my shift app<br /><small class="muted"
-                    >Turn on <b>Alton: read my shift app</b> in Accessibility (Installed
-                    apps)</small
-                  ></span
-                ><button class="btn" id="pwScreen" style="padding: 6px 10px"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Your shift app<br /><small class="muted"
-                    >The app Alton opens to read your rota</small
-                  ></span
-                ><button class="btn" id="pwApp" style="padding: 6px 10px"></button>
-              </div>
-              <div id="pwAppList" hidden style="max-height: 260px; overflow-y: auto"></div>
-              <label class="muted" style="display: block; margin-top: 6px"
-                >If your rota isn’t on the first screen: the tab or button to tap first (e.g.
-                Schedule, Rota, My shifts)
-                <input
-                  class="input"
-                  id="pwTab"
-                  placeholder="Blank = Alton tries Schedule, Rota, My shifts"
-              /></label>
-              <div class="row" style="gap: 8px; margin-top: 6px; align-items: flex-end">
-                <label class="muted" style="flex: 2"
-                  >The button for the next week (blank = Alton finds the arrow next to the dates)
-                  <input class="input" id="pwNext" placeholder="e.g. Next week"
-                /></label>
-                <label class="muted" style="flex: 1"
-                  >Weeks to read
-                  <select class="input" id="pwWeeks">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                    <option value="4">4</option>
-                  </select></label
+              <div id="persBox">
+                <label class="muted">Assistant's name</label>
+                <input id="asstName" class="input" style="margin: 4px 0 10px" />
+                <label class="muted">Style</label>
+                <select id="persPreset" class="input" style="margin: 4px 0 10px"></select>
+                <label class="muted">Tone</label>
+                <select id="persTone" class="input" style="margin: 4px 0 10px">
+                  <option value="warm">Warm</option>
+                  <option value="formal">Formal</option>
+                  <option value="dry-wit">Dry wit</option>
+                  <option value="concise">Concise</option>
+                  <option value="playful">Playful</option>
+                </select>
+                <label class="muted"
+                  >How it addresses you (e.g. sir, boss, your name; blank = nothing)</label
                 >
+                <input id="persTitle" class="input" style="margin: 4px 0 10px" />
+                <div class="steps">
+                  <label class="muted"
+                    >Detail <input type="range" id="persVerb" min="1" max="5" step="1"
+                  /></label>
+                  <label class="muted"
+                    >Humour <input type="range" id="persHumour" min="0" max="3" step="1"
+                  /></label>
+                  <label class="muted"
+                    >Suggestions <input type="range" id="persPro" min="0" max="2" step="1"
+                  /></label>
+                </div>
               </div>
-              <details class="mini" id="pwPreview" hidden>
-                <summary id="pwPreviewSum">What Alton read last time</summary>
-                <pre
-                  id="pwPreviewText"
-                  class="muted small"
-                  style="white-space: pre-wrap; max-height: 260px; overflow-y: auto"
-                ></pre>
-              </details>
-              <h3 class="sub">Alarms and Alexa</h3>
-              <label class="muted" style="display: block"
-                >How Alton reaches Alexa
-                <select id="pwAlexaVia" class="input" style="margin-top: 4px">
-                  <option value="app">Type it in the Alexa app (silent, works anywhere)</option>
-                  <option value="speak">Say it out loud (phone near the Echo)</option>
-                </select></label
-              >
-              <label class="muted" style="display: block; margin-top: 8px"
-                >Your Echo’s name, as in the Alexa app (so alarms go on it)
-                <input
-                  id="pwAlexaDev"
-                  class="input"
-                  placeholder="e.g. Jack's Echo Dot"
-                  style="margin-top: 4px"
-              /></label>
-              <button class="btn full" id="pwAlexaTest" style="margin: 8px 0">
-                Test: ask Alexa the time
-              </button>
-              <div class="li">
-                <span style="flex: 1"
-                  >Alarms also go to Alexa<br /><small class="muted"
-                    >Alton says “Alexa, set an alarm for…” out loud, so keep the phone near your
-                    Echo with the volume up</small
-                  ></span
-                ><button class="check" id="pwAlexa"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Shift alarms too<br /><small class="muted"
-                    >When Alton sets tomorrow’s shift alarm (in the evening), it tells Alexa as
-                    well</small
-                  ></span
-                ><button class="check" id="pwShiftAlexa"></button>
-              </div>
-              <h3 class="sub">Hands-free &amp; driving</h3>
-              <p class="muted small">
-                Driving mode keeps listening while Alton is on screen (phone in a car mount): say
-                “Alton, text Sam I’m on my way” or “Alton, next song”. It reads new messages out and
-                sends only after you say “send it”.
-              </p>
-              <div class="li">
-                <span style="flex: 1"
-                  >Open Alton with the assistant button<br /><small class="muted"
-                    >Choose Alton as the “Digital assistant app”; then long-press the home button
-                    (or swipe up from a bottom corner) to open it already listening</small
-                  ></span
-                ><button class="btn" id="pwAssist" style="padding: 6px 10px">Set up</button>
-              </div>
-              <h3 class="sub">Home-screen widgets</h3>
-              <p class="muted small">
-                Alton has five widgets: <b>Alton Clock</b>, <b>Alton Battery</b>,
-                <b>Alton Weather</b>, <b>Alton Screen time</b> and <b>Alton</b>. Each one changes
-                with its size: drag its edges smaller or bigger (e.g. the clock shows just the time
-                when small, the weather adds the next four days when big). To swipe between them
-                like your others: add one (long-press the home screen › Widgets › Alton), long-press
-                it › <b>Create stack</b>, and add the others to it.
-              </p>
-              <div class="li">
-                <span style="flex: 1"
-                  >Screen time on the widgets<br /><small class="muted"
-                    >Usage access: switch on Alton</small
-                  ></span
-                ><button class="btn" id="pwUsage" style="padding: 6px 10px"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Earbud and watch batteries on the clock<br /><small class="muted"
-                    >Nearby devices permission</small
-                  ></span
-                ><button class="btn" id="pwBt" style="padding: 6px 10px"></button>
-              </div>
-              <h3 class="sub">Watch heads-ups (Fitbit and other watches)</h3>
-              <p class="muted small">
-                Notifications at the right moments, so your watch buzzes even with Alton closed. In
-                the Fitbit app: Versa 2 › Notifications › App notifications › turn on Alton.
-              </p>
-              <div class="li">
-                <span style="flex: 1"
-                  >Shift the evening before<br /><small class="muted"
-                    >Tomorrow’s times, alarm and leave-by. At
-                    <input
-                      id="wEveHour"
-                      class="input hourin"
-                      type="number"
-                      min="0"
-                      max="23"
-                    />:00</small
-                  ></span
-                ><button class="check" id="wEve"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Time to leave<br /><small class="muted" id="wLeaveNote"
-                    >10 minutes before you need to go</small
-                  ></span
-                ><button class="check" id="wLeave"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Morning summary<br /><small class="muted"
-                    >Today’s shift, first event and weather. At
-                    <input
-                      id="wMorningHour"
-                      class="input hourin"
-                      type="number"
-                      min="0"
-                      max="23"
-                    />:00</small
-                  ></span
-                ><button class="check" id="wMorning"></button>
-              </div>
-              <button class="btn full" id="wTest" style="margin: 6px 0 12px">
-                Send a test to my watch
-              </button>
-              <label class="muted" style="display: block; margin-top: 8px"
-                >Read new messages out loud (even with Alton closed)
-                <select id="pwAnnounce" class="input" style="margin-top: 4px">
-                  <option value="off">Off</option>
-                  <option value="headphones">Only with headphones or car Bluetooth</option>
-                  <option value="always">Always (not when the phone is on silent)</option>
-                </select></label
-              >
-              <div class="row" style="margin: 6px 0 4px">
-                <label class="muted" style="flex: 1"
-                  >Quiet from (hour)
-                  <input id="pwQuietFrom" class="input" type="number" min="0" max="23"
-                /></label>
-                <label class="muted" style="flex: 1"
-                  >until <input id="pwQuietTo" class="input" type="number" min="0" max="23"
-                /></label>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Read new messages out in Driving mode<br /><small class="muted"
-                    >Needs “Read &amp; reply to messages”</small
-                  ></span
-                ><button class="check" id="pwReadOut"></button>
-              </div>
-              <button class="btn acc full" id="pwRead" style="margin-top: 8px">
-                Read my rota now
-              </button>
-              <p class="muted small">
-                If Android says <b>“Restricted setting”</b> when you turn something on: open App
-                info, tap ⋮ (top right) › <b>Allow restricted settings</b>, then try again. Android
-                asks this for apps installed from outside the Play Store.
-              </p>
-              <button class="btn full" id="pwRestricted">Open Alton’s App info</button>
             </div>
           </details>
           <details class="grp">
@@ -3160,6 +3096,208 @@
               <p class="muted small">Changes above show straight away once it’s set.</p>
             </div>
           </details>
+          <h2 class="set-h" id="phoneHead">Phone</h2>
+          <details class="grp" id="powersGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z" /></svg></span
+              ><span class="gt"
+                ><b>Phone powers</b
+                ><small>Messages, calendar, contacts, alarms, widgets, driving</small></span
+              >
+            </summary>
+            <div class="gb">
+              <div class="li">
+                <span style="flex: 1"
+                  >Read &amp; reply to messages<br /><small class="muted"
+                    >Texts, WhatsApp and more. Turn on <b>Alton</b> in Notification access. Replies
+                    are only sent when you tap Send.</small
+                  ></span
+                ><button class="btn" id="pwMsgs" style="padding: 6px 10px"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Calendar<br /><small class="muted"
+                    >Shifts go straight in, and “what’s on today?”</small
+                  ></span
+                ><button class="btn" id="pwCal" style="padding: 6px 10px"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Contacts<br /><small class="muted">So “text Sam” finds Sam’s number</small></span
+                ><button class="btn" id="pwContacts" style="padding: 6px 10px"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Shift alarms by themselves<br /><small class="muted"
+                    >The night before a shift, Alton sets (or switches on) the Clock alarm for
+                    it</small
+                  ></span
+                ><button class="check" id="pwAlarms"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Send messages by themselves<br /><small class="muted"
+                    >Texts, WhatsApp, Snapchat and replies go as soon as you ask, no tapping. Alton
+                    says who it sent what to.</small
+                  ></span
+                ><button class="check" id="pwAutoMsg"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Read my shift app<br /><small class="muted"
+                    >Turn on <b>Alton: read my shift app</b> in Accessibility (Installed
+                    apps)</small
+                  ></span
+                ><button class="btn" id="pwScreen" style="padding: 6px 10px"></button>
+              </div>
+              <h3 class="sub">Alarms and Alexa</h3>
+              <label class="muted" style="display: block"
+                >How Alton reaches Alexa
+                <select id="pwAlexaVia" class="input" style="margin-top: 4px">
+                  <option value="app">Type it in the Alexa app (silent, works anywhere)</option>
+                  <option value="speak">Say it out loud (phone near the Echo)</option>
+                </select></label
+              >
+              <label class="muted" style="display: block; margin-top: 8px"
+                >Your Echo’s name, as in the Alexa app (so alarms go on it)
+                <input
+                  id="pwAlexaDev"
+                  class="input"
+                  placeholder="e.g. Jack's Echo Dot"
+                  style="margin-top: 4px"
+              /></label>
+              <button class="btn full" id="pwAlexaTest" style="margin: 8px 0">
+                Test: ask Alexa the time
+              </button>
+              <div class="li">
+                <span style="flex: 1"
+                  >Alarms also go to Alexa<br /><small class="muted"
+                    >Alton says “Alexa, set an alarm for…” out loud, so keep the phone near your
+                    Echo with the volume up</small
+                  ></span
+                ><button class="check" id="pwAlexa"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Shift alarms too<br /><small class="muted"
+                    >When Alton sets tomorrow’s shift alarm (in the evening), it tells Alexa as
+                    well</small
+                  ></span
+                ><button class="check" id="pwShiftAlexa"></button>
+              </div>
+              <h3 class="sub">Hands-free &amp; driving</h3>
+              <p class="muted small">
+                Driving mode keeps listening while Alton is on screen (phone in a car mount): say
+                “Alton, text Sam I’m on my way” or “Alton, next song”. It reads new messages out and
+                sends only after you say “send it”.
+              </p>
+              <div class="li">
+                <span style="flex: 1"
+                  >Open Alton with the assistant button<br /><small class="muted"
+                    >Choose Alton as the “Digital assistant app”; then long-press the home button
+                    (or swipe up from a bottom corner) to open it already listening</small
+                  ></span
+                ><button class="btn" id="pwAssist" style="padding: 6px 10px">Set up</button>
+              </div>
+              <h3 class="sub">Home-screen widgets</h3>
+              <p class="muted small">
+                Alton has five widgets: <b>Alton Clock</b>, <b>Alton Battery</b>,
+                <b>Alton Weather</b>, <b>Alton Screen time</b> and <b>Alton</b>. Each one changes
+                with its size: drag its edges smaller or bigger (e.g. the clock shows just the time
+                when small, the weather adds the next four days when big). To swipe between them
+                like your others: add one (long-press the home screen › Widgets › Alton), long-press
+                it › <b>Create stack</b>, and add the others to it.
+              </p>
+              <div class="li">
+                <span style="flex: 1"
+                  >Screen time on the widgets<br /><small class="muted"
+                    >Usage access: switch on Alton</small
+                  ></span
+                ><button class="btn" id="pwUsage" style="padding: 6px 10px"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Earbud and watch batteries on the clock<br /><small class="muted"
+                    >Nearby devices permission</small
+                  ></span
+                ><button class="btn" id="pwBt" style="padding: 6px 10px"></button>
+              </div>
+              <h3 class="sub">Watch heads-ups (Fitbit and other watches)</h3>
+              <p class="muted small">
+                Notifications at the right moments, so your watch buzzes even with Alton closed. In
+                the Fitbit app: Versa 2 › Notifications › App notifications › turn on Alton.
+              </p>
+              <div class="li">
+                <span style="flex: 1"
+                  >Shift the evening before<br /><small class="muted"
+                    >Tomorrow’s times, alarm and leave-by. At
+                    <input
+                      id="wEveHour"
+                      class="input hourin"
+                      type="number"
+                      min="0"
+                      max="23"
+                    />:00</small
+                  ></span
+                ><button class="check" id="wEve"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Time to leave<br /><small class="muted" id="wLeaveNote"
+                    >10 minutes before you need to go</small
+                  ></span
+                ><button class="check" id="wLeave"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Morning summary<br /><small class="muted"
+                    >Today’s shift, first event and weather. At
+                    <input
+                      id="wMorningHour"
+                      class="input hourin"
+                      type="number"
+                      min="0"
+                      max="23"
+                    />:00</small
+                  ></span
+                ><button class="check" id="wMorning"></button>
+              </div>
+              <button class="btn full" id="wTest" style="margin: 6px 0 12px">
+                Send a test to my watch
+              </button>
+              <label class="muted" style="display: block; margin-top: 8px"
+                >Read new messages out loud (even with Alton closed)
+                <select id="pwAnnounce" class="input" style="margin-top: 4px">
+                  <option value="off">Off</option>
+                  <option value="headphones">Only with headphones or car Bluetooth</option>
+                  <option value="always">Always (not when the phone is on silent)</option>
+                </select></label
+              >
+              <div class="row" style="margin: 6px 0 4px">
+                <label class="muted" style="flex: 1"
+                  >Quiet from (hour)
+                  <input id="pwQuietFrom" class="input" type="number" min="0" max="23"
+                /></label>
+                <label class="muted" style="flex: 1"
+                  >until <input id="pwQuietTo" class="input" type="number" min="0" max="23"
+                /></label>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Read new messages out in Driving mode<br /><small class="muted"
+                    >Needs “Read &amp; reply to messages”</small
+                  ></span
+                ><button class="check" id="pwReadOut"></button>
+              </div>
+              <p class="muted small">
+                If Android says <b>“Restricted setting”</b> when you turn something on: open App
+                info, tap ⋮ (top right) › <b>Allow restricted settings</b>, then try again. Android
+                asks this for apps installed from outside the Play Store.
+              </p>
+              <button class="btn full" id="pwRestricted">Open Alton’s App info</button>
+            </div>
+          </details>
           <details class="grp" id="healthGrp" hidden>
             <summary>
               <span class="gi"
@@ -3180,52 +3318,48 @@
               <div id="healthOut" style="margin-top: 10px"></div>
             </div>
           </details>
+          <h2 class="set-h">Account &amp; data</h2>
           <details class="grp">
             <summary>
               <span class="gi"
                 ><svg viewBox="0 0 24 24">
-                  <path d="M4 5h16v11H8l-4 4zM8 10h.01M12 10h.01M16 10h.01" /></svg></span
+                  <path d="M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4z" /></svg></span
               ><span class="gt"
-                ><b>Personality</b><small>Name, tone, humour, how it talks to you</small></span
+                ><b>Claude &amp; spending</b><small>Model, saver mode, monthly limit</small></span
               >
             </summary>
             <div class="gb">
+              <label class="muted">Model</label>
+              <select id="model" class="input" style="margin: 4px 0 6px">
+                <option value="claude-haiku-5-5">Haiku 5.5 · fastest, cheapest</option>
+                <option value="claude-sonnet-5-5">Sonnet 5.5 · smarter</option>
+                <option value="claude-opus-5-5">Opus 5.5 · smartest</option>
+              </select>
               <div class="li">
                 <span style="flex: 1"
-                  >Same personality as my PC<br /><small class="muted"
-                    >Off: set it up differently on this phone</small
+                  >Saver mode<br /><small class="muted"
+                    >Cheapest model, shorter memory of the chat, fewer web searches</small
                   ></span
-                ><button class="check" id="matchPersToggle"></button>
+                ><button class="check" id="saverToggle"></button>
               </div>
-              <div id="persBox">
-                <label class="muted">Assistant's name</label>
-                <input id="asstName" class="input" style="margin: 4px 0 10px" />
-                <label class="muted">Style</label>
-                <select id="persPreset" class="input" style="margin: 4px 0 10px"></select>
-                <label class="muted">Tone</label>
-                <select id="persTone" class="input" style="margin: 4px 0 10px">
-                  <option value="warm">Warm</option>
-                  <option value="formal">Formal</option>
-                  <option value="dry-wit">Dry wit</option>
-                  <option value="concise">Concise</option>
-                  <option value="playful">Playful</option>
-                </select>
-                <label class="muted"
-                  >How it addresses you (e.g. sir, boss, your name; blank = nothing)</label
-                >
-                <input id="persTitle" class="input" style="margin: 4px 0 10px" />
-                <div class="steps">
-                  <label class="muted"
-                    >Detail <input type="range" id="persVerb" min="1" max="5" step="1"
-                  /></label>
-                  <label class="muted"
-                    >Humour <input type="range" id="persHumour" min="0" max="3" step="1"
-                  /></label>
-                  <label class="muted"
-                    >Suggestions <input type="range" id="persPro" min="0" max="2" step="1"
-                  /></label>
-                </div>
+              <div class="row stats" style="margin: 12px 0 4px">
+                <div><b id="spendToday">£0.00</b><small class="muted">Today</small></div>
+                <div><b id="spendMonth">£0.00</b><small class="muted">This month</small></div>
               </div>
+              <label class="muted" style="display: block; margin-top: 8px"
+                >Warn me above (£ a month, blank = no warning)
+                <input
+                  id="budget"
+                  class="input"
+                  inputmode="numeric"
+                  placeholder="e.g. 5"
+                  style="margin-top: 4px"
+              /></label>
+              <p class="muted small">
+                Estimates from each reply's size; the PC tracks its own spending. Set a hard limit
+                at console.anthropic.com › Limits.
+              </p>
+              <button class="btn full" id="keyChange">Change Claude key</button>
             </div>
           </details>
           <details class="grp">
@@ -3256,26 +3390,6 @@
                 {text} is replaced by whatever you type after it (or what you copied).
               </p>
               <button class="btn acc full" id="prSave">Save prompt</button>
-            </div>
-          </details>
-          <details class="grp">
-            <summary>
-              <span class="gi"
-                ><svg viewBox="0 0 24 24">
-                  <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" /></svg></span
-              ><span class="gt"><b>You</b><small>Name, country</small></span>
-            </summary>
-            <div class="gb">
-              <label class="muted">Your first name</label
-              ><input id="userName" class="input" style="margin: 4px 0 10px" />
-              <label class="muted">Country code for phone numbers</label
-              ><input
-                id="country"
-                class="input"
-                inputmode="numeric"
-                style="margin-top: 4px"
-                placeholder="44"
-              />
             </div>
           </details>
           <details class="grp">
@@ -3346,13 +3460,19 @@
             <path d="M3 10h18M8 3v4M16 3v4" /></svg
           >Today
         </button>
+        <button data-v="work">
+          <svg viewBox="0 0 24 24">
+            <rect x="3" y="7" width="18" height="13" rx="2" />
+            <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" /></svg
+          >Work
+        </button>
         <button data-v="people">
           <svg viewBox="0 0 24 24">
-            <circle cx="9" cy="8" r="3.5" />
-            <path
-              d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5a6.5 6.5 0 0 1 3.5 5.5"
-            /></svg
-          >People
+            <path d="M9 6h11M9 12h11M9 18h11" />
+            <circle cx="4.5" cy="6" r="1.3" />
+            <circle cx="4.5" cy="12" r="1.3" />
+            <circle cx="4.5" cy="18" r="1.3" /></svg
+          >Lists
         </button>
         <button data-v="pc">
           <svg viewBox="0 0 24 24">

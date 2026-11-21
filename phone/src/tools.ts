@@ -364,6 +364,12 @@ export const APP_TOOLS: Anthropic.Tool[] = [
       'Open the user\'s shift/rota app on the phone and read the rota off the screen (no screenshot needed). Then call add_shifts with the shifts you find. Use for "add my shifts", "check my rota", "have my shifts changed?".',
     input_schema: obj({}),
   },
+  {
+    name: 'remind_at_work',
+    description:
+      'Remind the user of something next time they arrive at work (their workplace is set in Work › At work list). Shown as a notification when they get there, with their shopping list. Use for "remind me at work to…", "when I get to work tell me…".',
+    input_schema: obj({ text: { type: 'string' } }, ['text']),
+  },
 ];
 
 export function runPhoneTool(name: string, input: unknown, st: ToolState): ToolOutcome {
