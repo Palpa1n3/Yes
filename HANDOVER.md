@@ -60,7 +60,16 @@ Read this first in a new chat, then README.md for the feature list.
   Phone-only jobs: `needsPhone(text)` (shift app, rota, texts, Snapchat, alarms, Alexa…) and any
   chat that already did one (`phoneChats`) are answered on the phone even with the PC connected.
   `readApp` re-reads the first page every 2 s until `looksLoaded` (2+ times/dates, no "Loading"),
-  up to ~25 s, trying a Schedule/Rota/Shifts tab halfway if no tab is set.
+  up to ~25 s. Flow: app in front → tap the tab (`shiftTab`, else Schedule/Rota/My shifts) → read and
+  scroll the week → scroll to top → `ScreenReader.tapNextWeek` (the `shiftNext` name, "Next"/›/>,
+  else the nearest tappable thing right of the top date text) → read again, `shiftWeeks` (default 2)
+  times. A "— next week —" line separates weeks; a `note` comes back if the next button wasn't found.
+  The phone builds its system prompt once per reply (`ask`): it holds the time, and a changed prompt
+  mid-reply makes the API reject the earlier thinking blocks (400 "block is bound…").
+  "Send messages by themselves" (`S.autoMessages`, default on, Settings › Phone powers): in `ask`,
+  message actions (reply, Snapchat, sms: link → `sendSms`, wa.me link → native `waSend`, which opens
+  the chat and presses Send via the accessibility service) are sent inside the tool loop, the tool
+  result becomes "SENT …" and the action gets `done` (shown as Sent ✓). Calls/emails stay buttons.
   Backgrounds: 15 CSS-only (`body[data-bg]`), `drift` animates (off for reduced motion).
   Phone health: `Diagnostics.java` readings → `src/shared/diagnostics.ts` (`healthReport`: issues
   with fixes) → the `phone_diagnostics` tool and Settings › Phone health.

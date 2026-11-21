@@ -243,3 +243,17 @@ describe('needsPhone', () => {
     expect(needsPhone('what is the weather')).toBe(false);
   });
 });
+
+describe('auto-send links', () => {
+  it('the SMS and WhatsApp links parse back to number and text', async () => {
+    const { smsLink, whatsappLink } = await import('../src/shared/phone');
+    const sms = /^sms:([+\d]+)\?&?body=(.*)$/i.exec(smsLink('07700 900123', 'On my way & late!'));
+    expect(sms?.[1]).toBe('07700900123');
+    expect(decodeURIComponent(sms?.[2] ?? '')).toBe('On my way & late!');
+    const wa = /^https:\/\/wa\.me\/(\d+)\?text=(.*)$/i.exec(
+      whatsappLink('07700 900123', 'Hi? 10 mins', '44'),
+    );
+    expect(wa?.[1]).toBe('447700900123');
+    expect(decodeURIComponent(wa?.[2] ?? '')).toBe('Hi? 10 mins');
+  });
+});

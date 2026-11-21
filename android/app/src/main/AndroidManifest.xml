@@ -154,6 +154,8 @@
         <package android:name="com.samsung.android.forest" />
         <package android:name="com.google.android.apps.wellbeing" />
         <package android:name="com.amazon.dee.app" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
         <!-- To see which keyboard app is in use (phone health check) -->
         <intent>
             <action android:name="android.view.InputMethod" />

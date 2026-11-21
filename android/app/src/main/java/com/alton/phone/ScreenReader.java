@@ -7,6 +7,7 @@ import android.provider.Settings;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -99,6 +100,74 @@ public class ScreenReader extends AccessibilityService {
             if (f != null) return f;
         }
         return null;
+    }
+
+    /** Scrolls the first scrollable list back to the top (a few pages up). */
+    public void scrollToTop() {
+        for (int i = 0; i < 10; i++) {
+            AccessibilityNodeInfo s = findScrollable(getRootInActiveWindow(), 0);
+            if (s == null || !s.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)) return;
+        }
+    }
+
+    private static final java.util.regex.Pattern DATEISH = java.util.regex.Pattern.compile(
+        "\\b\\d{1,2}(st|nd|rd|th)?\\s?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|\\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s\\d{1,2}\\b|\\bweek\\b|\\b\\d{1,2}/\\d{1,2}\\b",
+        java.util.regex.Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * Goes to the next week in a rota: a button named like "next" (or the user's own name for it),
+     * else the control just to the right of the date bar at the top (an arrow or the next date tab).
+     */
+    public boolean tapNextWeek(String own) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        if (own != null && !own.trim().isEmpty() && tapText(own)) return true;
+        for (String t : new String[] { "Next week", "Next", "Forward", "›", ">", "→", "Following week" })
+            if (tapText(t)) return true;
+        if (tapContaining(new String[] { "next week", "next period", "go forward" })) return true;
+        // The date bar: the highest date-looking text in the top part of the screen.
+        android.graphics.Rect screen = new android.graphics.Rect();
+        root.getBoundsInScreen(screen);
+        List<AccessibilityNodeInfo> all = new java.util.ArrayList<>();
+        flatten(root, all, 0);
+        AccessibilityNodeInfo header = null;
+        android.graphics.Rect hb = new android.graphics.Rect();
+        for (AccessibilityNodeInfo n : all) {
+            CharSequence t = n.getText() != null ? n.getText() : n.getContentDescription();
+            if (t == null || t.length() > 40 || !DATEISH.matcher(t).find()) continue;
+            android.graphics.Rect b = new android.graphics.Rect();
+            n.getBoundsInScreen(b);
+            if (b.top > screen.top + screen.height() * 0.4) continue;
+            if (header == null || b.top < hb.top) {
+                header = n;
+                hb.set(b);
+            }
+        }
+        if (header == null) return false;
+        // The nearest tappable thing to its right on the same row.
+        AccessibilityNodeInfo best = null;
+        int bestDx = Integer.MAX_VALUE;
+        for (AccessibilityNodeInfo n : all) {
+            if (!n.isClickable() || n.equals(header)) continue;
+            android.graphics.Rect b = new android.graphics.Rect();
+            n.getBoundsInScreen(b);
+            if (Math.abs(b.centerY() - hb.centerY()) > hb.height() + 20) continue;
+            if (b.centerX() <= hb.centerX() || b.contains(hb)) continue;
+            int dx = b.left - hb.right;
+            if (dx < -hb.width() / 2) continue;
+            if (Math.abs(dx) < bestDx) {
+                bestDx = Math.abs(dx);
+                best = n;
+            }
+        }
+        return best != null && best.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+    }
+
+    private void flatten(AccessibilityNodeInfo n, List<AccessibilityNodeInfo> out, int depth) {
+        if (n == null || depth > 40 || out.size() > 800) return;
+        out.add(n);
+        for (int i = 0; i < n.getChildCount(); i++) flatten(n.getChild(i), out, depth + 1);
     }
 
     /** Taps the first item whose text or description is exactly this (any case). */

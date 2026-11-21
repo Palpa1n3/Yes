@@ -663,9 +663,12 @@ public class AltonNativePlugin extends Plugin {
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         ctx.startActivity(launch);
         final Set<String> lines = ScreenReader.newLines();
-        // stage, tries in this stage, pages read
-        final int[] st = { 0, 0, 0 };
+        final String nextName = call.getString("next", "");
+        final int weeks = Math.max(1, Math.min(4, call.getInt("weeks", 2)));
+        // stage, tries in this stage, pages read this week, weeks read
+        final int[] st = { 0, 0, 0, 0 };
         final String[] seen = { "" };
+        final String[] note = { null };
         final Runnable[] step = new Runnable[1];
         step[0] = () -> {
             ScreenReader sr = ScreenReader.get();
@@ -676,44 +679,69 @@ public class AltonNativePlugin extends Plugin {
             seen[0] = sr.frontPackage();
             switch (st[0]) {
                 case 0: // wait for the app to be in front (splash screens, sign-in)
-                    if (!pkg.equals(seen[0]) && st[1]++ < 6) {
+                    if (!pkg.equals(seen[0]) && st[1]++ < 8) {
                         main.postDelayed(step[0], 1500);
                         return;
                     }
                     st[0] = 1;
                     st[1] = 0;
-                    main.postDelayed(step[0], 2500); // let it load the rota
+                    main.postDelayed(step[0], 2500);
                     return;
-                case 1: // open the rota tab if one is named
-                    st[0] = 2;
-                    if (tapFirst != null && !tapFirst.isEmpty() && sr.tapText(tapFirst)) {
-                        main.postDelayed(step[0], 2500);
+                case 1: { // go to the schedule tab (the one set in Phone powers, else "Schedule")
+                    boolean tapped = false;
+                    if (tapFirst != null && !tapFirst.isEmpty()) tapped = sr.tapText(tapFirst);
+                    if (!tapped)
+                        for (String t : new String[] { "Schedule", "My schedule", "Rota", "My rota", "My shifts", "Shifts" })
+                            if (sr.tapText(t)) {
+                                tapped = true;
+                                break;
+                            }
+                    // Not there yet (still loading)? Try again a few times.
+                    if (!tapped && st[1]++ < 3) {
+                        main.postDelayed(step[0], 2000);
                         return;
                     }
+                    st[0] = 2;
+                    st[1] = 0;
+                    main.postDelayed(step[0], tapped ? 2500 : 500);
+                    return;
+                }
+                case 2: { // read this week: wait until it has loaded, then scroll down for the rest
+                    Set<String> page = ScreenReader.newLines();
+                    sr.collectApp(pkg, page);
+                    if (st[2] == 0 && !looksLoaded(page) && st[1]++ < 12) {
+                        main.postDelayed(step[0], 2000);
+                        return;
+                    }
+                    int before = lines.size();
+                    lines.addAll(page);
+                    st[2]++;
+                    if (st[2] < 8 && (st[2] == 1 || lines.size() > before) && sr.scrollDown()) {
+                        main.postDelayed(step[0], 1300);
+                        return;
+                    }
+                    st[3]++;
+                    st[0] = 3;
                     main.post(step[0]);
                     return;
-                default: // read, waiting until the rota has loaded, then scroll for more
-                    int before = lines.size();
-                    if (st[2] == 0) {
-                        // First page: read it fresh each try until it looks loaded (times or
-                        // dates on screen, no "Loading…"), up to ~25 s for slow shift apps.
-                        lines.clear();
-                        sr.collectApp(pkg, lines);
-                        boolean loaded = looksLoaded(lines);
-                        if (!loaded && st[1] == 6 && (tapFirst == null || tapFirst.isEmpty())) {
-                            // Still nothing: it may have opened on a home page. Try its schedule tab.
-                            for (String t : new String[] { "Schedule", "My schedule", "Rota", "My shifts", "Shifts" })
-                                if (sr.tapText(t)) break;
-                        }
-                        if (!loaded && st[1]++ < 12) {
-                            main.postDelayed(step[0], 2000);
-                            return;
-                        }
-                        before = 0;
-                    } else sr.collectApp(pkg, lines);
-                    st[2]++;
-                    if (st[2] < 8 && lines.size() > before && sr.scrollDown()) main.postDelayed(step[0], 1300);
-                    else finishRead(call, ctx, lines, null, seen[0]);
+                }
+                default: // next week: back to the top, then the date bar's "next"
+                    if (st[3] >= weeks) {
+                        finishRead(call, ctx, lines, note[0], seen[0]);
+                        return;
+                    }
+                    sr.scrollToTop();
+                    if (!sr.tapNextWeek(nextName)) {
+                        note[0] = "Read this week only: couldn't find the button for the next week. "
+                            + "Set its name in Settings › Phone powers.";
+                        finishRead(call, ctx, lines, note[0], seen[0]);
+                        return;
+                    }
+                    lines.add("— next week —");
+                    st[0] = 2;
+                    st[1] = 0;
+                    st[2] = 0;
+                    main.postDelayed(step[0], 2500);
             }
         };
         main.postDelayed(step[0], 2000);
@@ -808,6 +836,68 @@ public class AltonNativePlugin extends Plugin {
             }
         };
         main.postDelayed(step[0], 3000);
+    }
+
+    /**
+     * Sends a WhatsApp message: opens the chat with the text filled in, presses Send, then comes
+     * back to Alton. `phone` is the number in international form without "+" (e.g. 447700900123).
+     */
+    @PluginMethod
+    public void waSend(final PluginCall call) {
+        final String phone = call.getString("phone", "").replaceAll("[^0-9]", "");
+        final String text = call.getString("text", "").trim();
+        final Context ctx = getContext();
+        if (phone.isEmpty() || text.isEmpty()) {
+            call.reject("Need a number and a message.");
+            return;
+        }
+        if (!ScreenReader.isEnabled(ctx) || ScreenReader.get() == null) {
+            call.reject("Turn on “Read my shift app” in Phone powers first (WhatsApp sending uses the same permission).");
+            return;
+        }
+        String pkg = null;
+        for (String p : new String[] { "com.whatsapp", "com.whatsapp.w4b" })
+            if (ctx.getPackageManager().getLaunchIntentForPackage(p) != null) {
+                pkg = p;
+                break;
+            }
+        if (pkg == null) {
+            call.reject("WhatsApp isn't installed.");
+            return;
+        }
+        final String wa = pkg;
+        Intent i = new Intent(
+            Intent.ACTION_VIEW,
+            android.net.Uri.parse("whatsapp://send?phone=" + phone + "&text=" + android.net.Uri.encode(text))
+        );
+        i.setPackage(wa);
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            ctx.startActivity(i);
+        } catch (Exception e) {
+            call.reject("Couldn't open WhatsApp.");
+            return;
+        }
+        final int[] tries = { 0 };
+        final Runnable[] step = new Runnable[1];
+        step[0] = () -> {
+            ScreenReader sr = ScreenReader.get();
+            if (sr == null) {
+                endSnap(call, ctx, "Screen reading was switched off.");
+                return;
+            }
+            // Wait for the chat to open with the text in it, then press Send.
+            if (!wa.equals(sr.frontPackage()) || !sr.pressSend()) {
+                if (tries[0]++ < 6) {
+                    main.postDelayed(step[0], 1200);
+                    return;
+                }
+                endSnap(call, ctx, "Opened WhatsApp but couldn't press Send: check it there.");
+                return;
+            }
+            main.postDelayed(() -> endSnap(call, ctx, null), 900);
+        };
+        main.postDelayed(step[0], 2000);
     }
 
     /**
@@ -912,6 +1002,7 @@ public class AltonNativePlugin extends Plugin {
         r.put("text", sb.toString());
         r.put("front", front == null ? "" : front);
         r.put("lines", lines.size());
+        if (err != null) r.put("note", err);
         call.resolve(r);
     }
 }

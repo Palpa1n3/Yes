@@ -2689,6 +2689,14 @@
               </div>
               <div class="li">
                 <span style="flex: 1"
+                  >Send messages by themselves<br /><small class="muted"
+                    >Texts, WhatsApp, Snapchat and replies go as soon as you ask, no tapping. Alton
+                    says who it sent what to.</small
+                  ></span
+                ><button class="check" id="pwAutoMsg"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
                   >Read my shift app<br /><small class="muted"
                     >Turn on <b>Alton: read my shift app</b> in Accessibility (Installed
                     apps)</small
@@ -2709,8 +2717,23 @@
                 <input
                   class="input"
                   id="pwTab"
-                  placeholder="Leave blank if the rota shows straight away"
+                  placeholder="Blank = Alton tries Schedule, Rota, My shifts"
               /></label>
+              <div class="row" style="gap: 8px; margin-top: 6px; align-items: flex-end">
+                <label class="muted" style="flex: 2"
+                  >The button for the next week (blank = Alton finds the arrow next to the dates)
+                  <input class="input" id="pwNext" placeholder="e.g. Next week"
+                /></label>
+                <label class="muted" style="flex: 1"
+                  >Weeks to read
+                  <select class="input" id="pwWeeks">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                  </select></label
+                >
+              </div>
               <details class="mini" id="pwPreview" hidden>
                 <summary id="pwPreviewSum">What Alton read last time</summary>
                 <pre

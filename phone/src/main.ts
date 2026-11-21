@@ -255,6 +255,11 @@ interface State {
   shiftAppName: string;
   /** A tab to tap after opening it (where the rota is), e.g. "Schedule". */
   shiftTab: string;
+  /** Send texts/WhatsApp/Snapchat/replies straight away (no tap). */
+  autoMessages: boolean;
+  /** The rota app's "next week" button, and how many weeks to read. */
+  shiftNext: string;
+  shiftWeeks: number;
   autoAlarms: boolean;
   alarmsSet: string[];
   /** Saved prompts were changed on the phone: keep them rather than the PC's. */
@@ -367,6 +372,9 @@ const DEFAULTS: State = {
   shiftApp: '',
   shiftAppName: '',
   shiftTab: '',
+  autoMessages: true,
+  shiftNext: '',
+  shiftWeeks: 2,
   autoAlarms: true,
   alarmsSet: [],
   usePc: true,
@@ -521,13 +529,15 @@ function systemText(): string {
       ? 'DRIVING MODE: the user is driving and hears your reply read aloud. Answer in one or two short spoken sentences, no lists, links or formatting. For texts and replies, get them ready (send_message / reply_message): the user confirms by saying "send it". Never ask them to look at or tap the screen unless unavoidable.'
       : '',
     isApp
-      ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a Send button the user taps), read_calendar for what's on (add_calendar_event adds straight in; edit_event changes events straight away; delete_event makes a Delete button), find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar), snapchat_message to send Snapchat chats (people's Snapchat nicknames are saved), and media_control for music. Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone powers)."
+      ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a reply to one of them), read_calendar for what's on (add_calendar_event adds straight in; edit_event changes events straight away; delete_event makes a Delete button), find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar), snapchat_message to send Snapchat chats (people's Snapchat nicknames are saved), and media_control for music. Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone powers)."
       : '',
     'Alexa: you cannot reach Alexa directly; tell_alexa makes the phone say a command out loud for a nearby Echo (e.g. turning alarms or lights on).',
     isApp
       ? ''
       : 'Shifts: you cannot open or read other apps. To add work shifts to the calendar, the user shares a screenshot of their rota/shift app (screenshot it, then Share › Alton, or the camera button here); read it and use add_shifts. If they ask without a screenshot, tell them that in one or two short steps.',
-    'On the phone you can get things ready with your tools: texts and WhatsApp messages, calls, emails, directions, places nearby, calendar events, timers/alarms (Android), sharing and links. Each becomes a button the user taps and then confirms; never say a message was sent or a call made. If you do not know who someone is, ask, or use the contact button. You can also check where the user is (get_location) and the local weather (get_weather).',
+    isApp && S.autoMessages
+      ? 'Messages send by themselves (the user switched this on): when the user asks you to text, WhatsApp, Snapchat or reply to someone, call the tool straight away (no "shall I send it?") and it is sent at once; the tool result says SENT or why not. Only ask first when who or what is unclear. Calls and emails are still buttons the user taps. If you do not know who someone is, ask, or use the contact button. You can also check where the user is (get_location) and the local weather (get_weather).'
+      : 'On the phone you can get things ready with your tools: texts and WhatsApp messages, calls, emails, directions, places nearby, calendar events, timers/alarms (Android), sharing and links. Each becomes a button the user taps and then confirms; never say a message was sent or a call made. If you do not know who someone is, ask, or use the contact button. You can also check where the user is (get_location) and the local weather (get_weather).',
     'Write for a phone screen: short paragraphs, bullet points when useful. You can search the web when it helps.',
     `Current local date and time: ${now.toLocaleString([], { dateStyle: 'full', timeStyle: 'short' })} (${Intl.DateTimeFormat().resolvedOptions().timeZone}).`,
     shiftLine(),
@@ -598,13 +608,16 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
   setSending(true);
   let activity = 'Thinking…';
   const live = (): void => renderMsgs(activity);
+  // One system prompt for the whole reply: it includes the time, and a slow tool (reading the
+  // shift app) can cross a minute. A changed prompt makes the API reject the earlier thinking.
+  const system = systemText();
   try {
     for (let step = 0; step < 6; step++) {
       const stream = client.messages.stream(
         {
           model: model(),
           max_tokens: 16000,
-          system: [{ type: 'text', text: systemText(), cache_control: { type: 'ephemeral' } }],
+          system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
           tools: [...PHONE_TOOLS, ...(isApp ? APP_TOOLS : []), ...webTools()],
           messages,
           thinking: { type: 'adaptive' },
@@ -692,6 +705,19 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
         }
         if (out.action) reply.actions?.push(out.action);
         if (out.actions) reply.actions?.push(...out.actions);
+        // "Send messages by themselves": send now instead of leaving a button to tap.
+        if (S.autoMessages && isApp) {
+          const notes: string[] = [];
+          for (const a of [out.action, ...(out.actions ?? [])]) {
+            if (!a) continue;
+            activity = 'Sending…';
+            live();
+            const r = await autoSendAction(a);
+            if (r) notes.push(r);
+          }
+          if (notes.length)
+            out.result = `${notes.join(' ')} (Sent automatically: do not ask the user to tap anything. Confirm in one short sentence who it went to.)`;
+        }
         if (out.remember) {
           S.memories.push(out.remember);
           S.newMemories.push(out.remember);
@@ -729,6 +755,44 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
     if (driving) driveAfterReply(reply);
     else if (handsFree) say(reply.text, true, () => handsFree && !busy && toggleMic());
     else say(reply.text);
+  }
+}
+
+/** Sends a message action straight away. Returns what happened for Claude, or null if it isn't a send. */
+async function autoSendAction(a: PhoneAction): Promise<string | null> {
+  if (a.done) return null;
+  let run: (() => Promise<unknown>) | null = null;
+  let what = '';
+  if (a.reply) {
+    const r = a.reply;
+    run = () => Native.replyMessage(r);
+    what = `the reply "${r.text}"`;
+  } else if (a.snap) {
+    const sn = a.snap;
+    run = () => Native.snapSend(sn);
+    what = `"${sn.text}" to ${sn.name} on Snapchat`;
+  } else if (a.href) {
+    const sms = /^sms:([+\d]+)\?&?body=(.*)$/i.exec(a.href);
+    const wa = /^https:\/\/wa\.me\/(\d+)\?text=(.*)$/i.exec(a.href);
+    if (sms?.[1]) {
+      const to = sms[1];
+      const text = decodeURIComponent(sms[2] ?? '');
+      run = () => Native.sendSms({ to, text });
+      what = `a text "${text}" (${a.label})`;
+    } else if (wa?.[1]) {
+      const phone = wa[1];
+      const text = decodeURIComponent(wa[2] ?? '');
+      run = () => Native.waSend({ phone, text });
+      what = `"${text}" on WhatsApp (${a.label})`;
+    }
+  }
+  if (!run) return null;
+  try {
+    await run();
+    a.done = 'Sent ✓';
+    return `SENT ${what}.`;
+  } catch (e) {
+    return `Couldn't send ${what} by itself (${(e as Error).message}); the button is still there to tap.`;
   }
 }
 
@@ -2104,6 +2168,7 @@ function driveAfterReply(reply: PhoneMessage): void {
   let extra = '';
   let nav = '';
   for (const a of reply.actions ?? []) {
+    if (a.done) continue;
     if (a.href?.startsWith('google.navigation:')) {
       nav = a.href;
       continue;
@@ -3089,6 +3154,8 @@ async function readShiftApp(): Promise<{ ok: boolean; text: string }> {
     const r = await Native.readApp({
       package: S.shiftApp,
       ...(S.shiftTab ? { tap: S.shiftTab } : {}),
+      ...(S.shiftNext ? { next: S.shiftNext } : {}),
+      weeks: S.shiftWeeks || 2,
     });
     lastRead = r.text;
     showPreview(r.lines, r.front);
@@ -3102,7 +3169,10 @@ async function readShiftApp(): Promise<{ ok: boolean; text: string }> {
         ok: false,
         text: `Alton opened ${app} but couldn't see any text on it. Some apps hide their text from screen readers; if so, use a screenshot instead (Share › Alton).`,
       };
-    return { ok: true, text: r.text };
+    return {
+      ok: true,
+      text: `${r.text}${r.note ? `\n(Note: ${r.note} Tell the user.)` : ''}\n(Lines after "— next week —" are the following week: check the dates shown.)`,
+    };
   } catch (e) {
     return { ok: false, text: `Couldn't read it: ${(e as Error).message}` };
   }
@@ -3190,9 +3260,14 @@ async function renderPowers(): Promise<void> {
   set('pwBt', !!st?.bluetooth, 'Allow');
   $('pwAlarms').classList.toggle('on', S.autoAlarms);
   $('pwAlarms').textContent = S.autoAlarms ? '✓' : '';
+  $('pwAutoMsg').classList.toggle('on', S.autoMessages);
+  $('pwAutoMsg').textContent = S.autoMessages ? '✓' : '';
   $('pwApp').textContent = S.shiftAppName || 'Choose…';
   const tab = $<HTMLInputElement>('pwTab');
   if (document.activeElement !== tab) tab.value = S.shiftTab;
+  const nx = $<HTMLInputElement>('pwNext');
+  if (document.activeElement !== nx) nx.value = S.shiftNext;
+  $<HTMLSelectElement>('pwWeeks').value = String(S.shiftWeeks || 2);
   renderWatch();
   $<HTMLSelectElement>('pwAnnounce').value = S.announce;
   $<HTMLInputElement>('pwQuietFrom').value = String(S.quietFrom);
@@ -3276,6 +3351,11 @@ function wirePowers(): void {
     await Native.requestAccess({ which: 'contacts' }).catch(() => undefined);
     void renderPowers();
   };
+  $('pwAutoMsg').onclick = () => {
+    S.autoMessages = !S.autoMessages;
+    save();
+    void renderPowers();
+  };
   $('pwAlarms').onclick = () => {
     S.autoAlarms = !S.autoAlarms;
     save();
@@ -3313,6 +3393,14 @@ function wirePowers(): void {
   };
   $<HTMLInputElement>('pwTab').onchange = (e) => {
     S.shiftTab = (e.target as HTMLInputElement).value.trim().slice(0, 40);
+    save();
+  };
+  $<HTMLInputElement>('pwNext').onchange = (e) => {
+    S.shiftNext = (e.target as HTMLInputElement).value.trim().slice(0, 40);
+    save();
+  };
+  $<HTMLSelectElement>('pwWeeks').onchange = (e) => {
+    S.shiftWeeks = Number((e.target as HTMLSelectElement).value) || 2;
     save();
   };
   $('pwRead').onclick = async () => {
@@ -3734,6 +3822,15 @@ async function openIcs(name: string, text: string): Promise<void> {
 }
 
 function actionNode(a: PhoneAction): HTMLElement {
+  if (a.done) {
+    // Already sent by itself: show it, don't offer to send again.
+    const d = el('div', 'actbtn done');
+    const t = el('span');
+    t.appendChild(document.createTextNode(a.label));
+    t.appendChild(el('small', undefined, `${a.done}${a.sub ? ` ${a.sub}` : ''}`));
+    d.append(el('span', 'dot'), t);
+    return d;
+  }
   const b = el(a.href ? 'a' : 'button', 'actbtn') as HTMLAnchorElement;
   const txt = el('span');
   txt.appendChild(document.createTextNode(a.label));

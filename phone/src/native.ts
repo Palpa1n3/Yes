@@ -361,8 +361,14 @@ interface AltonNativePlugin {
   readApp(o: {
     package: string;
     tap?: string;
-  }): Promise<{ text: string; front: string; lines: number }>;
+    /** Rota apps: the "next week" button's name (blank = the arrow beside the dates). */
+    next?: string;
+    /** Rota apps: how many weeks to read (going to the next week between them). */
+    weeks?: number;
+  }): Promise<{ text: string; front: string; lines: number; note?: string }>;
   snapSend(o: { name: string; text: string }): Promise<void>;
+  /** WhatsApp: open the chat with the text and press Send (number without "+"). */
+  waSend(o: { phone: string; text: string }): Promise<void>;
   takeAssist(): Promise<{ assist: boolean; mode: 'drive' | 'talk' }>;
   setWidget(o: {
     title: string;
