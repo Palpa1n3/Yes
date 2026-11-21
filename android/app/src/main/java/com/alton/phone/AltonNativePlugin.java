@@ -55,6 +55,8 @@ public class AltonNativePlugin extends Plugin {
     private static AltonNativePlugin instance;
     /** Opened as the phone's assistant (long-press / side key): start listening straight away. */
     static volatile boolean assistPending = false;
+    /** How it was opened: "drive" (assistant button / widget Drive) or "talk" (widget Talk). */
+    static volatile String assistMode = "drive";
 
     @Override
     public void load() {
@@ -62,10 +64,11 @@ public class AltonNativePlugin extends Plugin {
     }
 
     /** Called by MainActivity when Alton is opened as the assistant while already running. */
-    static void assistOpened() {
+    static void assistOpened(String mode) {
         assistPending = true;
+        assistMode = mode;
         final AltonNativePlugin p = instance;
-        if (p != null) p.main.post(() -> p.notifyListeners("assist", new JSObject()));
+        if (p != null) p.main.post(() -> p.notifyListeners("assist", new JSObject().put("mode", mode)));
     }
 
     /** Called by MessageListener when a new message notification arrives. */
@@ -86,11 +89,28 @@ public class AltonNativePlugin extends Plugin {
         call.resolve();
     }
 
+    /** What the home-screen widget shows. */
+    @PluginMethod
+    public void setWidget(PluginCall call) {
+        getContext()
+            .getSharedPreferences(AltonWidget.PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString("title", call.getString("title", "ALTON"))
+            .putString("line1", call.getString("line1", ""))
+            .putString("line2", call.getString("line2", ""))
+            .putString("line3", call.getString("line3", ""))
+            .apply();
+        try {
+            AltonWidget.refresh(getContext());
+        } catch (Exception ignored) {}
+        call.resolve();
+    }
+
     @PluginMethod
     public void takeAssist(PluginCall call) {
         boolean was = assistPending;
         assistPending = false;
-        call.resolve(new JSObject().put("assist", was));
+        call.resolve(new JSObject().put("assist", was).put("mode", assistMode));
     }
 
     /* ── Hands-free helpers: screen on while driving, music keys, volume ── */
@@ -333,6 +353,8 @@ public class AltonNativePlugin extends Plugin {
             CalendarContract.Instances.END,
             CalendarContract.Instances.ALL_DAY,
             CalendarContract.Instances.EVENT_LOCATION,
+            CalendarContract.Instances.EVENT_ID,
+            CalendarContract.Instances.RRULE,
         };
         JSArray out = new JSArray();
         try (Cursor c = getContext().getContentResolver().query(b.build(), cols, null, null, CalendarContract.Instances.BEGIN + " ASC")) {
@@ -343,6 +365,8 @@ public class AltonNativePlugin extends Plugin {
                 o.put("end", c.getLong(2));
                 o.put("allDay", c.getInt(3) == 1);
                 o.put("location", c.getString(4) == null ? "" : c.getString(4));
+                o.put("id", c.getLong(5));
+                o.put("repeats", c.getString(6) != null && !c.getString(6).isEmpty());
                 out.put(o);
             }
         } catch (Exception e) {
@@ -411,6 +435,74 @@ public class AltonNativePlugin extends Plugin {
             } catch (Exception ignored) {}
         }
         call.resolve(new JSObject().put("added", added));
+    }
+
+    /** Repeating events are left to the Calendar app (changing one would change them all). */
+    private String repeatCheck(ContentResolver cr, long id) {
+        String[] cols = { CalendarContract.Events.RRULE, CalendarContract.Events.TITLE };
+        try (Cursor c = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), cols, null, null, null)) {
+            if (c == null || !c.moveToFirst()) return "That event isn't in the calendar any more.";
+            String rr = c.getString(0);
+            if (rr != null && !rr.isEmpty()) return "“" + c.getString(1) + "” repeats, so change it in the Calendar app.";
+        } catch (Exception e) {
+            return "Couldn't read that event.";
+        }
+        return null;
+    }
+
+    @PluginMethod
+    public void updateEvent(PluginCall call) {
+        if (getPermissionState("calendar") != PermissionState.GRANTED) {
+            call.reject("Calendar permission is off.");
+            return;
+        }
+        long id = num(call, "id");
+        ContentResolver cr = getContext().getContentResolver();
+        String bad = id > 0 ? repeatCheck(cr, id) : "Which event?";
+        if (bad != null) {
+            call.reject(bad);
+            return;
+        }
+        ContentValues v = new ContentValues();
+        JSONObject d = call.getData();
+        if (d.has("title")) v.put(CalendarContract.Events.TITLE, d.optString("title"));
+        if (d.has("location")) v.put(CalendarContract.Events.EVENT_LOCATION, d.optString("location"));
+        if (d.has("notes")) v.put(CalendarContract.Events.DESCRIPTION, d.optString("notes"));
+        long start = num(call, "start");
+        long end = num(call, "end");
+        if (start > 0) v.put(CalendarContract.Events.DTSTART, start);
+        if (end > 0) v.put(CalendarContract.Events.DTEND, end);
+        if (v.size() == 0) {
+            call.reject("Nothing to change.");
+            return;
+        }
+        try {
+            int n = cr.update(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), v, null, null);
+            call.resolve(new JSObject().put("updated", n));
+        } catch (Exception e) {
+            call.reject("Couldn't change that event.");
+        }
+    }
+
+    @PluginMethod
+    public void deleteEvent(PluginCall call) {
+        if (getPermissionState("calendar") != PermissionState.GRANTED) {
+            call.reject("Calendar permission is off.");
+            return;
+        }
+        long id = num(call, "id");
+        ContentResolver cr = getContext().getContentResolver();
+        String bad = id > 0 ? repeatCheck(cr, id) : "Which event?";
+        if (bad != null) {
+            call.reject(bad);
+            return;
+        }
+        try {
+            int n = cr.delete(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), null, null);
+            call.resolve(new JSObject().put("deleted", n));
+        } catch (Exception e) {
+            call.reject("Couldn't delete that event.");
+        }
     }
 
     /* ── Contacts (needs the Contacts permission) ── */

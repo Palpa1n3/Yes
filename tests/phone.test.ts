@@ -192,6 +192,8 @@ describe('Android app tools', () => {
       'read_messages',
       'reply_message',
       'read_calendar',
+      'edit_event',
+      'delete_event',
       'find_contact',
       'snapchat_message',
       'media_control',

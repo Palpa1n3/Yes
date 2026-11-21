@@ -1100,6 +1100,54 @@
         color: var(--ice);
         border-top: 1px solid var(--line);
       }
+      .wx-now {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+        color: var(--text);
+      }
+      .wx-icon {
+        font-size: 40px;
+        line-height: 1;
+        filter: drop-shadow(0 0 10px rgba(63, 208, 255, 0.35));
+      }
+      .wx-icon.sm {
+        font-size: 22px;
+        filter: none;
+      }
+      .wx-temp {
+        font-size: 30px;
+        font-weight: 600;
+        color: var(--ice);
+      }
+      .wx-days {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+        text-align: center;
+        margin-bottom: 8px;
+      }
+      .wx-day {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        padding: 6px 0;
+        border-radius: 10px;
+        background: rgba(63, 208, 255, 0.05);
+        color: var(--text);
+      }
+      .tint.fog {
+        backdrop-filter: blur(0.6px);
+        background-color: rgba(190, 210, 225, 0.08) !important;
+      }
+      .hourin {
+        display: inline-block;
+        width: 58px;
+        padding: 4px 6px;
+        margin: 2px 2px 0;
+      }
       /* ── Contact search sheet ── */
       .sheet {
         position: fixed;
@@ -1815,7 +1863,7 @@
           </div>
           <div class="card">
             <div class="lbl"><span class="dot"></span>Weather</div>
-            <p id="tdWeather" class="muted" style="margin-top: 0"></p>
+            <div id="tdWeather" class="muted"></div>
             <button class="btn full" id="tdWeatherBtn">Check the weather here</button>
           </div>
           <div class="card" id="tdListsCard">
@@ -2206,6 +2254,49 @@
                   ></span
                 ><button class="btn" id="pwAssist" style="padding: 6px 10px">Set up</button>
               </div>
+              <h3 class="sub">Watch heads-ups (Fitbit and other watches)</h3>
+              <p class="muted small">
+                Notifications at the right moments, so your watch buzzes even with Alton closed. In
+                the Fitbit app: Versa 2 › Notifications › App notifications › turn on Alton.
+              </p>
+              <div class="li">
+                <span style="flex: 1"
+                  >Shift the evening before<br /><small class="muted"
+                    >Tomorrow’s times, alarm and leave-by. At
+                    <input
+                      id="wEveHour"
+                      class="input hourin"
+                      type="number"
+                      min="0"
+                      max="23"
+                    />:00</small
+                  ></span
+                ><button class="check" id="wEve"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Time to leave<br /><small class="muted" id="wLeaveNote"
+                    >10 minutes before you need to go</small
+                  ></span
+                ><button class="check" id="wLeave"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Morning summary<br /><small class="muted"
+                    >Today’s shift, first event and weather. At
+                    <input
+                      id="wMorningHour"
+                      class="input hourin"
+                      type="number"
+                      min="0"
+                      max="23"
+                    />:00</small
+                  ></span
+                ><button class="check" id="wMorning"></button>
+              </div>
+              <button class="btn full" id="wTest" style="margin: 6px 0 12px">
+                Send a test to my watch
+              </button>
               <label class="muted" style="display: block; margin-top: 8px"
                 >Read new messages out loud (even with Alton closed)
                 <select id="pwAnnounce" class="input" style="margin-top: 4px">
@@ -2264,6 +2355,10 @@
                   >Fish Audio API key (optional: the same voice with the PC off; kept on this phone
                   only)</label
                 >
+                <label class="muted"
+                  >Fish voice ID (blank = the one your PC uses; or paste the voice’s Fish Audio
+                  link) <input id="fishVoice" class="input" style="margin: 4px 0 8px"
+                /></label>
                 <div class="row" style="margin: 4px 0 10px">
                   <input
                     id="fishKey"
@@ -2275,9 +2370,8 @@
                   <button class="btn" id="fishKeySave">Save</button>
                 </div>
               </div>
-              <button class="btn full" id="voiceTest" style="margin-bottom: 12px">
-                Test the voice
-              </button>
+              <button class="btn full" id="voiceTest">Test the voice</button>
+              <p class="muted small" id="voiceTestMsg" style="margin-bottom: 12px"></p>
               <label class="muted">Alton's voice</label>
               <select id="voicePick" class="input" style="margin: 4px 0 10px"></select>
               <label class="muted">Speed</label>
@@ -2411,6 +2505,13 @@
                     >A faint glow at the edges: morning, dusk, night</small
                   ></span
                 ><button class="check" id="tintToggle"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Weather on the background<br /><small class="muted"
+                    >Rain, snow, storms and fog where you are (like the PC)</small
+                  ></span
+                ><button class="check" id="wxToggle"></button>
               </div>
               <div class="li">
                 <span style="flex: 1">Snow in December</span

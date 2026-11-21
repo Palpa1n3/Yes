@@ -20,7 +20,8 @@ import {
 import { md, plain } from './md';
 import { CapacitorHttp } from '@capacitor/core';
 import { fishRequest } from '../../src/main/services/fish-tts';
-import type { FishModel } from '@shared/voice';
+import { DEFAULT_FISH_VOICE, FISH_MODELS, type FishModel } from '@shared/voice';
+import { fishError } from '../../src/main/services/fish-tts';
 import {
   canSpeak,
   setAudioVoice,
@@ -28,7 +29,7 @@ import {
   isApp,
   isSpeaking,
   loadVoices,
-  scheduleReminders,
+  scheduleNotes,
   Native,
   powerStatus,
   shareFile,
@@ -73,7 +74,7 @@ import {
   sanitizePersonality,
   type Personality,
 } from '@shared/personalities';
-import { dayPhase, isFestive, tintFor } from '@shared/ambient';
+import { dayPhase, isFestive, isFrosty, precipFor, tintFor } from '@shared/ambient';
 import { addFix, applyFixes, learnFix, type VoiceFix } from '@shared/vocab';
 import {
   alarmFor,
@@ -103,7 +104,8 @@ import {
   summarise,
   type DayUsage,
 } from '@shared/usage';
-import { APP_TOOLS, PHONE_TOOLS, nearbyLink, runPhoneTool, weatherSummary } from './tools';
+import { APP_TOOLS, PHONE_TOOLS, WMO, nearbyLink, runPhoneTool, weatherSummary } from './tools';
+import { noteId, planHeadsUps } from '@shared/headsups';
 import {
   DEFAULT_PROMPTS,
   expandPrompt,
@@ -177,10 +179,21 @@ interface State {
    *  the PC), or Fish Audio with a key on this phone. And what the PC uses. */
   voiceSource: 'auto' | 'phone' | 'pc' | 'fish';
   pcVoice: SyncFromPc['voice'] | null;
+  /** Fish Audio voice ID typed on the phone ('' = the PC's, else the default). */
+  fishVoiceId: string;
+  /** Watch heads-ups (notifications a Fitbit etc. shows): shift the evening before (hour),
+   *  time to leave, morning summary (hour). */
+  watchEve: boolean;
+  eveHour: number;
+  watchLeave: boolean;
+  watchMorning: boolean;
+  morningHour: number;
   /** Read new messages out loud (Android app): off, with headphones/car Bluetooth, or always. */
   announce: 'off' | 'headphones' | 'always';
   quietFrom: number;
   quietTo: number;
+  /** Show the real weather (rain, snow, storms, fog) on the background. */
+  weatherFx: boolean;
   /** Background style, picture darkness (%), and interface options. */
   bg: 'aurora' | 'grid' | 'stars' | 'circuit' | 'plain' | 'photo';
   bgDim: number;
@@ -276,9 +289,16 @@ const DEFAULTS: State = {
   promptsMine: false,
   voiceSource: 'auto',
   pcVoice: null,
+  fishVoiceId: '',
+  watchEve: true,
+  eveHour: 20,
+  watchLeave: true,
+  watchMorning: true,
+  morningHour: 7,
   announce: 'off',
   quietFrom: 23,
   quietTo: 7,
+  weatherFx: true,
   bg: 'aurora',
   bgDim: 60,
   uiText: 'm',
@@ -408,6 +428,7 @@ function applyFromPc(d: SyncFromPc): void {
     pcHttps: isPcAddress(d.pcUrl.replace(/\/+$/, '')) ? d.pcUrl.replace(/\/+$/, '') : S.pcHttps,
   };
   save();
+  void scheduleWatch();
 }
 /** Old-style sync link from the PC (still works for one more version). */
 function takeHash(): void {
@@ -442,7 +463,7 @@ function systemText(): string {
       ? 'DRIVING MODE: the user is driving and hears your reply read aloud. Answer in one or two short spoken sentences, no lists, links or formatting. For texts and replies, get them ready (send_message / reply_message): the user confirms by saying "send it". Never ask them to look at or tap the screen unless unavoidable.'
       : '',
     isApp
-      ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a Send button the user taps), read_calendar for what's on, find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar), snapchat_message to send Snapchat chats (people's Snapchat nicknames are saved), and media_control for music. Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone powers)."
+      ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a Send button the user taps), read_calendar for what's on (add_calendar_event adds straight in; edit_event changes events straight away; delete_event makes a Delete button), find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar), snapchat_message to send Snapchat chats (people's Snapchat nicknames are saved), and media_control for music. Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone powers)."
       : '',
     'Alexa: you cannot reach Alexa directly; tell_alexa makes the phone say a command out loud for a nearby Echo (e.g. turning alarms or lights on).',
     isApp
@@ -599,7 +620,10 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
           payRate: S.payRate,
           unpaidBreak: S.unpaidBreak,
         });
-        if (out.shifts?.length) S.shifts = replaceRota(S.shifts, out.shifts);
+        if (out.shifts?.length) {
+          S.shifts = replaceRota(S.shifts, out.shifts);
+          void scheduleWatch();
+        }
         if (isApp && u.name === 'add_shifts' && out.shifts?.length)
           await shiftsIntoCalendar(out, u.input);
         if (out.reminder) {
@@ -1446,9 +1470,16 @@ function renderAbout(): void {
 const FISH_KEY = 'alton-fish-key';
 async function fishDirect(text: string): Promise<Blob | null> {
   const key = ls.get(FISH_KEY);
-  const v = S.pcVoice;
-  if (!key || !v?.fishVoiceId) return null;
-  const { url, init } = fishRequest(key, text, v.fishVoiceId, (v.fishModel || 's1') as FishModel);
+  if (!key) {
+    voiceNote = 'No Fish Audio key saved on this phone.';
+    return null;
+  }
+  const voiceId = S.fishVoiceId || S.pcVoice?.fishVoiceId || DEFAULT_FISH_VOICE;
+  const m = S.pcVoice?.fishModel ?? '';
+  const model: FishModel = (FISH_MODELS as readonly string[]).includes(m)
+    ? (m as FishModel)
+    : 's2.1-pro-free';
+  const { url, init } = fishRequest(key, text, voiceId, model);
   if (isApp) {
     // Native request (Fish Audio doesn't allow browser requests).
     const r = await CapacitorHttp.request({
@@ -1458,17 +1489,24 @@ async function fishDirect(text: string): Promise<Blob | null> {
       data: JSON.parse(init.body) as Record<string, unknown>,
       responseType: 'blob',
     });
-    if (r.status !== 200 || typeof r.data !== 'string') return null;
+    if (r.status !== 200 || typeof r.data !== 'string') {
+      voiceNote = fishError(r.status, typeof r.data === 'string' ? r.data.slice(0, 200) : '');
+      return null;
+    }
     const bin = atob(r.data);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new Blob([bytes], { type: 'audio/mpeg' });
   }
   const r = await fetch(url, init);
+  if (!r.ok) voiceNote = fishError(r.status, '');
   return r.ok ? r.blob() : null;
 }
+/** Why the last attempt at the Fish voice didn't work (shown by "Test the voice"). */
+let voiceNote = '';
 async function voiceAudio(text: string): Promise<Blob | null> {
   const src = S.voiceSource;
+  voiceNote = '';
   if (src === 'phone') return null;
   const c = conn();
   if ((src === 'auto' || src === 'pc') && c && S.pcVoice?.engine === 'fish') {
@@ -1479,14 +1517,20 @@ async function voiceAudio(text: string): Promise<Blob | null> {
         body: JSON.stringify({ text }),
       });
       if (r.ok) return await r.blob();
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      voiceNote = `Your PC said: ${j.error ?? r.status}`;
     } catch {
-      /* try the phone's own Fish key next */
+      voiceNote = 'Couldn’t reach your PC for its voice.';
     }
-  }
+  } else if (src === 'pc')
+    voiceNote = !c
+      ? 'Not connected to your PC right now.'
+      : 'Your PC isn’t using a Fish Audio voice (update the PC to 0.31 or newer and connect again).';
   if (src === 'auto' || src === 'fish') {
     try {
       return await fishDirect(text);
-    } catch {
+    } catch (e) {
+      voiceNote = `Fish Audio couldn’t be reached (${(e as Error).message}).`;
       return null;
     }
   }
@@ -1500,10 +1544,10 @@ function renderVoiceSource(): void {
     : v.engine === 'fish'
       ? `Your PC speaks with a Fish Audio voice. Through the PC it works whenever you're connected; with your own Fish key on this phone it works anywhere${ls.get(FISH_KEY) ? ' (key saved ✓)' : ''}.`
       : `Your PC uses a Windows voice${v.name ? ` (${v.name})` : ''}, which can't be copied to a phone. Pick the closest one above, or set up a Fish Audio voice on the PC to share it.`;
-  $('fishKeyRow').hidden = !(
-    S.voiceSource === 'fish' ||
-    (S.voiceSource === 'auto' && v?.engine === 'fish')
-  );
+  $('fishKeyRow').hidden = S.voiceSource === 'phone' || S.voiceSource === 'pc';
+  const vid = $<HTMLInputElement>('fishVoice');
+  if (document.activeElement !== vid) vid.value = S.fishVoiceId;
+  vid.placeholder = S.pcVoice?.fishVoiceId || DEFAULT_FISH_VOICE;
 }
 function wireVoiceSource(): void {
   setAudioVoice(voiceAudio);
@@ -1520,13 +1564,191 @@ function wireVoiceSource(): void {
     renderVoiceSource();
     toast('Saved on this phone only.');
   };
-  $('voiceTest').onclick = () => {
-    stopSpeaking();
-    speak(`Hello${S.userName ? ` ${S.userName}` : ''}, this is ${S.name}.`, {
-      rate: S.voiceRate || 1,
-      voice: S.voiceName,
-    });
+  $<HTMLInputElement>('fishVoice').onchange = (e) => {
+    S.fishVoiceId = (e.target as HTMLInputElement).value.trim().replace(/^.*\//, '').slice(0, 64);
+    save();
   };
+  $('voiceTest').onclick = async () => {
+    stopSpeaking();
+    const line = `Hello${S.userName ? ` ${S.userName}` : ''}, this is ${S.name}.`;
+    if (S.voiceSource === 'phone') {
+      speak(line, { rate: S.voiceRate || 1, voice: S.voiceName });
+      return;
+    }
+    $('voiceTestMsg').textContent = 'Getting the voice…';
+    const blob = await voiceAudio(line);
+    if (!blob) {
+      $('voiceTestMsg').textContent = `Using the phone’s voice instead. ${voiceNote}`;
+      setAudioVoice(null);
+      speak(line, { rate: S.voiceRate || 1, voice: S.voiceName });
+      setAudioVoice(voiceAudio);
+      return;
+    }
+    $('voiceTestMsg').textContent = 'That’s your Fish Audio voice ✓';
+    speak(line, { rate: S.voiceRate || 1, voice: S.voiceName });
+  };
+}
+
+/* ── Home-screen widget (Android app): next shift, weather, next reminder ── */
+async function updateWidget(): Promise<void> {
+  if (!isApp) return;
+  const hm = (d: Date): string => d.toTimeString().slice(0, 5);
+  const cur = currentShift(S.shifts);
+  const next = upcomingShifts(S.shifts).find((x) => x !== cur);
+  let line1: string;
+  if (cur) line1 = `At work · ${cur.title} until ${cur.end.slice(11, 16)}`;
+  else if (next) {
+    const lb = leaveBy(next, S.travel);
+    line1 = `${describeShift(next)}${lb ? ` · leave by ${lb}` : ''}`;
+  } else line1 = 'No shifts coming up';
+  const w = nowWeather;
+  const today = w?.days[0];
+  const line2 = w
+    ? `${wxIcon(w.code, w.isDay)} ${Math.round(w.temp)}° ${WMO[w.code] ?? ''}${today ? ` · ${Math.round(today.hi)}°/${Math.round(today.lo)}°` : ''}`
+    : '';
+  const rem = S.reminders.filter((r) => r.at > Date.now()).sort((a, b) => a.at - b.at)[0];
+  const line3 = rem
+    ? `⏰ ${new Date(rem.at).toLocaleDateString() === new Date().toLocaleDateString() ? '' : `${new Date(rem.at).toLocaleDateString([], { weekday: 'short' })} `}${hm(new Date(rem.at))} ${rem.what}`
+    : `Updated ${hm(new Date())}`;
+  await Native.setWidget({ title: S.name.toUpperCase(), line1, line2, line3 }).catch(
+    () => undefined,
+  );
+}
+
+/* ── Notifications (reminders + watch heads-ups) that buzz the phone and a paired watch ── */
+let watchExtras: {
+  at: number;
+  forecast: Record<string, string>;
+  events: Array<{ title: string; start: number; allDay?: boolean }>;
+} | null = null;
+async function morningExtras(): Promise<NonNullable<typeof watchExtras>> {
+  if (watchExtras && Date.now() - watchExtras.at < 3 * 3600_000) return watchExtras;
+  const forecast: Record<string, string> = {};
+  let events: Array<{ title: string; start: number; allDay?: boolean }> = [];
+  try {
+    const f = lastFix ?? (await locate());
+    if (f) {
+      const j = (await (
+        await fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${f.lat}&longitude=${f.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=4`,
+        )
+      ).json()) as {
+        daily?: {
+          time: string[];
+          weather_code: number[];
+          temperature_2m_max: number[];
+          temperature_2m_min: number[];
+          precipitation_probability_max: number[];
+        };
+      };
+      const d = j.daily;
+      d?.time.forEach((day, i) => {
+        const rain = d.precipitation_probability_max[i] ?? 0;
+        forecast[day] =
+          `${WMO[d.weather_code[i] ?? 0] ?? 'weather'}, ${Math.round(d.temperature_2m_min[i] ?? 0)}–${Math.round(d.temperature_2m_max[i] ?? 0)}°C${rain >= 40 ? `, ${rain}% rain` : ''}`;
+      });
+    }
+  } catch {
+    /* no forecast this time */
+  }
+  try {
+    if ((await powerStatus())?.calendar) {
+      const from = Date.now();
+      events = (await Native.calendarEvents({ from, to: from + 4 * 86_400_000 })).events;
+    }
+  } catch {
+    /* no calendar */
+  }
+  watchExtras = { at: Date.now(), forecast, events };
+  return watchExtras;
+}
+async function scheduleWatch(): Promise<void> {
+  if (!isApp) return;
+  const notes = S.reminders
+    .filter((r) => r.at > Date.now())
+    .map((r) => ({
+      id: noteId(`rem:${r.at}:${r.what}`),
+      title: `Alton · ${r.what}`,
+      body: 'Reminder',
+      at: r.at,
+    }));
+  const extras = S.watchMorning ? await morningExtras() : undefined;
+  const ups = planHeadsUps(
+    S.shifts,
+    {
+      shiftEve: S.watchEve,
+      eveHour: S.eveHour,
+      leave: S.watchLeave,
+      travel: S.travel,
+      morning: S.watchMorning,
+      morningHour: S.morningHour,
+      alarmRules: S.shiftRules,
+      alarmLead: S.shiftLead,
+    },
+    new Date(),
+    extras,
+  );
+  for (const u of ups) notes.push({ id: noteId(u.key), title: u.title, body: u.body, at: u.at });
+  await scheduleNotes(notes);
+  void updateWidget();
+}
+function renderWatch(): void {
+  for (const [id, on] of [
+    ['wEve', S.watchEve],
+    ['wLeave', S.watchLeave],
+    ['wMorning', S.watchMorning],
+  ] as const) {
+    $(id).classList.toggle('on', on);
+    $(id).textContent = on ? '✓' : '';
+  }
+  $<HTMLInputElement>('wEveHour').value = String(S.eveHour);
+  $<HTMLInputElement>('wMorningHour').value = String(S.morningHour);
+  $('wLeaveNote').textContent = S.travel
+    ? `${S.travel} min journey (from People › Shifts)`
+    : 'Set “Travel to work” in People › Shifts first';
+}
+function wireWatch(): void {
+  if (!isApp) return;
+  for (const [id, key] of [
+    ['wEve', 'watchEve'],
+    ['wLeave', 'watchLeave'],
+    ['wMorning', 'watchMorning'],
+  ] as const)
+    $(id).onclick = () => {
+      S[key] = !S[key];
+      save();
+      renderWatch();
+      void scheduleWatch();
+    };
+  for (const [id, key] of [
+    ['wEveHour', 'eveHour'],
+    ['wMorningHour', 'morningHour'],
+  ] as const)
+    $<HTMLInputElement>(id).onchange = (e) => {
+      S[key] = Math.min(
+        23,
+        Math.max(0, Math.round(Number((e.target as HTMLInputElement).value) || 0)),
+      );
+      save();
+      void scheduleWatch();
+    };
+  $('wTest').onclick = () => {
+    void scheduleNotes([]).then(() =>
+      scheduleNotes([
+        {
+          id: noteId('test'),
+          title: 'Alton · test',
+          body: 'If your watch buzzed, heads-ups will reach it.',
+          at: Date.now() + 8000,
+        },
+      ]),
+    );
+    toast('A test notification comes in about 8 seconds: lock the phone and check your watch.');
+    setTimeout(() => void scheduleWatch(), 15_000);
+  };
+  // Keep them up to date while Alton is open (new shifts, a fresh forecast).
+  void scheduleWatch();
+  setInterval(() => void scheduleWatch(), 60 * 60_000);
 }
 
 /* ── Reading new messages out loud (Android app; works with Alton closed) ── */
@@ -1718,6 +1940,17 @@ function driveAfterReply(reply: PhoneMessage): void {
       nav = a.href;
       continue;
     }
+    if (a.delEvent) {
+      const de = a.delEvent;
+      drvPending = {
+        run: () =>
+          Native.deleteEvent({ id: de.id }).then(
+            () => 'Deleted.',
+            (e: Error) => `Couldn’t delete it: ${e.message}`,
+          ),
+      };
+      break;
+    }
     if (a.snap) {
       const sn = a.snap;
       drvPending = {
@@ -1756,7 +1989,11 @@ function driveAfterReply(reply: PhoneMessage): void {
     if (a.href && /wa\.me|whatsapp/i.test(a.href))
       extra = ' WhatsApp only sends when you tap it, so it’s ready on the screen.';
   }
-  const ask = drvPending ? ' Say “send it” to send, or “cancel”.' : '';
+  const ask = drvPending
+    ? reply.actions?.some((x) => x.delEvent)
+      ? ' Say “yes” to delete it, or “cancel”.'
+      : ' Say “send it” to send, or “cancel”.'
+    : '';
   if (nav && !drvPending) {
     // "Navigate to…" while driving: start Google Maps once it has said the route.
     dvSay(`${text} Starting navigation.`, () => {
@@ -1817,39 +2054,138 @@ function wireDriving(): void {
       () => driveListen(true),
     );
   });
-  // Opened with the assistant button: straight into Driving mode, already listening.
-  void Native.addListener('assist', () => enterDriving(true));
+  // Opened with the assistant button or a widget button: Driving mode, or just listen.
+  const opened = (mode?: string): void => {
+    if (mode === 'talk') {
+      if (driving) exitDriving();
+      setView('chat');
+      setTimeout(() => !recog && toggleMic(), 400);
+    } else enterDriving(true);
+  };
+  void Native.addListener('assist', (d) => opened(d.mode));
   void Native.takeAssist().then((r) => {
-    if (r.assist) enterDriving(true);
+    if (r.assist) opened(r.mode);
   });
 }
 
 /* ── Background: edge glow by time of day, and snow in December ── */
+/* ── Weather you can see: rain, snow, storms and fog on the background (like the PC) ── */
+interface NowWeather {
+  at: number;
+  code: number;
+  temp: number;
+  isDay: boolean;
+  days: Array<{ day: string; code: number; hi: number; lo: number; rain: number }>;
+}
+let nowWeather: NowWeather | null = null;
+async function refreshWeather(force = false): Promise<NowWeather | null> {
+  if (!force && nowWeather && Date.now() - nowWeather.at < 30 * 60_000) return nowWeather;
+  const f = lastFix ?? (await locate());
+  if (!f) return nowWeather;
+  try {
+    const j = (await (
+      await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${f.lat}&longitude=${f.lon}&current=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=4`,
+      )
+    ).json()) as {
+      current?: { temperature_2m: number; weather_code: number; is_day: number };
+      daily?: {
+        time: string[];
+        weather_code: number[];
+        temperature_2m_max: number[];
+        temperature_2m_min: number[];
+        precipitation_probability_max: number[];
+      };
+    };
+    if (!j.current) return nowWeather;
+    const d = j.daily;
+    nowWeather = {
+      at: Date.now(),
+      code: j.current.weather_code,
+      temp: j.current.temperature_2m,
+      isDay: j.current.is_day === 1,
+      days: (d?.time ?? []).map((day, i) => ({
+        day,
+        code: d?.weather_code[i] ?? 0,
+        hi: d?.temperature_2m_max[i] ?? 0,
+        lo: d?.temperature_2m_min[i] ?? 0,
+        rain: d?.precipitation_probability_max[i] ?? 0,
+      })),
+    };
+    applyAmbient();
+    if (view === 'today') renderToday();
+    void updateWidget();
+  } catch {
+    /* keep the last one */
+  }
+  return nowWeather;
+}
+const wxIcon = (code: number, day = true): string =>
+  code === 0
+    ? day
+      ? '☀️'
+      : '🌙'
+    : code <= 2
+      ? day
+        ? '🌤️'
+        : '☁️'
+      : code === 3
+        ? '☁️'
+        : code === 45 || code === 48
+          ? '🌫️'
+          : code >= 95
+            ? '⛈️'
+            : precipFor(code) === 'snow'
+              ? '🌨️'
+              : precipFor(code) === 'rain'
+                ? '🌧️'
+                : '🌥️';
 let stopSnow: () => void = () => undefined;
 function applyAmbient(): void {
   const tint = tintFor(dayPhase(new Date().getHours()));
+  const frost = S.weatherFx && nowWeather && isFrosty(nowWeather.temp);
   $('tint').style.background =
-    S.timeTint && tint.alpha > 0
-      ? `radial-gradient(ellipse at center, transparent 55%, rgb(${tint.color} / ${tint.alpha}) 100%)`
-      : 'none';
+    [
+      frost
+        ? 'radial-gradient(ellipse at center, transparent 62%, rgba(210, 235, 255, 0.16) 100%)'
+        : '',
+      S.timeTint && tint.alpha > 0
+        ? `radial-gradient(ellipse at center, transparent 55%, rgb(${tint.color} / ${tint.alpha}) 100%)`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(', ') || 'none';
+  const code = nowWeather?.code ?? 0;
+  const fog = S.weatherFx && (code === 45 || code === 48);
+  $('tint').classList.toggle('fog', !!fog);
   stopSnow();
   stopSnow = () => undefined;
   const c = $<HTMLCanvasElement>('snow');
-  const on =
-    S.snow && isFestive(new Date()) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
-  c.hidden = !on;
-  if (!on) return;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const weather = S.weatherFx && nowWeather ? precipFor(code) : 'none';
+  const fall = weather !== 'none' ? weather : S.snow && isFestive(new Date()) ? 'snow' : 'none';
+  const storm = S.weatherFx && code >= 95;
+  c.hidden = reduced || (fall === 'none' && !storm);
+  if (c.hidden) return;
   const ctx = c.getContext('2d');
   if (!ctx) return;
-  const flakes = Array.from({ length: 36 }, () => ({
+  const heavy = [65, 67, 75, 82, 86, 99].includes(code)
+    ? 1.6
+    : [51, 53, 56, 61, 71, 80, 85].includes(code)
+      ? 0.6
+      : 1;
+  const n = fall === 'rain' ? Math.round(70 * heavy) : fall === 'snow' ? Math.round(40 * heavy) : 0;
+  const drops = Array.from({ length: n }, () => ({
     x: Math.random(),
     y: Math.random(),
-    r: 0.6 + Math.random() * 1.8,
-    v: 0.02 + Math.random() * 0.04,
+    r: fall === 'rain' ? 0.6 + Math.random() * 0.8 : 0.7 + Math.random() * 1.8,
+    v: fall === 'rain' ? 0.55 + Math.random() * 0.4 : 0.02 + Math.random() * 0.04,
     w: Math.random() * Math.PI * 2,
   }));
   let raf = 0;
   let last = performance.now();
+  let flash = 0;
+  let nextFlash = performance.now() + 4000 + Math.random() * 8000;
   const frame = (now: number): void => {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
@@ -1859,17 +2195,46 @@ function applyAmbient(): void {
       c.height = innerHeight * px;
     }
     ctx.clearRect(0, 0, c.width, c.height);
-    ctx.fillStyle = 'rgba(220, 240, 255, 0.55)';
-    for (const f of flakes) {
-      f.y += f.v * dt;
-      f.w += dt;
-      if (f.y > 1.02) {
-        f.y = -0.02;
-        f.x = Math.random();
-      }
+    if (fall === 'rain') {
+      ctx.strokeStyle = 'rgba(170, 215, 255, 0.35)';
+      ctx.lineWidth = px;
       ctx.beginPath();
-      ctx.arc((f.x + Math.sin(f.w) * 0.01) * c.width, f.y * c.height, f.r * px, 0, Math.PI * 2);
-      ctx.fill();
+      for (const d of drops) {
+        d.y += d.v * dt;
+        if (d.y > 1.02) {
+          d.y = -0.03;
+          d.x = Math.random();
+        }
+        const x = d.x * c.width;
+        const y = d.y * c.height;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 2 * px, y + 14 * px * d.r);
+      }
+      ctx.stroke();
+    } else if (fall === 'snow') {
+      ctx.fillStyle = 'rgba(220, 240, 255, 0.6)';
+      for (const d of drops) {
+        d.y += d.v * dt;
+        d.w += dt;
+        if (d.y > 1.02) {
+          d.y = -0.02;
+          d.x = Math.random();
+        }
+        ctx.beginPath();
+        ctx.arc((d.x + Math.sin(d.w) * 0.01) * c.width, d.y * c.height, d.r * px, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    if (storm) {
+      if (now > nextFlash) {
+        flash = 1;
+        nextFlash = now + 6000 + Math.random() * 9000;
+      }
+      if (flash > 0) {
+        ctx.fillStyle = `rgba(200, 225, 255, ${0.18 * flash})`;
+        ctx.fillRect(0, 0, c.width, c.height);
+        flash = Math.max(0, flash - dt * 3);
+      }
     }
     if (!document.hidden) raf = requestAnimationFrame(frame);
   };
@@ -1896,6 +2261,7 @@ function renderLook(): void {
   tick('matchLookToggle', S.matchLook);
   tick('tintToggle', S.timeTint);
   tick('snowToggle', S.snow);
+  tick('wxToggle', S.weatherFx);
   const sel = $<HTMLSelectElement>('avatarPick');
   if (!sel.options.length)
     for (const a of PHONE_AVATARS) {
@@ -1994,7 +2360,7 @@ function renderPrompts(): void {
   }
 }
 function wireLook(): void {
-  const tog = (id: string, key: 'matchLook' | 'timeTint' | 'snow'): void => {
+  const tog = (id: string, key: 'matchLook' | 'timeTint' | 'snow' | 'weatherFx'): void => {
     $(id).onclick = () => {
       S[key] = !S[key];
       save();
@@ -2009,6 +2375,7 @@ function wireLook(): void {
   tog('matchLookToggle', 'matchLook');
   tog('tintToggle', 'timeTint');
   tog('snowToggle', 'snow');
+  tog('wxToggle', 'weatherFx');
   $<HTMLSelectElement>('avatarPick').onchange = (e) => {
     const v = (e.target as HTMLSelectElement).value;
     if (isPhoneAvatar(v)) setLook({ avatar: v });
@@ -2330,10 +2697,71 @@ async function appTool(
           .map((e) =>
             e.allDay
               ? `${new Date(e.start).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })} (all day): ${e.title}`
-              : `${t(e.start)} – ${new Date(e.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${e.title}${e.location ? ` @ ${e.location}` : ''}`,
+              : `${t(e.start)} – ${new Date(e.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${e.title}${e.location ? ` @ ${e.location}` : ''} [id ${e.id}${e.repeats ? ', repeats' : ''}]`,
           )
           .join('\n'),
       };
+    }
+    if (name === 'edit_event' || name === 'delete_event' || name === 'add_calendar_event') {
+      const st = await powerStatus();
+      if (!st?.calendar) {
+        if (name === 'add_calendar_event') return null; // the button version still works
+        return off('Calendar access');
+      }
+      const t = (v: unknown): number | undefined => {
+        const d = typeof v === 'string' && v ? new Date(v) : null;
+        return d && !Number.isNaN(d.getTime()) ? d.getTime() : undefined;
+      };
+      if (name === 'add_calendar_event') {
+        const start = t(o.start);
+        if (!start) return { result: 'The start time must look like 2026-11-20T15:00.' };
+        const end = t(o.end) ?? start + 3600_000;
+        const title = String(o.title ?? 'Event').slice(0, 200);
+        const { added } = await Native.addEvents({
+          events: [
+            {
+              title,
+              start,
+              end,
+              location: String(o.location ?? '').slice(0, 200),
+              notes: String(o.details ?? '').slice(0, 1000),
+              remindMinutes: 30,
+            },
+          ],
+        });
+        return {
+          result: added
+            ? `Added “${title}” to the phone's calendar (${new Date(start).toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}), with a reminder 30 minutes before. It's done: no button needed.`
+            : 'Couldn’t add it to the calendar.',
+        };
+      }
+      const id = Number(o.id);
+      if (!(id > 0)) return { result: 'Need the event id from read_calendar.' };
+      if (name === 'delete_event') {
+        const title = String(o.title ?? 'that event').slice(0, 100);
+        return {
+          result: `A Delete button is ready for “${title}”; it's only deleted when the user taps it (or says yes while driving). Don't say it's deleted.`,
+          action: {
+            label: `Delete “${title}” from my calendar`,
+            sub: 'Tap to delete',
+            delEvent: { id, title },
+          },
+        };
+      }
+      const ch: Parameters<typeof Native.updateEvent>[0] = { id };
+      if (typeof o.title === 'string') ch.title = o.title.slice(0, 200);
+      if (typeof o.location === 'string') ch.location = o.location.slice(0, 200);
+      if (typeof o.notes === 'string') ch.notes = o.notes.slice(0, 1000);
+      const s0 = t(o.start);
+      const e0 = t(o.end);
+      if (s0) ch.start = s0;
+      if (e0) ch.end = e0;
+      try {
+        const { updated } = await Native.updateEvent(ch);
+        return { result: updated ? 'Changed in the calendar. Done.' : 'That event wasn’t found.' };
+      } catch (e) {
+        return { result: (e as Error).message };
+      }
     }
     if (name === 'find_contact') {
       const st = await powerStatus();
@@ -2526,6 +2954,7 @@ async function renderPowers(): Promise<void> {
   $('pwApp').textContent = S.shiftAppName || 'Choose…';
   const tab = $<HTMLInputElement>('pwTab');
   if (document.activeElement !== tab) tab.value = S.shiftTab;
+  renderWatch();
   $<HTMLSelectElement>('pwAnnounce').value = S.announce;
   $<HTMLInputElement>('pwQuietFrom').value = String(S.quietFrom);
   $<HTMLInputElement>('pwQuietTo').value = String(S.quietTo);
@@ -2882,7 +3311,7 @@ function trainOnce(phrase: string, out: HTMLElement): void {
 const pinged = new Set<number>();
 function scheduleReminderPings(): void {
   // In the Android app they also become real notifications that work with the app closed.
-  void scheduleReminders(S.reminders);
+  void scheduleWatch();
   for (const r of S.reminders) {
     const ms = r.at - Date.now();
     if (ms <= 0 || ms > 6 * 3600_000 || pinged.has(r.at)) continue;
@@ -3052,6 +3481,20 @@ function actionNode(a: PhoneAction): HTMLElement {
     };
   } else if (a.pickFor) {
     b.onclick = () => void pickContact(a.pickFor);
+  } else if (a.delEvent) {
+    const de = a.delEvent;
+    b.onclick = async () => {
+      if (b.classList.contains('done')) return;
+      try {
+        await Native.deleteEvent({ id: de.id });
+        b.classList.add('done');
+        const sub = b.querySelector('small');
+        if (sub) sub.textContent = 'Deleted ✓';
+        toast(`Deleted “${de.title}”.`);
+      } catch (e) {
+        toast((e as Error).message);
+      }
+    };
   } else if (a.snap) {
     const sn = a.snap;
     b.onclick = async () => {
@@ -3843,6 +4286,8 @@ function renderPeople(): void {
 
 /* ── Today: work, what's coming up, weather, lists and the PC at a glance ── */
 function renderToday(): void {
+  if (S.weatherFx && (!nowWeather || Date.now() - nowWeather.at > 30 * 60_000))
+    void refreshWeather();
   const now = new Date();
   const h = now.getHours();
   const hi = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -3908,7 +4353,35 @@ function renderToday(): void {
   }
   $('tdListsCard').hidden = !lists.childElementCount;
   // Weather (last check).
-  $('tdWeather').textContent = lastWeather ? lastWeather : 'Tap below (uses your location once).';
+  const wb = $('tdWeather');
+  wb.textContent = '';
+  if (nowWeather) {
+    const w = nowWeather;
+    const top = el('div', 'wx-now');
+    top.appendChild(el('span', 'wx-icon', wxIcon(w.code, w.isDay)));
+    const t = el('div');
+    t.appendChild(el('b', 'wx-temp', `${Math.round(w.temp)}°`));
+    t.appendChild(el('span', 'muted', ` ${WMO[w.code] ?? ''}`));
+    top.appendChild(t);
+    wb.appendChild(top);
+    const row = el('div', 'wx-days');
+    for (const d of w.days.slice(0, 4)) {
+      const c = el('div', 'wx-day');
+      c.appendChild(
+        el(
+          'small',
+          'muted',
+          new Date(`${d.day}T12:00`).toLocaleDateString([], { weekday: 'short' }),
+        ),
+      );
+      c.appendChild(el('span', 'wx-icon sm', wxIcon(d.code)));
+      c.appendChild(el('small', undefined, `${Math.round(d.hi)}° / ${Math.round(d.lo)}°`));
+      if (d.rain >= 30) c.appendChild(el('small', 'muted', `${d.rain}% 💧`));
+      row.appendChild(c);
+    }
+    wb.appendChild(row);
+    $('tdWeatherBtn').textContent = 'Refresh';
+  } else wb.textContent = lastWeather || 'Tap below (uses your location once).';
   // PC.
   $('tdPc').textContent =
     pcLink === 'paired'
@@ -4613,10 +5086,20 @@ function wire(): void {
   $('snapRead').onclick = () => void readSnapFriends();
   wireUi();
   wireVoiceSource();
+  wireWatch();
   wirePowers();
   wireDriving();
-  // The background follows the time of day.
+  // The background follows the time of day, and the weather where you are.
   setInterval(applyAmbient, 10 * 60_000);
+  void navigator.permissions
+    ?.query({ name: 'geolocation' as PermissionName })
+    .then((p) => {
+      if (p.state === 'granted' || isApp) void refreshWeather();
+    })
+    .catch(() => undefined);
+  setInterval(() => {
+    if (!document.hidden && S.weatherFx) void refreshWeather();
+  }, 30 * 60_000);
   // People & lists: one section at a time (remembered).
   const seg = (k: string): void => {
     $('peopleView').dataset.seg = k;
@@ -4641,6 +5124,7 @@ function wire(): void {
   $('tdPcOpen').onclick = () => setView('pc');
   $('tdPlay').onclick = () => void pcAct('media_control', 'play_pause');
   $('tdWeatherBtn').onclick = async () => {
+    if (await refreshWeather(true)) return renderToday();
     $('tdWeather').textContent = 'Checking…';
     const r = await placeTool('get_weather', {});
     lastWeather = (r?.result ?? 'Couldn’t get the weather.').replace(

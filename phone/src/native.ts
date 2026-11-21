@@ -219,7 +219,10 @@ export function installSpeechShim(): void {
 }
 
 /* ── Reminders that buzz even when the app is closed ── */
-export async function scheduleReminders(list: Array<{ what: string; at: number }>): Promise<void> {
+/** Replaces everything Alton has scheduled with this list (reminders and watch heads-ups). */
+export async function scheduleNotes(
+  list: Array<{ id: number; title: string; body: string; at: number }>,
+): Promise<void> {
   if (!isApp) return;
   try {
     let p = await LocalNotifications.checkPermissions();
@@ -233,10 +236,10 @@ export async function scheduleReminders(list: Array<{ what: string; at: number }
     const future = list.filter((r) => r.at > Date.now() + 5000).slice(0, 60);
     if (!future.length) return;
     await LocalNotifications.schedule({
-      notifications: future.map((r, i) => ({
-        id: ((Math.floor(r.at / 60_000) % 200_000_000) * 10 + (i % 10)) % 2_000_000_000,
-        title: `Alton · ${r.what}`,
-        body: 'Reminder',
+      notifications: future.map((r) => ({
+        id: r.id,
+        title: r.title,
+        body: r.body,
         schedule: { at: new Date(r.at), allowWhileIdle: true },
       })),
     });
@@ -290,6 +293,8 @@ export interface AppMessage {
   canReply: boolean;
 }
 export interface CalEvent {
+  id: number;
+  repeats: boolean;
   title: string;
   start: number;
   end: number;
@@ -326,6 +331,15 @@ interface AltonNativePlugin {
       remindMinutes?: number;
     }>;
   }): Promise<{ added: number }>;
+  updateEvent(o: {
+    id: number;
+    title?: string;
+    start?: number;
+    end?: number;
+    location?: string;
+    notes?: string;
+  }): Promise<{ updated: number }>;
+  deleteEvent(o: { id: number }): Promise<{ deleted: number }>;
   findContacts(o: { name: string }): Promise<{ contacts: Array<{ name: string; phone: string }> }>;
   listApps(): Promise<{ apps: Array<{ name: string; package: string }> }>;
   readApp(o: {
@@ -333,14 +347,18 @@ interface AltonNativePlugin {
     tap?: string;
   }): Promise<{ text: string; front: string; lines: number }>;
   snapSend(o: { name: string; text: string }): Promise<void>;
-  takeAssist(): Promise<{ assist: boolean }>;
+  takeAssist(): Promise<{ assist: boolean; mode: 'drive' | 'talk' }>;
+  setWidget(o: { title: string; line1: string; line2: string; line3: string }): Promise<void>;
   keepScreenOn(o: { on: boolean }): Promise<void>;
   media(o: {
     action: 'next' | 'previous' | 'pause' | 'play' | 'play_pause' | 'volume_up' | 'volume_down';
   }): Promise<void>;
   sendSms(o: { to: string; text: string }): Promise<void>;
   pickContact(): Promise<{ name: string; phone: string }>;
-  addListener(event: 'assist', fn: () => void): Promise<PluginListenerHandle>;
+  addListener(
+    event: 'assist',
+    fn: (d: { mode?: 'drive' | 'talk' }) => void,
+  ): Promise<PluginListenerHandle>;
   addListener(event: 'message', fn: (m: AppMessage) => void): Promise<PluginListenerHandle>;
 }
 /** The app's own native code (android/app/src/main/java/com/alton/phone/AltonNativePlugin.java). */

@@ -30,6 +30,19 @@
 
         </activity>
 
+        <!-- Home-screen widget -->
+        <receiver
+            android:name=".AltonWidget"
+            android:exported="false"
+            android:label="Alton">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/alton_widget_info" />
+        </receiver>
+
         <!-- Reads message notifications so Alton can read them out and reply (user switches on Notification access) -->
         <service
             android:name=".MessageListener"

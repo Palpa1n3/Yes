@@ -35,6 +35,11 @@ Read this first in a new chat, then README.md for the feature list.
   or with a Fish key saved on the phone (native HTTP); `setAudioVoice` in native.ts plays MP3
   chunks and falls back to the phone's TTS. `Announcer.java` reads new messages out (from the
   notification listener, so even with the app closed): off / headphones-only / always, quiet hours.
+  Home-screen widget: `AltonWidget.java` + `res/layout/alton_widget.xml`; the app fills it via
+  `setWidget` (next shift, weather, next reminder); its Talk/Drive buttons open the app with an
+  action that `MainActivity.modeFor` turns into "talk" or "drive". Watch heads-ups: pure planner in
+  `src/shared/headsups.ts`, scheduled as local notifications. Weather on the phone background:
+  `refreshWeather`/`applyAmbient` (rain, snow, storm flashes, fog, frost).
   Driving mode (phone/src/main.ts) listens for the wake word
   while on screen; a true background wake word is not built (Android limits it). Claude gets them as `APP_TOOLS`. The app's origin is
   `https://localhost`, which the PC's CORS also allows. The release workflow's `android` job

@@ -35,6 +35,8 @@ export interface PhoneAction {
   reply?: { id: string; text: string };
   /** Android app: send this on Snapchat to the friend shown as `name` (on tap / "send it"). */
   snap?: { name: string; text: string };
+  /** Android app: delete this calendar event (on tap / "yes"). */
+  delEvent?: { id: number; title: string };
 }
 
 export interface PhoneChat {

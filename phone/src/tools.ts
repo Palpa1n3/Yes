@@ -297,6 +297,28 @@ export const APP_TOOLS: Anthropic.Tool[] = [
     }),
   },
   {
+    name: 'edit_event',
+    description:
+      "Change an event in the phone's calendar straight away (time, title, place or notes), using the id from read_calendar. Times are local like 2026-11-24T09:30. Moving an event: give the new start and end. Repeating events can't be changed here.",
+    input_schema: obj(
+      {
+        id: { type: 'number' },
+        title: { type: 'string' },
+        start: { type: 'string' },
+        end: { type: 'string' },
+        location: { type: 'string' },
+        notes: { type: 'string' },
+      },
+      ['id'],
+    ),
+  },
+  {
+    name: 'delete_event',
+    description:
+      "Delete an event from the phone's calendar (id from read_calendar). It becomes a Delete button the user taps (or says yes while driving); say which event it is.",
+    input_schema: obj({ id: { type: 'number' }, title: { type: 'string' } }, ['id']),
+  },
+  {
     name: 'find_contact',
     description:
       "Look up someone in the phone's contacts by name to get their number (before texting or calling someone not in the saved People list).",
@@ -645,7 +667,7 @@ export function nearbyLink(query: string, lat?: number, lon?: number): string {
     : `https://www.google.com/maps/search/${q}+near+me`;
 }
 
-const WMO: Record<number, string> = {
+export const WMO: Record<number, string> = {
   0: 'clear',
   1: 'mostly clear',
   2: 'partly cloudy',
