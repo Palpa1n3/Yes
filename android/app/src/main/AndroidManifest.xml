@@ -61,7 +61,7 @@
         <receiver
             android:name=".AltonWeatherWidget"
             android:exported="false"
-            android:label="Alton Weather &amp; screen time">
+            android:label="Alton Weather">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -90,6 +90,17 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/screen_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".AltonBatteryWidget"
+            android:exported="false"
+            android:label="Alton Battery">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/battery_widget_info" />
         </receiver>
 
         <!-- Reads message notifications so Alton can read them out and reply (user switches on Notification access) -->
@@ -166,7 +177,7 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <!-- Battery of connected earbuds / watch on the clock widget -->
+    <!-- Battery of connected earbuds / watch on the battery widget -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- Screen time widget (you allow it in Settings › Usage access) -->

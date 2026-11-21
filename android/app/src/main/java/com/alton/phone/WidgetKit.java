@@ -11,6 +11,10 @@ import android.app.AppOpsManager;
 import android.app.PendingIntent;
 import android.app.usage.UsageEvents;
 import android.app.usage.UsageStatsManager;
+import android.appwidget.AppWidgetManager;
+import android.os.Bundle;
+import android.util.SizeF;
+import android.widget.RemoteViews;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -60,7 +64,42 @@ final class WidgetKit {
             AltonWeatherWidget.refresh(ctx);
             AltonClockWidget.refresh(ctx);
             AltonScreenWidget.refresh(ctx);
+            AltonBatteryWidget.refresh(ctx);
         } catch (Exception ignored) {}
+    }
+
+
+    /** Builds one look of a widget (index into its list of sizes). */
+    interface Look {
+        RemoteViews make(int i);
+    }
+
+    /**
+     * A widget that changes with its size. sizes[i] = {minWidthDp, minHeightDp} for look i.
+     * Android 12+ gets every look and switches by itself as you resize; older phones get the
+     * biggest look that fits the size the launcher reports.
+     */
+    static RemoteViews sized(Context ctx, AppWidgetManager mgr, int id, int[][] sizes, Look look) {
+        if (Build.VERSION.SDK_INT >= 31) {
+            Map<SizeF, RemoteViews> m = new HashMap<>();
+            for (int i = 0; i < sizes.length; i++) m.put(new SizeF(sizes[i][0], sizes[i][1]), look.make(i));
+            return new RemoteViews(m);
+        }
+        Bundle o = mgr.getAppWidgetOptions(id);
+        int w = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0);
+        int h = o.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0);
+        int best = 0;
+        long area = -1;
+        for (int i = 0; i < sizes.length; i++) {
+            if (sizes[i][0] > w || sizes[i][1] > h) continue;
+            long a = (long) sizes[i][0] * Math.max(1, sizes[i][1]) + i;
+            if (a > area) {
+                area = a;
+                best = i;
+            }
+        }
+        if (w == 0 && h == 0) best = sizes.length - 1; // launcher didn't say: use the full look
+        return look.make(best);
     }
 
     static PendingIntent openApp(Context ctx, String action, int code) {
@@ -269,6 +308,11 @@ final class WidgetKit {
 
     /** A row of battery rings: the phone first, then connected devices. */
     static Bitmap batteryRow(Context ctx, float density) {
+        return batteryRow(ctx, density, 4);
+    }
+
+    /** Battery rings for the phone and connected earbuds/watch, in `cells` slots. */
+    static Bitmap batteryRow(Context ctx, float density, int cells) {
         List<String> icons = new ArrayList<>();
         List<Integer> levels = new ArrayList<>();
         icons.add(charging(ctx) ? "⚡" : "📱");
@@ -279,7 +323,7 @@ final class WidgetKit {
         }
         int cell = Math.round(74 * density);
         int h = Math.round(84 * density);
-        Bitmap b = Bitmap.createBitmap(cell * 4, h, Bitmap.Config.ARGB_8888);
+        Bitmap b = Bitmap.createBitmap(cell * cells, h, Bitmap.Config.ARGB_8888);
         Canvas cv = new Canvas(b);
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         p.setStyle(Paint.Style.STROKE);
@@ -289,7 +333,7 @@ final class WidgetKit {
         t.setTextAlign(Paint.Align.CENTER);
         t.setShadowLayer(4 * density, 0, density, Color.argb(150, 0, 0, 0));
         float r = 24 * density;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < cells; i++) {
             float cx = cell * i + cell / 2f;
             float cy = 30 * density;
             RectF rr = new RectF(cx - r, cy - r, cx + r, cy + r);

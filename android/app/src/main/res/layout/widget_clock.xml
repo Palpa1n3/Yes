@@ -1,46 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/ck_clock"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:gravity="center"
-    android:orientation="vertical"
-    android:padding="6dp">
-
-    <LinearLayout
-        android:id="@+id/ck_clock"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
-        android:orientation="vertical">
-
-        <TextClock
-            android:id="@+id/ck_date"
-            style="@style/WText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:format12Hour="EEE, d MMM"
-            android:format24Hour="EEE, d MMM"
-            android:textAllCaps="true"
-            android:textSize="17sp"
-            android:textStyle="bold" />
-
-        <TextClock
-            android:id="@+id/ck_time"
-            style="@style/WText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:format12Hour="h:mm:ss"
-            android:format24Hour="HH:mm:ss"
-            android:textSize="54sp"
-            android:textStyle="bold" />
-    </LinearLayout>
-
-    <ImageView
-        android:id="@+id/ck_rings"
-        android:layout_width="match_parent"
-        android:layout_height="72dp"
-        android:layout_marginTop="10dp"
-        android:adjustViewBounds="true"
-        android:contentDescription="Battery levels"
-        android:scaleType="fitCenter" />
+    android:orientation="vertical">
+    <TextClock style="@style/WText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:format12Hour="EEE, d MMM" android:format24Hour="EEE, d MMM" android:textAllCaps="true" android:textSize="17sp" android:textStyle="bold" />
+    <TextClock android:id="@+id/ck_time" style="@style/WText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:format12Hour="h:mm:ss" android:format24Hour="HH:mm:ss" android:textSize="56sp" android:textStyle="bold" />
 </LinearLayout>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wx_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="8dp"
+    android:paddingEnd="8dp">
+    <TextView android:id="@+id/wx_icon" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="6dp" android:textSize="34sp" />
+    <TextView android:id="@+id/wx_temp" style="@style/WText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginEnd="12dp" android:textSize="32sp" android:textStyle="bold" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+        <TextView android:id="@+id/wx_line" style="@style/WText" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLines="2" android:ellipsize="end" android:textSize="13sp" android:textStyle="bold" />
+        <TextView android:id="@+id/wx_place" style="@style/WText" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLines="1" android:ellipsize="end" android:textSize="12sp" />
+    </LinearLayout>
+</LinearLayout>

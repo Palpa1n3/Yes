@@ -7,8 +7,9 @@
     <string name="screen_reader_label">Alton: read my shift app</string>
     <string name="screen_reader_description">Lets Alton read the rota on your shift app\'s screen when you ask it to add your shifts. It only reads while Alton has opened that app for you, and nothing leaves your phone except the rota text you ask about.</string>
     <string name="widget_description">Alton: greeting, next shift, next reminder, and Talk / Drive buttons</string>
-    <string name="widget_weather_description">The weather now, the next four days, and today\'s screen time</string>
-    <string name="widget_clock_description">Date and time, with the battery of your phone and connected earbuds or watch</string>
-    <string name="widget_screen_description">Today\'s screen time and your top apps</string>
+    <string name="widget_weather_description">The weather now and the next four days. Make it smaller for just the temperature</string>
+    <string name="widget_clock_description">The date and time. Make it smaller for just the time</string>
+    <string name="widget_battery_description">Battery of your phone and connected earbuds or watch</string>
+    <string name="widget_screen_description">Today\'s screen time. Make it wider to see your top apps</string>
     <string name="wallpaper_description">Your picture with Alton\'s spinning data cloud and a small clock</string>
 </resources>

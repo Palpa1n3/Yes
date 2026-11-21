@@ -35,10 +35,17 @@ Read this first in a new chat, then README.md for the feature list.
   or with a Fish key saved on the phone (native HTTP); `setAudioVoice` in native.ts plays MP3
   chunks and falls back to the phone's TTS. `Announcer.java` reads new messages out (from the
   notification listener, so even with the app closed): off / headphones-only / always, quiet hours.
-  Widgets (same 4×2 size so they stack on Samsung): `AltonClockWidget` (date, TextClock, phone +
-  Bluetooth device battery rings via `WidgetKit.batteryRow`), `AltonWeatherWidget` (forecast fetched
-  natively every 30 min from the saved location, plus a screen-time strip from UsageEvents),
-  `AltonScreenWidget`, and `AltonWidget` (avatar, greeting, shift, reminder, Talk/Drive).
+  Widgets, each separate and size-responsive via `WidgetKit.sized` (Android 12+: a
+  `Map<SizeF, RemoteViews>` so the launcher swaps looks as you resize; older: picks the biggest
+  look that fits `OPTION_APPWIDGET_MIN_WIDTH`/`MAX_HEIGHT`, re-rendered in
+  `onAppWidgetOptionsChanged`): `AltonClockWidget` (`widget_clock_s/_m/widget_clock`: time /
+  date+time / date+time with seconds; tap → alarms), `AltonBatteryWidget` (phone + Bluetooth
+  battery rings via `WidgetKit.batteryRow(ctx, d, cells)`, 2/3/4 rings by width; tap → battery
+  settings), `AltonWeatherWidget` (`widget_weather_s/_w/_m/widget_weather`; forecast fetched natively
+  every 30 min from the saved location; tap → Samsung/Google Weather), `AltonScreenWidget`
+  (`widget_screen_s`/`widget_screen`: total / plus top apps and donut, from UsageEvents; tap →
+  Digital Wellbeing), and `AltonWidget` (avatar, greeting, shift, reminder, Talk/Drive).
+  A view a smaller look lacks is skipped by RemoteViews, so one fill routine serves all looks.
   Lock screen: `AltonWallpaper.java` (live wallpaper: the user's picture from `setWallpaperImage`,
   a small spinning data cloud/sphere and a clock; position/size from `setWallpaper`; only animates
   while visible). Samsung's own lock clock can't be hidden by apps.
