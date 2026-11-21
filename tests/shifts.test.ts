@@ -126,7 +126,7 @@ describe('shift alarms and Alexa', () => {
   it('counts hours per week and keeps the saved list tidy', () => {
     const now = new Date(2026, 10, 19, 12);
     expect(weekHours([early, late], now)).toBe(16);
-    const old = { title: 'Old', start: '2026-11-01T07:00', end: '2026-11-01T15:00' };
+    const old = { title: 'Old', start: '2026-10-01T07:00', end: '2026-10-01T15:00' };
     const merged = mergeShifts([old, early], [{ ...early, title: 'Early (Tesco)' }, late], now);
     expect(merged.map((s) => s.title)).toEqual(['Early (Tesco)', 'Late']);
     expect(upcomingShifts(merged, new Date(2026, 10, 21)).map((s) => s.title)).toEqual(['Late']);

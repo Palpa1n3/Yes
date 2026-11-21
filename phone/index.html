@@ -77,6 +77,9 @@
       [hidden] {
         display: none !important;
       }
+      .is-app .web-only {
+        display: none !important;
+      }
       header {
         display: flex;
         align-items: center;
@@ -1275,6 +1278,119 @@
         width: 100%;
         text-align: left;
       }
+      /* ── Shifts tab ── */
+      .shift-hero:empty {
+        display: none;
+      }
+      .shift-hero .when {
+        font-size: 22px;
+        font-weight: 700;
+        margin: 2px 0;
+      }
+      .shift-hero .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .shift-hero .meta span {
+        font-size: 12px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        background: rgba(63, 208, 255, 0.1);
+        border: 1px solid var(--line);
+      }
+      .shift-get {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .shift-get .btn {
+        padding: 10px 8px;
+        font-size: 13px;
+      }
+      .cal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      .cal-head .icon {
+        font-size: 22px;
+      }
+      .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+      }
+      .cal-grid .dow {
+        text-align: center;
+        font-size: 11px;
+        color: var(--muted);
+        padding-bottom: 2px;
+      }
+      .cal-grid button {
+        aspect-ratio: 1;
+        border-radius: 10px;
+        border: 1px solid transparent;
+        background: rgba(255, 255, 255, 0.03);
+        color: inherit;
+        font-size: 13px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: 0;
+      }
+      .cal-grid button.out {
+        opacity: 0.35;
+      }
+      .cal-grid button.today {
+        border-color: var(--accent);
+      }
+      .cal-grid button.sel {
+        background: rgba(63, 208, 255, 0.18);
+      }
+      .cal-grid button small {
+        font-size: 9px;
+        opacity: 0.85;
+      }
+      .cal-grid button i,
+      .cal-key i {
+        display: inline-block;
+        width: 18px;
+        height: 4px;
+        border-radius: 3px;
+      }
+      .cal-key {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        font-size: 11px;
+        color: var(--muted);
+        margin: 8px 0 4px;
+      }
+      .cal-key i {
+        width: 10px;
+        margin-right: 4px;
+        vertical-align: middle;
+      }
+      .k-early {
+        background: #ffc65c;
+      }
+      .k-day {
+        background: #3fd0ff;
+      }
+      .k-late {
+        background: #b07cff;
+      }
+      .k-night {
+        background: #5b7cff;
+      }
+      .shift-stats {
+        margin-top: 10px;
+      }
       /* ── Backgrounds ── */
       body[data-bg='grid'] {
         background:
@@ -1311,6 +1427,128 @@
           repeating-linear-gradient(0deg, transparent 0 62px, rgba(63, 208, 255, 0.05) 62px 63px),
           radial-gradient(700px 500px at 100% 0%, rgba(63, 208, 255, 0.1), transparent 60%),
           var(--bg);
+      }
+      body[data-bg='nebula'] {
+        background:
+          radial-gradient(600px 420px at 15% 20%, rgba(170, 70, 255, 0.28), transparent 65%),
+          radial-gradient(520px 380px at 85% 35%, rgba(255, 70, 160, 0.2), transparent 65%),
+          radial-gradient(700px 500px at 50% 100%, rgba(40, 120, 255, 0.25), transparent 65%),
+          radial-gradient(1px 1px at 30% 60%, #fff8, transparent) 0 0 / 180px 180px,
+          radial-gradient(1px 1px at 70% 80%, #fff6, transparent) 0 0 / 230px 230px,
+          #05040d;
+      }
+      body[data-bg='ocean'] {
+        background:
+          radial-gradient(900px 400px at 50% -10%, rgba(60, 220, 255, 0.22), transparent 60%),
+          repeating-radial-gradient(
+            ellipse at 50% 130%,
+            rgba(63, 208, 255, 0.05) 0 2px,
+            transparent 2px 26px
+          ),
+          linear-gradient(180deg, #032033, #020a14 70%);
+      }
+      body[data-bg='sunset'] {
+        background:
+          radial-gradient(800px 380px at 50% 105%, rgba(255, 120, 60, 0.35), transparent 65%),
+          radial-gradient(600px 300px at 80% 90%, rgba(255, 60, 120, 0.25), transparent 65%),
+          linear-gradient(180deg, #0b0718 0%, #1a0b24 55%, #2a0f1e 100%);
+      }
+      body[data-bg='forest'] {
+        background:
+          radial-gradient(700px 420px at 50% -5%, rgba(120, 255, 180, 0.14), transparent 60%),
+          radial-gradient(500px 300px at 10% 100%, rgba(40, 160, 90, 0.2), transparent 65%),
+          linear-gradient(180deg, #04110b, #020806);
+      }
+      body[data-bg='hex'] {
+        background:
+          radial-gradient(
+              circle at 50% 50%,
+              transparent 58%,
+              rgba(63, 208, 255, 0.08) 60%,
+              transparent 63%
+            )
+            0 0 / 34px 30px,
+          radial-gradient(
+              circle at 50% 50%,
+              transparent 58%,
+              rgba(63, 208, 255, 0.08) 60%,
+              transparent 63%
+            )
+            17px 15px / 34px 30px,
+          radial-gradient(800px 500px at 50% 0%, rgba(63, 208, 255, 0.12), transparent 60%),
+          var(--bg);
+      }
+      body[data-bg='carbon'] {
+        background:
+          linear-gradient(
+              45deg,
+              rgba(255, 255, 255, 0.025) 25%,
+              transparent 25%,
+              transparent 75%,
+              rgba(255, 255, 255, 0.025) 75%
+            )
+            0 0 / 8px 8px,
+          linear-gradient(
+              45deg,
+              rgba(255, 255, 255, 0.025) 25%,
+              transparent 25%,
+              transparent 75%,
+              rgba(255, 255, 255, 0.025) 75%
+            )
+            4px 4px / 8px 8px,
+          radial-gradient(800px 400px at 50% 0%, rgba(255, 255, 255, 0.06), transparent 60%),
+          #08090b;
+      }
+      body[data-bg='bokeh'] {
+        background:
+          radial-gradient(40px 40px at 15% 25%, rgba(255, 190, 90, 0.18), transparent 70%),
+          radial-gradient(60px 60px at 75% 15%, rgba(90, 200, 255, 0.16), transparent 70%),
+          radial-gradient(50px 50px at 60% 55%, rgba(255, 90, 140, 0.14), transparent 70%),
+          radial-gradient(70px 70px at 25% 75%, rgba(120, 140, 255, 0.14), transparent 70%),
+          radial-gradient(45px 45px at 88% 80%, rgba(255, 220, 120, 0.14), transparent 70%),
+          linear-gradient(180deg, #070912, #04050a);
+        background-size:
+          230px 260px,
+          300px 280px,
+          260px 340px,
+          340px 300px,
+          280px 320px,
+          100% 100%;
+      }
+      body[data-bg='rings'] {
+        background:
+          repeating-radial-gradient(
+            circle at 50% 38%,
+            transparent 0 38px,
+            rgba(63, 208, 255, 0.07) 38px 39px
+          ),
+          radial-gradient(400px 400px at 50% 38%, rgba(63, 208, 255, 0.14), transparent 70%),
+          var(--bg);
+      }
+      body[data-bg='drift'] {
+        background:
+          linear-gradient(
+              120deg,
+              rgba(63, 208, 255, 0.18),
+              rgba(170, 70, 255, 0.16),
+              rgba(255, 90, 140, 0.14),
+              rgba(63, 208, 255, 0.18)
+            )
+            0 0 / 300% 300%,
+          var(--bg);
+        animation: bgDrift 30s ease-in-out infinite alternate;
+      }
+      @keyframes bgDrift {
+        to {
+          background-position:
+            100% 100%,
+            0 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        body[data-bg='drift'] {
+          animation: none;
+        }
       }
       body[data-bg='plain'] {
         background: var(--bg);
@@ -2067,11 +2305,60 @@
             <div id="snapTodo" style="margin-top: 8px"></div>
             <div id="snapList" style="margin-top: 8px"></div>
           </div>
+          <div class="card shift-hero" data-in="shifts" id="shiftNext"></div>
           <div class="card" data-in="shifts">
-            <div class="lbl"><span class="dot"></span>Shifts</div>
+            <div class="lbl"><span class="dot"></span>Get my shifts</div>
+            <div class="shift-get">
+              <button class="btn acc" id="shGetApp">📲 From my shift app</button>
+              <button class="btn" id="shGetPic">🖼️ From a screenshot</button>
+              <button class="btn" id="shGetCal">📅 From my calendar</button>
+              <button class="btn" id="shAddOpen">✍️ Type one in</button>
+            </div>
+            <div id="shCalRow" hidden style="margin-top: 10px">
+              <label class="muted" style="display: block"
+                >Calendar events whose name has any of these words are shifts
+                <input class="input" id="shWords" placeholder="shift, work, Tesco"
+              /></label>
+              <button class="btn acc full" id="shCalGo" style="margin-top: 8px">
+                Find my shifts in the calendar (next 8 weeks)
+              </button>
+            </div>
+            <div id="shForm" hidden style="margin-top: 10px">
+              <div class="row" style="gap: 8px">
+                <input class="input" id="shDate" type="date" style="flex: 1.4" />
+                <input class="input" id="shFrom" type="time" style="flex: 1" />
+                <input class="input" id="shTo" type="time" style="flex: 1" />
+              </div>
+              <div class="row" style="gap: 8px; margin-top: 8px">
+                <input class="input" id="shTitle" placeholder="Name, e.g. Tesco" style="flex: 1" />
+                <button class="btn acc" id="shSave">Save</button>
+              </div>
+            </div>
+            <p class="muted small" id="shGetMsg" style="margin-bottom: 0"></p>
+          </div>
+          <div class="card" data-in="shifts">
+            <div class="cal-head">
+              <button class="icon" id="calPrev" aria-label="Previous month">‹</button>
+              <b id="calTitle"></b>
+              <button class="icon" id="calNext" aria-label="Next month">›</button>
+            </div>
+            <div id="calGrid" class="cal-grid"></div>
+            <div class="cal-key">
+              <span><i class="k-early"></i>Early</span><span><i class="k-day"></i>Day</span
+              ><span><i class="k-late"></i>Late</span><span><i class="k-night"></i>Night</span>
+            </div>
+            <div id="calDay" class="muted small"></div>
+            <div class="row stats shift-stats" id="shiftStats"></div>
+          </div>
+          <div class="card" data-in="shifts">
+            <div class="lbl"><span class="dot"></span>Coming up</div>
             <p class="muted" style="margin-top: 0" id="shiftHours"></p>
             <div id="shiftWeek" style="margin: 4px 0 8px"></div>
             <div id="shiftList"></div>
+            <div class="row" style="gap: 8px; margin-top: 8px">
+              <button class="btn" id="shShare" style="flex: 1">Share my rota</button>
+              <button class="btn" id="shToCal" style="flex: 1">Add all to my calendar</button>
+            </div>
             <details class="mini">
               <summary>Alarms, pay &amp; travel</summary>
               <label class="muted" style="display: block; margin-top: 10px">
@@ -2471,12 +2758,12 @@
               </div>
               <h3 class="sub">Home-screen widgets</h3>
               <p class="muted small">
-                Alton has five widgets: <b>Alton Clock</b>, <b>Alton Battery</b>, <b>Alton Weather</b>,
-                <b>Alton Screen time</b> and <b>Alton</b>. Each one changes with its size: drag its
-                edges smaller or bigger (e.g. the clock shows just the time when small, the weather
-                adds the next four days when big). To swipe between them like your others:
-                add one (long-press the home screen › Widgets › Alton), long-press it ›
-                <b>Create stack</b>, and add the others to it.
+                Alton has five widgets: <b>Alton Clock</b>, <b>Alton Battery</b>,
+                <b>Alton Weather</b>, <b>Alton Screen time</b> and <b>Alton</b>. Each one changes
+                with its size: drag its edges smaller or bigger (e.g. the clock shows just the time
+                when small, the weather adds the next four days when big). To swipe between them
+                like your others: add one (long-press the home screen › Widgets › Alton), long-press
+                it › <b>Create stack</b>, and add the others to it.
               </p>
               <div class="li">
                 <span style="flex: 1"
@@ -2693,6 +2980,15 @@
                 <option value="grid">Holo grid</option>
                 <option value="stars">Starfield</option>
                 <option value="circuit">Circuit lines</option>
+                <option value="nebula">Nebula</option>
+                <option value="ocean">Deep ocean</option>
+                <option value="sunset">Sunset</option>
+                <option value="forest">Forest night</option>
+                <option value="hex">Hex shield</option>
+                <option value="carbon">Carbon fibre</option>
+                <option value="bokeh">City lights</option>
+                <option value="rings">Arc rings</option>
+                <option value="drift">Colour drift (moves)</option>
                 <option value="plain">Plain dark</option>
                 <option value="photo">My own picture…</option>
               </select>
@@ -2966,8 +3262,8 @@
               </div>
               <h3 class="sub">Backup</h3>
               <p class="muted small">
-                Chats, people, lists, shifts and settings live in this browser. Save a copy now and
-                then, so clearing the browser or a new phone loses nothing. Your Claude key isn't
+                Chats, people, lists, shifts and settings live on this phone. Save a copy now and
+                then, so clearing the app's data or a new phone loses nothing. Your Claude key isn't
                 included.
               </p>
               <div class="row">
@@ -2996,7 +3292,7 @@
                 >Get the Android app</a
               >
               <p class="muted small" id="updMsg"></p>
-              <p class="muted small">
+              <p class="muted small web-only">
                 Tip: browser menu › Add to Home Screen to use Alton like an app.
               </p>
             </div>

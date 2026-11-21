@@ -49,6 +49,11 @@ Read this first in a new chat, then README.md for the feature list.
   Lock screen: `AltonWallpaper.java` (live wallpaper: the user's picture from `setWallpaperImage`,
   a small spinning data cloud/sphere and a clock; position/size from `setWallpaper`; only animates
   while visible). Samsung's own lock clock can't be hidden by apps.
+  Shifts tab (People › Shifts): next-shift card, "Get my shifts" (shift app via chat, screenshot,
+  phone calendar by keywords `S.shiftWords` via `shiftsFromCalendar`, typed in via `manualShift`;
+  tap a shift to edit), a month calendar (`monthGrid`, colour by `shiftKind`), month hours/pay,
+  share rota (`rotaText`), add all to calendar. Saved shifts now kept 5 weeks back for the calendar.
+  Backgrounds: 15 CSS-only (`body[data-bg]`), `drift` animates (off for reduced motion).
   Phone health: `Diagnostics.java` readings → `src/shared/diagnostics.ts` (`healthReport`: issues
   with fixes) → the `phone_diagnostics` tool and Settings › Phone health.
   Remote control: PC setting `phoneControl` (off by default; notice on the PC when used),

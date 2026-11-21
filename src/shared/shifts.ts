@@ -217,11 +217,11 @@ export function weekHours(shifts: Shift[], day = new Date()): number {
   return Math.round(h * 100) / 100;
 }
 
-/** Keep saved shifts tidy: newer copies replace older ones, old ones (over a week ago) go. */
+/** Keep saved shifts tidy: newer copies replace older ones, old ones (over 5 weeks ago) go. */
 export function mergeShifts(saved: Shift[], incoming: Shift[], now = new Date()): Shift[] {
   const byKey = new Map(saved.map((s) => [shiftKey(s), s]));
   for (const s of incoming) byKey.set(shiftKey(s), s);
-  const cutoff = now.getTime() - 7 * 86_400_000;
+  const cutoff = now.getTime() - 35 * 86_400_000;
   return [...byKey.values()]
     .filter((s) => (parts(s.end)?.getTime() ?? 0) > cutoff)
     .sort((a, b) => a.start.localeCompare(b.start))
@@ -332,4 +332,121 @@ export function timeLeft(s: Shift, now = new Date()): string {
   if (!b) return '';
   const m = Math.max(0, Math.round((b.getTime() - now.getTime()) / 60_000));
   return m >= 60 ? `${Math.floor(m / 60)}h ${p2(m % 60)}m` : `${m}m`;
+}
+
+/* ── Shifts tab: kinds, month calendar, calendar import, sharing ── */
+
+export type ShiftKind = 'early' | 'day' | 'late' | 'night';
+export const SHIFT_KIND_LABEL: Record<ShiftKind, string> = {
+  early: 'Early',
+  day: 'Day',
+  late: 'Late',
+  night: 'Night',
+};
+
+/** Early (before 9), day (9–1), late (1pm–8pm) or night (8pm–4am) by start time. */
+export function shiftKind(s: Shift): ShiftKind {
+  const h = Number(s.start.slice(11, 13));
+  if (!Number.isFinite(h)) return 'day';
+  if (h < 4 || h >= 20) return 'night';
+  if (h < 9) return 'early';
+  if (h < 13) return 'day';
+  return 'late';
+}
+
+/** "2026-11-24" for a local date. */
+export const ymd = (d: Date): string =>
+  `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+
+export interface MonthDay {
+  date: string;
+  day: number;
+  inMonth: boolean;
+  shifts: Shift[];
+}
+
+/** A Monday-first calendar for a month: whole weeks, each day with its shifts. */
+export function monthGrid(year: number, month: number, shifts: Shift[]): MonthDay[][] {
+  const first = new Date(year, month, 1);
+  const start = new Date(year, month, 1 - ((first.getDay() + 6) % 7));
+  const byDay = new Map<string, Shift[]>();
+  for (const s of shifts) {
+    const k = dayOf(s);
+    byDay.set(k, [...(byDay.get(k) ?? []), s]);
+  }
+  const weeks: MonthDay[][] = [];
+  const d = new Date(start);
+  while (weeks.length < 6) {
+    const week: MonthDay[] = [];
+    for (let i = 0; i < 7; i++) {
+      const k = ymd(d);
+      week.push({
+        date: k,
+        day: d.getDate(),
+        inMonth: d.getMonth() === month,
+        shifts: byDay.get(k) ?? [],
+      });
+      d.setDate(d.getDate() + 1);
+    }
+    weeks.push(week);
+    if (d.getMonth() !== month) break;
+  }
+  return weeks;
+}
+
+/** Hours in a calendar month. */
+export function monthHours(shifts: Shift[], year: number, month: number): number {
+  const pre = `${year}-${p2(month + 1)}-`;
+  const h = shifts.filter((s) => s.start.startsWith(pre)).reduce((n, s) => n + shiftHours(s), 0);
+  return Math.round(h * 100) / 100;
+}
+
+/** Days with no shift in the next `days` days (today included). */
+export function daysOff(shifts: Shift[], days = 14, now = new Date()): number {
+  const worked = new Set(shifts.map(dayOf));
+  let n = 0;
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    if (!worked.has(ymd(d))) n++;
+  }
+  return n;
+}
+
+/** Calendar events that look like shifts (title has one of the words) turned into shifts. */
+export function shiftsFromCalendar(
+  events: Array<{ title: string; start: number; end: number; allDay: boolean; location?: string }>,
+  words: string,
+): Shift[] {
+  const keys = words
+    .split(',')
+    .map((w) => w.trim().toLowerCase())
+    .filter(Boolean);
+  if (!keys.length) return [];
+  return events
+    .filter((e) => !e.allDay && e.end > e.start && e.end - e.start <= 16 * 3600_000)
+    .filter((e) => keys.some((k) => e.title.toLowerCase().includes(k)))
+    .map((e) => ({
+      title: e.title.trim() || 'Work',
+      start: isoLocal(new Date(e.start)),
+      end: isoLocal(new Date(e.end)),
+      ...(e.location ? { location: e.location } : {}),
+    }))
+    .sort((a, b) => a.start.localeCompare(b.start));
+}
+
+/** A shift typed in by hand: date "2026-11-24", times "07:00"/"15:00" (an end before the start is the next day). */
+export function manualShift(date: string, from: string, to: string, title = 'Work'): Shift | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(from) || !/^\d{2}:\d{2}$/.test(to))
+    return null;
+  if (from === to) return null;
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number];
+  const endDay = to < from ? ymd(new Date(y, m - 1, d + 1)) : date;
+  return { title: title.trim() || 'Work', start: `${date}T${from}`, end: `${endDay}T${to}` };
+}
+
+/** The rota as plain text to share: one line per shift. */
+export function rotaText(shifts: Shift[], now = new Date()): string {
+  const up = upcomingShifts(shifts, now);
+  if (!up.length) return 'No shifts coming up.';
+  return ['My shifts:', ...up.map((s) => `• ${describeShift(s)} ${s.title}`)].join('\n');
 }

@@ -94,6 +94,16 @@ import {
   upcomingShifts,
   weekHours,
   weekPay,
+  daysOff,
+  manualShift,
+  mergeShifts,
+  monthGrid,
+  monthHours,
+  rotaText,
+  shiftKind,
+  shiftsFromCalendar,
+  SHIFT_KIND_LABEL,
+  ymd,
   type Shift,
   type ShiftAlarmRule,
 } from '@shared/shifts';
@@ -211,7 +221,22 @@ interface State {
   /** Show the real weather (rain, snow, storms, fog) on the background. */
   weatherFx: boolean;
   /** Background style, picture darkness (%), and interface options. */
-  bg: 'aurora' | 'grid' | 'stars' | 'circuit' | 'plain' | 'photo';
+  bg:
+    | 'aurora'
+    | 'grid'
+    | 'stars'
+    | 'circuit'
+    | 'plain'
+    | 'photo'
+    | 'nebula'
+    | 'ocean'
+    | 'sunset'
+    | 'forest'
+    | 'hex'
+    | 'carbon'
+    | 'bokeh'
+    | 'rings'
+    | 'drift';
   bgDim: number;
   uiText: 's' | 'm' | 'l' | 'xl';
   uiCorners: 'round' | 'soft' | 'sharp';
@@ -254,6 +279,8 @@ interface State {
   unpaidBreak: number;
   /** Minutes to get to work, for "leave by". */
   travel: number;
+  /** Words that mark a calendar event as a shift (From my calendar). */
+  shiftWords: string;
   /** Last backup saved, and when the reminder was last put off (ms). */
   lastBackup: number;
   backupSnooze: number;
@@ -352,6 +379,7 @@ const DEFAULTS: State = {
   payRate: 0,
   unpaidBreak: 0,
   travel: 0,
+  shiftWords: 'shift, work',
   lastBackup: 0,
   backupSnooze: 0,
 };
@@ -1168,7 +1196,7 @@ const usePcNow = (): boolean => S.usePc && pcLink === 'paired';
 async function checkPc(): Promise<void> {
   const base = pcBase();
   if (!base) {
-    pcWhy = 'Add your PC’s Tailscale address below.';
+    pcWhy = 'Add your PC’s Tailscale address above, then the pairing code.';
     return setLink('off');
   }
   if (!isPcAddress(base)) {
@@ -4259,6 +4287,12 @@ async function pickContact(forName?: string): Promise<void> {
   }
 }
 function renderShifts(): void {
+  renderShiftNext();
+  renderCalendar();
+  $('shGetApp').hidden = !isApp;
+  $('shGetCal').hidden = !isApp;
+  $('shToCal').hidden = !isApp;
+  $<HTMLInputElement>('shWords').value = S.shiftWords;
   // Week timeline and hours (and pay) per week.
   const colors = {
     bar: 'var(--accent)',
@@ -4287,6 +4321,10 @@ function renderShifts(): void {
     const t = el('span', undefined, `${describeShift(s)} · ${s.title}`);
     t.style.flex = '1';
     t.title = `Alarm ${a.time}`;
+    const kind = el('i', `k-${shiftKind(s)}`);
+    kind.style.cssText = 'width:4px;height:22px;border-radius:3px;margin-right:8px;flex:none';
+    row.appendChild(kind);
+    t.onclick = () => editShift(s);
     const x = el('button', 'x', '✕');
     x.setAttribute('aria-label', 'Remove this shift');
     x.onclick = () => {
@@ -4302,6 +4340,247 @@ function renderShifts(): void {
   $<HTMLInputElement>('payRate').value = S.payRate ? String(S.payRate) : '';
   $<HTMLInputElement>('unpaidBreak').value = S.unpaidBreak ? String(S.unpaidBreak) : '';
   $<HTMLInputElement>('travel').value = S.travel ? String(S.travel) : '';
+}
+
+/* ── Shifts tab: next shift, month calendar, getting shifts in ── */
+let calMonth = (() => {
+  const d = new Date();
+  return { y: d.getFullYear(), m: d.getMonth() };
+})();
+let calSel = ymd(new Date());
+let editing: Shift | null = null;
+
+function renderShiftNext(): void {
+  const box = $('shiftNext');
+  const cur = currentShift(S.shifts);
+  const n = cur ?? upcomingShifts(S.shifts)[0];
+  box.textContent = '';
+  if (!n) return;
+  const start = new Date(n.start);
+  const mins = Math.round((start.getTime() - Date.now()) / 60_000);
+  const until = cur
+    ? `On shift now · ${timeLeft(cur)} left`
+    : mins < 60
+      ? `Starts in ${Math.max(0, mins)} min`
+      : mins < 48 * 60
+        ? `Starts in ${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, '0')}m`
+        : `In ${Math.round(mins / 1440)} days`;
+  const day = start.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+  });
+  const a = alarmFor(n, S.shiftRules, S.shiftLead);
+  const chips = [
+    `${SHIFT_KIND_LABEL[shiftKind(n)]} shift`,
+    `${n.start.slice(11, 16)}–${n.end.slice(11, 16)}`,
+    cur ? '' : `⏰ Alarm ${a.time}`,
+    S.travel && !cur ? `🚗 Leave by ${leaveBy(n, S.travel)}` : '',
+    S.travel ? `🏠 Home by ${homeBy(n, S.travel)}` : '',
+    n.location ? `📍 ${n.location}` : '',
+  ].filter(Boolean);
+  box.append(
+    el('div', 'lbl', cur ? 'At work' : 'Next shift'),
+    el('div', 'when', cur ? n.title : day),
+    el('div', 'muted', cur ? until : `${n.title} · ${until}`),
+  );
+  const meta = el('div', 'meta');
+  for (const c of chips) meta.appendChild(el('span', undefined, c));
+  box.appendChild(meta);
+}
+
+function renderCalendar(): void {
+  const { y, m } = calMonth;
+  $('calTitle').textContent = new Date(y, m, 1).toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+  });
+  const grid = $('calGrid');
+  grid.textContent = '';
+  for (const d of ['M', 'T', 'W', 'T', 'F', 'S', 'S']) grid.appendChild(el('div', 'dow', d));
+  const today = ymd(new Date());
+  for (const week of monthGrid(y, m, S.shifts))
+    for (const d of week) {
+      const b = el('button');
+      b.className = [
+        d.inMonth ? '' : 'out',
+        d.date === today ? 'today' : '',
+        d.date === calSel ? 'sel' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      b.appendChild(el('span', undefined, String(d.day)));
+      const first = d.shifts[0];
+      if (first) {
+        b.appendChild(el('i', `k-${shiftKind(first)}`));
+        b.appendChild(el('small', undefined, first.start.slice(11, 16)));
+      }
+      b.setAttribute(
+        'aria-label',
+        `${d.date}${d.shifts.length ? `: ${d.shifts.map((s) => s.title).join(', ')}` : ''}`,
+      );
+      b.onclick = () => {
+        calSel = d.date;
+        renderCalendar();
+      };
+      grid.appendChild(b);
+    }
+  const sel = S.shifts.filter((s) => s.start.startsWith(calSel));
+  const label = new Date(`${calSel}T12:00`).toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  $('calDay').textContent = sel.length
+    ? `${label}: ${sel.map((s) => `${s.title} ${s.start.slice(11, 16)}–${s.end.slice(11, 16)}`).join(', ')}`
+    : `${label}: day off`;
+  const hrs = monthHours(S.shifts, y, m);
+  const pre = `${y}-${String(m + 1).padStart(2, '0')}-`;
+  const stats: Array<[string, string]> = [
+    [`${hrs}h`, 'this month'],
+    [String(S.shifts.filter((s) => s.start.startsWith(pre)).length), 'shifts'],
+    S.payRate > 0
+      ? [money(hrs * S.payRate), 'pay (before tax)']
+      : [String(daysOff(S.shifts, 14)), 'days off (2 wks)'],
+  ];
+  const st = $('shiftStats');
+  st.textContent = '';
+  for (const [b, small] of stats) {
+    const d = el('div');
+    d.append(el('b', undefined, b), el('small', 'muted', small));
+    st.appendChild(d);
+  }
+}
+
+function editShift(s: Shift | null): void {
+  editing = s;
+  $('shForm').hidden = false;
+  $('shCalRow').hidden = true;
+  $<HTMLInputElement>('shDate').value = s ? s.start.slice(0, 10) : calSel;
+  $<HTMLInputElement>('shFrom').value = s ? s.start.slice(11, 16) : '';
+  $<HTMLInputElement>('shTo').value = s ? s.end.slice(11, 16) : '';
+  $<HTMLInputElement>('shTitle').value = s ? s.title : S.shiftAppName || '';
+  $('shSave').textContent = s ? 'Update' : 'Save';
+  $('shForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function addShifts(fresh: Shift[], replace?: Shift): void {
+  const kept = replace ? S.shifts.filter((x) => x !== replace) : S.shifts;
+  S.shifts = mergeShifts(kept, fresh);
+  save();
+  renderShifts();
+  renderShiftCard();
+  void autoShiftAlarms();
+}
+
+async function shiftsFromMyCalendar(): Promise<void> {
+  const msg = $('shGetMsg');
+  const st = await powerStatus();
+  if (!st?.calendar) {
+    const r = await Native.requestAccess({ which: 'calendar' }).catch(() => ({ granted: false }));
+    if (!r.granted) {
+      msg.textContent = 'Alton needs Calendar access: allow it in Settings › Phone powers.';
+      return;
+    }
+  }
+  const from = new Date();
+  from.setHours(0, 0, 0, 0);
+  try {
+    const { events } = await Native.calendarEvents({
+      from: from.getTime(),
+      to: from.getTime() + 56 * 86_400_000,
+    });
+    const found = shiftsFromCalendar(events, S.shiftWords);
+    if (!found.length) {
+      msg.textContent = `No events with “${S.shiftWords}” in the name in the next 8 weeks. Change the words above to match what your shifts are called.`;
+      return;
+    }
+    const before = new Set(S.shifts.map(shiftKey));
+    const added = found.filter((x) => !before.has(shiftKey(x))).length;
+    // Already in the calendar, so "Add all to my calendar" skips them.
+    S.addedShifts = [...new Set([...S.addedShifts, ...found.map(shiftKey)])].slice(-500);
+    addShifts(found);
+    msg.textContent = `Found ${found.length} shift${found.length > 1 ? 's' : ''} (${added} new).`;
+  } catch (e) {
+    msg.textContent = `Couldn't read the calendar: ${(e as Error).message}`;
+  }
+}
+
+function wireShiftsTab(): void {
+  $('shGetApp').onclick = () => {
+    if (!S.shiftApp) {
+      $('shGetMsg').textContent =
+        'First pick your shift app in Settings › Phone powers › Read my shift app.';
+      return;
+    }
+    setView('chat');
+    send('Read my shift app and add all my upcoming shifts.');
+  };
+  $('shGetPic').onclick = () => {
+    setView('chat');
+    $<HTMLTextAreaElement>('msg').value = 'Add the shifts from this rota screenshot.';
+    $('photo').click();
+    toast('Pick the screenshot of your rota, then tap send.');
+  };
+  $('shGetCal').onclick = () => {
+    $('shForm').hidden = true;
+    $('shCalRow').hidden = !$('shCalRow').hidden;
+  };
+  $('shCalGo').onclick = () => void shiftsFromMyCalendar();
+  $<HTMLInputElement>('shWords').onchange = (e) => {
+    S.shiftWords = (e.target as HTMLInputElement).value.trim() || 'shift, work';
+    save();
+  };
+  $('shAddOpen').onclick = () => {
+    if (!$('shForm').hidden && !editing) $('shForm').hidden = true;
+    else editShift(null);
+  };
+  $('shSave').onclick = () => {
+    const s = manualShift(
+      $<HTMLInputElement>('shDate').value,
+      $<HTMLInputElement>('shFrom').value,
+      $<HTMLInputElement>('shTo').value,
+      $<HTMLInputElement>('shTitle').value,
+    );
+    if (!s) return toast('Fill in the date, start and finish.');
+    addShifts([s], editing ?? undefined);
+    $('shGetMsg').textContent = `${editing ? 'Updated' : 'Saved'}: ${describeShift(s)}.`;
+    editing = null;
+    $('shForm').hidden = true;
+  };
+  $('calPrev').onclick = () => {
+    calMonth =
+      calMonth.m === 0 ? { y: calMonth.y - 1, m: 11 } : { y: calMonth.y, m: calMonth.m - 1 };
+    renderCalendar();
+  };
+  $('calNext').onclick = () => {
+    calMonth =
+      calMonth.m === 11 ? { y: calMonth.y + 1, m: 0 } : { y: calMonth.y, m: calMonth.m + 1 };
+    renderCalendar();
+  };
+  $('shShare').onclick = () => {
+    const text = rotaText(S.shifts);
+    void shareText('My shifts', text).then((ok) => {
+      if (!ok) void navigator.clipboard?.writeText(text).then(() => toast('Rota copied.'));
+    });
+  };
+  $('shToCal').onclick = async () => {
+    const done = new Set(S.addedShifts);
+    const todo = upcomingShifts(S.shifts).filter((x) => !done.has(shiftKey(x)));
+    if (!todo.length) return toast('All your shifts are already in your calendar.');
+    const out: { result: string; actions?: PhoneAction[]; shifts?: Shift[] } = {
+      result: '',
+      shifts: todo,
+      actions: [{ marks: todo.map(shiftKey) } as unknown as PhoneAction],
+    };
+    await shiftsIntoCalendar(out, {});
+    save();
+    toast(
+      out.result.startsWith('DONE')
+        ? `Added ${todo.length} to your calendar.`
+        : 'Allow Calendar in Settings › Phone powers first.',
+    );
+  };
 }
 
 /* ── People › Snapchat friends: match Snapchat nicknames to who they are ── */
@@ -5280,7 +5559,7 @@ function setView(v: string): void {
     .querySelectorAll('nav.tabs button')
     .forEach((b) => b.classList.toggle('on', b.getAttribute('data-v') === v));
   for (const id of ['menuBtn', 'newBtn', 'researchBtn', 'handsBtn', 'shareBtn'])
-    $(id).style.visibility = v === 'chat' ? 'visible' : 'hidden';
+    $(id).style.display = v === 'chat' ? '' : 'none';
   $('title').textContent =
     v === 'chat'
       ? chat()
@@ -5309,6 +5588,7 @@ function setView(v: string): void {
 }
 
 function start(): void {
+  document.documentElement.classList.toggle('is-app', isApp);
   const ready = !!apiKey;
   $('setup').hidden = ready;
   $('app').hidden = !ready;
@@ -5460,6 +5740,7 @@ function wire(): void {
   setInterval(() => {
     if (!document.hidden && (view === 'chat' || view === 'today')) renderShiftCard();
   }, 60_000);
+  wireShiftsTab();
   $('shiftLead').onchange = () => {
     const v = Number($<HTMLInputElement>('shiftLead').value);
     S.shiftLead = v >= 0 && v <= 600 ? Math.round(v) : 90;
