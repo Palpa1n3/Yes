@@ -26,6 +26,9 @@ final class AppReader {
         final int[] st = { 0, 0, 0, 0 };
         final String[] seen = { "" };
         final String[] note = { null };
+        // Reading open shifts / swaps rather than the rota.
+        final String tf = tapFirst == null ? "" : tapFirst.toLowerCase(java.util.Locale.ROOT);
+        final boolean trades = tf.contains("trade") || tf.contains("swap") || tf.contains("open shift");
         final Runnable[] step = new Runnable[1];
         step[0] = () -> {
             ScreenReader sr = ScreenReader.get();
@@ -44,11 +47,15 @@ final class AppReader {
                     st[1] = 0;
                     main.postDelayed(step[0], 2500);
                     return;
-                case 1: { // go to the schedule tab (the one set in Phone powers, else "Schedule")
+                case 1: { // go to the tab asked for: the rota (the one set, else "Schedule"…) or shift trades
                     boolean tapped = false;
                     if (tapFirst != null && !tapFirst.isEmpty()) tapped = sr.tapTab(tapFirst);
+                    // Shift trades never fall back to the rota: reading the rota as "trades" misleads.
+                    String[] others = trades
+                        ? new String[] { "Shift Trade", "Shift Trades", "Trades", "Trade", "Shift Swap", "Swaps", "Open Shifts", "Marketplace" }
+                        : new String[] { "Schedule", "My schedule", "Rota", "My rota", "My shifts", "Shifts" };
                     if (!tapped)
-                        for (String t : new String[] { "Schedule", "My schedule", "Rota", "My rota", "My shifts", "Shifts" })
+                        for (String t : others)
                             if (sr.tapTab(t)) {
                                 tapped = true;
                                 break;
@@ -58,7 +65,11 @@ final class AppReader {
                         main.postDelayed(step[0], 2000);
                         return;
                     }
-                    st[0] = 5;
+                    if (!tapped)
+                        note[0] = "Couldn't find the \"" + (tapFirst == null || tapFirst.isEmpty() ? "Schedule" : tapFirst)
+                            + "\" tab, so this is whatever screen the app opened on.";
+                    // Shift trades: no Day/Week switch, no next week.
+                    st[0] = trades ? 2 : 5;
                     st[1] = 0;
                     main.postDelayed(step[0], tapped ? 2500 : 500);
                     return;
@@ -74,7 +85,8 @@ final class AppReader {
                 case 2: { // read this week: wait until it has loaded, then scroll down for the rest
                     Set<String> page = ScreenReader.newLines();
                     sr.collectApp(pkg, page);
-                    if (st[2] == 0 && !AltonNativePlugin.looksLoaded(page) && st[1]++ < 12) {
+                    // (An empty trades list never "looks loaded": wait less for it.)
+                    if (st[2] == 0 && !AltonNativePlugin.looksLoaded(page) && st[1]++ < (trades ? 4 : 12)) {
                         main.postDelayed(step[0], 2000);
                         return;
                     }

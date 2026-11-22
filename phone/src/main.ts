@@ -3494,6 +3494,9 @@ async function renderPowers(): Promise<void> {
   $('pwApp').textContent = S.shiftAppName || 'Choose…';
   const tab = $<HTMLInputElement>('pwTab');
   if (document.activeElement !== tab) tab.value = S.shiftTab;
+  const trade = $<HTMLInputElement>('pwTrade');
+  if (document.activeElement !== trade)
+    trade.value = S.tradeTab === 'Shift Trade' ? '' : S.tradeTab;
   const nx = $<HTMLInputElement>('pwNext');
   if (document.activeElement !== nx) nx.value = S.shiftNext;
   $<HTMLSelectElement>('pwWeeks').value = String(S.shiftWeeks || 2);
@@ -3625,6 +3628,10 @@ function wirePowers(): void {
     S.shiftTab = (e.target as HTMLInputElement).value.trim().slice(0, 40);
     save();
     void pushAutoRota();
+  };
+  $<HTMLInputElement>('pwTrade').onchange = (e) => {
+    S.tradeTab = (e.target as HTMLInputElement).value.trim().slice(0, 40) || 'Shift Trade';
+    save();
   };
   $<HTMLInputElement>('pwNext').onchange = (e) => {
     S.shiftNext = (e.target as HTMLInputElement).value.trim().slice(0, 40);
@@ -5369,7 +5376,9 @@ async function readTrades(): Promise<string> {
     const r = await Native.readApp({ package: S.shiftApp, tap: tab, weeks: 1 });
     if (r.front && r.front !== S.shiftApp)
       return `The shift app didn't stay on screen (Alton saw ${r.front}).`;
-    return `Text on the shift app's "${tab}" screen (read just now):\n${r.text.slice(0, 12000)}\n\nIf this is their own rota rather than shifts on offer, the tab wasn't found: say so. Otherwise call check_shift_fit with the shifts on offer (local times).`;
+    if (r.note)
+      return `${r.note} Tell the user Alton couldn't find their shift app's "${tab}" tab, and that they can type its exact name in Work › Your shift app › Shift trades tab. What was on screen:\n${r.text.slice(0, 3000)}`;
+    return `Text on the shift app's "${tab}" screen (read just now):\n${r.text.slice(0, 12000)}\n\nIf this is their own rota rather than shifts on offer, say the trades tab wasn't found. Otherwise call check_shift_fit with the shifts on offer (local times).`;
   } catch (e) {
     return `Couldn't read it: ${(e as Error).message}`;
   }

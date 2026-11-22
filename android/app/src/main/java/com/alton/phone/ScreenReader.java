@@ -196,28 +196,80 @@ public class ScreenReader extends AccessibilityService {
     public boolean tapTab(String target) {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return false;
-        String want = target.trim().toLowerCase();
+        String want = tabName(target);
+        if (want.isEmpty()) return false;
         List<AccessibilityNodeInfo> all = new java.util.ArrayList<>();
         flatten(root, all, 0);
         AccessibilityNodeInfo best = null;
+        int bestScore = 0;
         int bestTop = Integer.MIN_VALUE;
         for (AccessibilityNodeInfo n : all) {
-            CharSequence t = n.getText();
-            CharSequence d = n.getContentDescription();
-            boolean hit = (t != null && t.toString().trim().toLowerCase().equals(want))
-                || (d != null && d.toString().trim().toLowerCase().equals(want));
-            if (!hit) continue;
-            AccessibilityNodeInfo c = n;
-            while (c != null && !c.isClickable()) c = c.getParent();
+            int score = Math.max(labelScore(n.getText(), want), labelScore(n.getContentDescription(), want));
+            if (score == 0) continue;
+            AccessibilityNodeInfo c = clickableFor(n, all);
             if (c == null) continue;
             android.graphics.Rect b = new android.graphics.Rect();
             c.getBoundsInScreen(b);
-            if (b.top > bestTop) {
+            // Exact names beat loose ones; then the lowest on screen (the bottom navigation bar).
+            if (score > bestScore || (score == bestScore && b.top > bestTop)) {
+                bestScore = score;
                 bestTop = b.top;
                 best = c;
             }
         }
         return best != null && best.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+    }
+
+    /** "Schedule, Tab 2 of 4" / "SCHEDULE (3)" / "Shift Trade selected" → "schedule" / "shift trade". */
+    static String tabName(CharSequence cs) {
+        if (cs == null) return "";
+        String s = cs.toString().toLowerCase(java.util.Locale.ROOT);
+        s = s.replaceAll("\\btab\\s*\\d+\\s*(of|/)\\s*\\d+", " ")
+            .replaceAll("\\b(not selected|selected|button|tab|double tap to activate|new)\\b", " ")
+            .replaceAll("[^a-z ]+", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+        return s;
+    }
+
+    /** 2 = the label is exactly the name (after tidying), 1 = a short label starting with it, 0 = no. */
+    private static int labelScore(CharSequence cs, String want) {
+        if (cs == null || cs.length() == 0 || cs.length() > 80) return 0;
+        for (String line : cs.toString().split("[\\n,]")) {
+            if (tabName(line).equals(want)) return 2;
+        }
+        String all = tabName(cs);
+        if (all.equals(want)) return 2;
+        if (all.length() <= want.length() + 14 && (all.startsWith(want + " ") || all.endsWith(" " + want))) return 1;
+        return 0;
+    }
+
+    /** The node to tap for a label: itself or a tappable parent, else the smallest tappable thing
+     *  that covers the label's middle (some apps put the touch area beside the text). */
+    private static AccessibilityNodeInfo clickableFor(AccessibilityNodeInfo n, List<AccessibilityNodeInfo> all) {
+        AccessibilityNodeInfo c = n;
+        int up = 0;
+        while (c != null && !c.isClickable() && up++ < 8) c = c.getParent();
+        if (c != null && c.isClickable()) return c;
+        android.graphics.Rect r = new android.graphics.Rect();
+        n.getBoundsInScreen(r);
+        if (r.isEmpty()) return null;
+        int cx = r.centerX();
+        int cy = r.centerY();
+        AccessibilityNodeInfo best = null;
+        long bestArea = Long.MAX_VALUE;
+        android.graphics.Rect b = new android.graphics.Rect();
+        for (AccessibilityNodeInfo m : all) {
+            if (!m.isClickable()) continue;
+            m.getBoundsInScreen(b);
+            if (!b.contains(cx, cy)) continue;
+            long area = (long) b.width() * b.height();
+            if (area < bestArea) {
+                bestArea = area;
+                best = m;
+            }
+        }
+        return best;
     }
 
     /** Taps the first item whose text or description is exactly this (any case). */
