@@ -1,3 +1,4 @@
+import { UI_STYLE_GROUPS, cleanUiStyle, type UiStyle } from '@shared/ui-style';
 import { SPACE_BACKDROPS } from '@shared/backdrops';
 import { SPACE_LOOKS } from '@shared/looks';
 import { SpaceTileArt } from '@renderer/components/hud/Background';
@@ -191,6 +192,7 @@ export function AppearanceTab() {
   const { settings: s, update } = useSettingsStore();
   return (
     <>
+      <InterfaceSection />
       <Section title="One-tap space looks">
         <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Space looks">
           {SPACE_LOOKS.map((l) => {
@@ -1063,6 +1065,66 @@ export function AiTab() {
           </pre>
         </Field>
       </Section>
+    </>
+  );
+}
+
+/** Interface: font, glass, chat, layout and motion (the same options as the phone app). */
+function InterfaceSection() {
+  const { settings: s, update } = useSettingsStore();
+  const ui = s.uiStyle;
+  const set = (ch: Partial<UiStyle>): void =>
+    void update({ uiStyle: cleanUiStyle({ ...ui, ...ch }) });
+  return (
+    <>
+      {UI_STYLE_GROUPS.map((g) => (
+        <Section key={g.title} title={g.title}>
+          {g.fields.map((f) => {
+            const v = ui[f.key];
+            if (f.kind === 'toggle')
+              return (
+                <Field key={f.key} label={f.label} hint={f.hint}>
+                  <Toggle
+                    label={f.label}
+                    checked={v === true}
+                    onChange={(on) => set({ [f.key]: on } as Partial<UiStyle>)}
+                  />
+                </Field>
+              );
+            if (f.kind === 'select')
+              return (
+                <Field key={f.key} label={f.label} hint={f.hint}>
+                  <Select
+                    label={f.label}
+                    value={String(v)}
+                    onChange={(val) => set({ [f.key]: val } as Partial<UiStyle>)}
+                    options={f.options.map(([value, label]) => ({ value, label }))}
+                  />
+                </Field>
+              );
+            return (
+              <Field key={f.key} label={f.label} hint={f.hint} stacked>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    aria-label={f.label}
+                    min={f.min}
+                    max={f.max}
+                    step={f.step}
+                    value={Number(v)}
+                    onChange={(e) => set({ [f.key]: Number(e.target.value) } as Partial<UiStyle>)}
+                    className="hud-range w-full"
+                  />
+                  <span className="w-12 text-right font-mono text-[11px] text-accent">
+                    {String(v)}
+                    {f.unit ?? ''}
+                  </span>
+                </div>
+              </Field>
+            );
+          })}
+        </Section>
+      ))}
     </>
   );
 }

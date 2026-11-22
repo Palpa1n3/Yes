@@ -251,6 +251,14 @@ Schwarzschild spacetime (d²x/dλ² = −1.5·h²·x/r⁵), a thin disc from the
 (3 Rs) with the thin-disc temperature law, Doppler beaming and gravitational redshift, and
 lensed stars. Painted once when chosen (cached), so it costs nothing while you use the app.
 
+### Interface customisation (0.52)
+
+Phone: Settings › Look › Interface. PC: Settings › Appearance. The same options on both:
+**Font** (Standard, Futuristic, Sci-fi, Terminal, System, Classic), **Panels and glass**
+(see-through, frosted blur, glow), **Chat** (bubble shape and colour, message width, your
+messages left or right, times on messages), **Layout and motion** (tab bar names or icons only,
+compact/normal/roomy spacing, animations normal/quick/off). Defaults keep the designed look.
+
 ### Saver mode
 
 Click the leaf next to the spending chip (or type `/saver`, or Settings › AI › Spending) to

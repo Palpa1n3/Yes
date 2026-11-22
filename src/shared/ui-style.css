@@ -1,0 +1,192 @@
+/* Interface customisation (src/shared/ui-style.ts), for the phone app and the PC.
+   Each rule only applies when its option was changed (a data-ui-* attribute on <html>). */
+
+/* ── Font (bundled Rajdhani / Orbitron / JetBrains Mono, else built-in fonts) ── */
+html[data-ui-font] body,
+html[data-ui-font] .font-body,
+html[data-ui-font] .input,
+html[data-ui-font] input,
+html[data-ui-font] textarea {
+  font-family: var(--ui-font);
+}
+
+/* ── Panels and glass: see-through, frosted blur ── */
+html[data-ui-glass] .card,
+html[data-ui-glass] details.grp {
+  background: color-mix(in srgb, var(--panel) calc(var(--ui-glass) * 100%), transparent);
+  backdrop-filter: blur(var(--ui-blur));
+  -webkit-backdrop-filter: blur(var(--ui-blur));
+}
+html[data-ui-glass] .hud-panel {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--bg-panel-raised) / calc(var(--ui-glass) * 0.85)) 0%,
+    rgb(var(--bg-panel) / calc(var(--ui-glass) * 0.95)) 38%,
+    rgb(var(--bg-panel) / var(--ui-glass)) 100%
+  );
+  backdrop-filter: blur(var(--ui-blur));
+}
+
+/* ── Glow around panels (0 = none) ── */
+html[data-ui-glow] .card,
+html[data-ui-glow] details.grp {
+  box-shadow: 0 0 calc(var(--ui-glow) * 10px)
+    color-mix(in srgb, var(--accent) calc(var(--ui-glow) * 12%), transparent);
+}
+html[data-ui-glow] .hud-panel,
+html[data-ui-glow] .hud-panel:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(var(--ice) / 0.04),
+    0 0 calc(var(--ui-glow) * 12px) rgb(var(--accent) / calc(var(--ui-glow) * 0.09));
+}
+html[data-ui-glow] .hud-panel::before {
+  opacity: calc(var(--ui-glow) / 1.5);
+}
+
+/* ── Chat: your messages (phone .me, PC .chat-user) ── */
+html[data-ui-bubble='round'] .me {
+  border-radius: 18px;
+}
+html[data-ui-bubble='square'] .me {
+  border-radius: 5px;
+}
+html[data-ui-bubble='plain'] .me {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+html[data-ui-bubble='round'] .chat-user > .chat-text,
+html[data-ui-bubble='square'] .chat-user > .chat-text {
+  display: inline-block;
+  padding: 6px 11px;
+  background: rgb(var(--bg-panel-raised) / 0.9);
+  border: 1px solid rgb(var(--line) / 0.8);
+  color: rgb(var(--text-primary));
+  text-align: left;
+}
+html[data-ui-bubble='round'] .chat-user > .chat-text {
+  border-radius: 14px;
+}
+html[data-ui-bubble='square'] .chat-user > .chat-text {
+  border-radius: 4px;
+}
+html[data-ui-bubble-colour='accent'] .me {
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+html[data-ui-bubble-colour='grey'] .me {
+  background: #1d242c;
+  border-color: #2c3640;
+}
+html[data-ui-bubble-colour='clear'] .me {
+  background: transparent;
+  border-color: var(--line);
+}
+html[data-ui-bubble-colour='accent'] .chat-user > .chat-text {
+  background: rgb(var(--accent) / 0.18);
+  border-color: rgb(var(--accent) / 0.45);
+}
+html[data-ui-bubble-colour='grey'] .chat-user > .chat-text {
+  background: #1d242c;
+  border-color: #2c3640;
+}
+html[data-ui-bubble-colour='clear'] .chat-user > .chat-text {
+  background: transparent;
+}
+html[data-ui-width='narrow'] .me {
+  max-width: 68%;
+}
+html[data-ui-width='wide'] .me {
+  max-width: 97%;
+}
+html[data-ui-width='narrow'] .chat-user {
+  margin-left: 30%;
+}
+html[data-ui-width='wide'] .chat-user {
+  margin-left: 0;
+}
+html[data-ui-side='left'] .me {
+  align-self: flex-start;
+}
+html[data-ui-side='left']:not([data-ui-bubble]) .me {
+  border-radius: 18px 18px 18px 4px;
+}
+html[data-ui-side='left'] .chat-user {
+  margin-left: 0;
+  margin-right: 2.5rem;
+  text-align: left;
+}
+
+/* Times under messages. */
+.msg-time {
+  display: none;
+  font-size: 10.5px;
+  opacity: 0.55;
+  margin-top: -8px;
+}
+html[data-ui-times] .msg-time {
+  display: block;
+}
+.msg-time.mine {
+  align-self: flex-end;
+}
+html[data-ui-side='left'] .msg-time.mine {
+  align-self: flex-start;
+}
+.chat-time {
+  display: none;
+  margin-left: 0.5rem;
+  font-size: 10.5px;
+  opacity: 0.55;
+}
+html[data-ui-times] .chat-time {
+  display: inline;
+}
+
+/* ── Tab bar: icons only ── */
+html[data-ui-tabs='icons'] nav.tabs button {
+  font-size: 0;
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+html[data-ui-tabs='icons'] .tab-label {
+  display: none !important;
+}
+
+/* ── Spacing ── */
+html[data-ui-spacing='roomy'] .card {
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+html[data-ui-spacing='roomy'] .msgs {
+  gap: 20px;
+}
+html[data-ui-spacing='roomy'] .li {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+/* On the PC, spacing is set with the root size (its layout is in rem). */
+html.pc[data-ui-spacing='compact'] {
+  font-size: 15px;
+}
+html.pc[data-ui-spacing='roomy'] {
+  font-size: 17px;
+}
+
+/* ── Motion ── */
+html[data-ui-motion='fast'] *:not(canvas) {
+  transition-duration: 0.08s !important;
+}
+html[data-ui-motion='fast'] .view,
+html[data-ui-motion='fast'] .me,
+html[data-ui-motion='fast'] .it {
+  animation-duration: 0.08s !important;
+}
+html[data-ui-motion='off'] *,
+html[data-ui-motion='off'] *::before,
+html[data-ui-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

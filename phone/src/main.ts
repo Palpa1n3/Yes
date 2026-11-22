@@ -19,6 +19,17 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import '@shared/ui-style.css';
+import '@fontsource/rajdhani/500.css';
+import '@fontsource/orbitron/400.css';
+import '@fontsource/jetbrains-mono/400.css';
+import {
+  UI_STYLE_GROUPS,
+  applyUiStyle,
+  cleanUiStyle,
+  msgTime,
+  type UiStyle,
+} from '@shared/ui-style';
 import { THEMES } from '../../src/renderer/themes/themes';
 import { isSpaceArt, paintSpace } from '../../src/renderer/components/core/spaceArt';
 import '@shared/space-backdrops.css';
@@ -273,6 +284,8 @@ interface State {
   uiPanels: 'glass' | 'solid' | 'outline';
   uiChat: 'bubbles' | 'minimal';
   uiCompact: boolean;
+  /** Fonts, glass panels, chat look, tab bar, spacing and motion (Settings › Look › Interface). */
+  uiStyle: UiStyle;
   uiScan: boolean;
   /** Driving mode reads new messages out. */
   readOut: boolean;
@@ -418,6 +431,7 @@ const DEFAULTS: State = {
   uiPanels: 'glass',
   uiChat: 'bubbles',
   uiCompact: false,
+  uiStyle: cleanUiStyle({}),
   uiScan: false,
   readOut: true,
   shiftApp: '',
@@ -488,6 +502,8 @@ const ls = {
   },
 };
 let S: State = { ...DEFAULTS, ...(JSON.parse(ls.get(KEY) ?? '{}') as Partial<State>) };
+// Older versions had a single "Compact spacing" switch.
+S.uiStyle = cleanUiStyle(S.uiStyle ?? (S.uiCompact ? { spacing: 'compact' } : {}));
 let apiKey = ls.get('alton-key') ?? '';
 const save = (): void => {
   ls.set(KEY, JSON.stringify(S));
@@ -2153,7 +2169,8 @@ function applyUi(): void {
   h.dataset.corners = S.uiCorners;
   h.dataset.panels = S.uiPanels;
   h.dataset.chat = S.uiChat;
-  h.classList.toggle('compact', S.uiCompact);
+  h.classList.toggle('compact', S.uiStyle.spacing === 'compact');
+  applyUiStyle(h, S.uiStyle);
   h.classList.toggle('scan', S.uiScan);
 }
 /** Background previews: one small tile per background, drawn with the real thing. */
@@ -2185,12 +2202,71 @@ function renderUiSettings(): void {
   $<HTMLSelectElement>('uiCorners').value = S.uiCorners;
   $<HTMLSelectElement>('uiPanels').value = S.uiPanels;
   $<HTMLSelectElement>('uiChat').value = S.uiChat;
-  for (const [id, on] of [
-    ['uiCompact', S.uiCompact],
-    ['uiScan', S.uiScan],
-  ] as const) {
+  renderUiStyle();
+  for (const [id, on] of [['uiScan', S.uiScan]] as const) {
     $(id).classList.toggle('on', on);
     $(id).textContent = on ? '✓' : '';
+  }
+}
+/** Settings › Look › Interface: font, glass, chat, layout and motion (shared with the PC). */
+function renderUiStyle(): void {
+  const box = $('uiStyleBox');
+  box.textContent = '';
+  const change = (ch: Partial<UiStyle>): void => {
+    S.uiStyle = cleanUiStyle({ ...S.uiStyle, ...ch });
+    S.uiCompact = S.uiStyle.spacing === 'compact';
+    save();
+    applyUi();
+  };
+  for (const g of UI_STYLE_GROUPS) {
+    box.appendChild(el('h3', 'sub', g.title));
+    const grid = el('div', 'steps two');
+    for (const f of g.fields) {
+      const v = S.uiStyle[f.key];
+      if (f.kind === 'toggle') {
+        const row = el('div', 'li');
+        const name = el('span', undefined, f.label);
+        name.style.flex = '1';
+        const b = el('button', 'check');
+        b.classList.toggle('on', v === true);
+        b.textContent = v === true ? '✓' : '';
+        b.onclick = () => {
+          change({ [f.key]: !(v === true) } as Partial<UiStyle>);
+          renderUiStyle();
+        };
+        row.append(name, b);
+        box.appendChild(row);
+        continue;
+      }
+      const lab = el('label', 'muted', f.label);
+      if (f.kind === 'select') {
+        const sel = el('select', 'input');
+        for (const [val, text] of f.options) {
+          const o = el('option', undefined, text) as HTMLOptionElement;
+          o.value = val;
+          sel.appendChild(o);
+        }
+        sel.value = String(v);
+        sel.onchange = () => change({ [f.key]: sel.value } as Partial<UiStyle>);
+        lab.appendChild(sel);
+      } else {
+        const out = el('span', undefined, ` ${String(v)}${f.unit ?? ''}`);
+        const r = el('input') as HTMLInputElement;
+        r.type = 'range';
+        r.min = String(f.min);
+        r.max = String(f.max);
+        r.step = String(f.step);
+        r.value = String(v);
+        r.style.width = '100%';
+        r.oninput = () => {
+          out.textContent = ` ${r.value}${f.unit ?? ''}`;
+          change({ [f.key]: Number(r.value) } as Partial<UiStyle>);
+        };
+        lab.append(out, r);
+      }
+      grid.appendChild(lab);
+    }
+    if (grid.childElementCount) box.appendChild(grid);
   }
 }
 function wireUi(): void {
@@ -2229,7 +2305,6 @@ function wireUi(): void {
     set({ uiPanels: (e.target as HTMLSelectElement).value as State['uiPanels'] });
   $<HTMLSelectElement>('uiChat').onchange = (e) =>
     set({ uiChat: (e.target as HTMLSelectElement).value as State['uiChat'] });
-  $('uiCompact').onclick = () => set({ uiCompact: !S.uiCompact });
   $('uiScan').onclick = () => set({ uiScan: !S.uiScan });
 }
 
@@ -4473,6 +4548,7 @@ function renderMsgs(activity?: string): void {
         w.style.fontSize = '12px';
         box.appendChild(w);
       }
+      if (m.at) box.appendChild(el('div', 'msg-time mine', msgTime(m.at)));
       const isLastUser = !c.messages.slice(i + 1).some((x) => x.role === 'user');
       if (isLastUser && !busy) {
         const edit = el('button', 'chip', 'Edit');
@@ -4481,10 +4557,12 @@ function renderMsgs(activity?: string): void {
         edit.onclick = () => editLast();
         box.appendChild(edit);
       }
-    } else
+    } else {
       box.appendChild(
         assistantNode(m, i === c.messages.length - 1 && busy ? activity || undefined : undefined),
       );
+      if (m.at) box.appendChild(el('div', 'msg-time', msgTime(m.at)));
+    }
   });
   $('main').scrollTop = 1e9;
 }

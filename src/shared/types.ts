@@ -1,3 +1,4 @@
+import { DEFAULT_UI_STYLE } from './ui-style';
 import { DEFAULT_PROMPTS } from './prompts';
 import { DEFAULT_FISH_VOICE, type FishModel, type VoiceEngine, type WhisperModel } from './voice';
 import type { TempUnit, WeatherPlace, WindUnit } from './weather';
@@ -148,6 +149,8 @@ export interface Settings {
   userName: string;
   closeToTray: boolean;
   launchAtLogin: boolean;
+  /** Font, glass panels, chat look, tab bar, spacing and motion (shared with the phone). */
+  uiStyle: import('./ui-style').UiStyle;
   /** Show the window at sign-in and whenever the PC wakes or unlocks (e.g. Wake my PC from the phone). */
   openOnWake: boolean;
   /** Keep the conversation between restarts (stored locally in userData). */
@@ -347,6 +350,7 @@ export const DEFAULT_SETTINGS: Settings = {
   launchAtLogin: false,
   openOnWake: false,
   persistHistory: true,
+  uiStyle: DEFAULT_UI_STYLE,
   weatherPlace: null,
   tempUnit: 'c',
   windUnit: 'kmh',

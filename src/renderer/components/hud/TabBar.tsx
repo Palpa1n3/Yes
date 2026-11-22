@@ -56,7 +56,9 @@ export function TabBar() {
           >
             <Icon size={15} strokeWidth={1.5} className={active ? 'text-accent' : ''} />
             {/* Names for every tab only on wide screens; otherwise just the open one. */}
-            <span className={active ? 'hidden hud:inline' : 'hidden full:inline'}>{t.label}</span>
+            <span className={`tab-label ${active ? 'hidden hud:inline' : 'hidden full:inline'}`}>
+              {t.label}
+            </span>
             <span
               className={`absolute inset-x-3 bottom-0 h-[2px] transition-opacity duration-150 ${
                 active

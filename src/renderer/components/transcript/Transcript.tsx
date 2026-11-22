@@ -1,3 +1,4 @@
+import { msgTime } from '@shared/ui-style';
 import { JourneyMapCard } from './JourneyMapCard';
 import {
   ArrowDown,
@@ -165,7 +166,7 @@ function Row({
   switch (m.role) {
     case 'user':
       return (
-        <li className="group/user ml-10 text-right text-text-primary/70">
+        <li className="chat-user group/user ml-10 text-right text-text-primary/70">
           {m.attachments && m.attachments.length > 0 && (
             <span className="mb-1 flex flex-wrap justify-end gap-1.5">
               {m.attachments.map((a, i) =>
@@ -188,7 +189,7 @@ function Row({
               )}
             </span>
           )}
-          <span className="select-text">{m.text}</span>
+          <span className="chat-text select-text">{m.text}</span>
           {lastUser && (
             <button
               type="button"
@@ -204,12 +205,16 @@ function Row({
             </button>
           )}
           <span className="ml-2 font-mono text-[11px] text-text-muted">‹ you</span>
+          <span className="chat-time font-mono text-text-muted">{msgTime(m.timestamp)}</span>
         </li>
       );
     case 'assistant':
       return (
         <li className="group/msg mr-6 flex gap-2 text-text-primary">
-          <span className="shrink-0 font-mono text-accent">{assistantName} ›</span>
+          <span className="shrink-0 font-mono text-accent">
+            {assistantName} ›
+            <span className="chat-time text-text-muted">{msgTime(m.timestamp)}</span>
+          </span>
           <div className="min-w-0 flex-1 select-text">
             <Typewriter
               id={m.id}

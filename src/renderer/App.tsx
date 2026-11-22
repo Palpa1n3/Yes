@@ -1,3 +1,4 @@
+import { applyUiStyle } from '@shared/ui-style';
 import { useAvatarLife } from '@renderer/hooks/useAvatarLife';
 import { AmbientBack, AmbientTint } from '@renderer/components/hud/Ambient';
 import { Screensaver, SCREENSAVER_EVENT } from '@renderer/components/hud/Screensaver';
@@ -72,7 +73,13 @@ const VIEWS: Record<TabId, ComponentType> = {
 
 export function App() {
   const { settings, loaded } = useSettingsStore();
-  const reduced = useReducedMotion();
+  const systemReduced = useReducedMotion();
+  const uiStyle = settings.uiStyle;
+  const reduced = systemReduced || uiStyle.motion === 'off';
+  useEffect(() => {
+    document.documentElement.classList.add('pc');
+    applyUiStyle(document.documentElement, uiStyle);
+  }, [uiStyle]);
   const [booting, setBooting] = useState<boolean | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   useAvatarLife();
