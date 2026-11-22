@@ -8,6 +8,7 @@ import {
   shell,
   clipboard,
   desktopCapturer,
+  powerMonitor,
   screen,
 } from 'electron';
 import os from 'node:os';
@@ -336,7 +337,7 @@ function createWindow(): BrowserWindow {
 
   if (saved?.maximized) win.maximize();
   win.once('ready-to-show', () => {
-    if (!startHidden || !tray.exists) win.show();
+    if (!startHidden || !tray.exists || settings.get().openOnWake) win.show();
   });
 
   // Lock the renderer down: no new windows, no navigation away from the app.
@@ -447,6 +448,12 @@ if (!app.requestSingleInstanceLock()) {
       windUnit: ['US', 'GB', 'LR', 'MM'].includes(region) ? 'mph' : 'kmh',
     });
     settings.subscribe(onSettingsChanged);
+    // "Open Alton when the PC starts or wakes": pop up after sleep, and after signing back in.
+    const onWake = (): void => {
+      if (settings.get().openOnWake) setTimeout(() => ctx.showWindow(), 1500);
+    };
+    powerMonitor.on('resume', onWake);
+    powerMonitor.on('unlock-screen', onWake);
     registerIpc(ctx);
     mainWindow = createWindow();
     tray.create();

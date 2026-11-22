@@ -142,6 +142,16 @@ export function GeneralTab() {
             disabled={!(isWin || info?.platform === 'darwin')}
           />
         </Field>
+        <Field
+          label="Open Alton when the PC starts or wakes"
+          hint="Shows the window after you sign in, wake the PC (for example with Wake my PC on your phone) or unlock it, instead of staying in the tray. Turn on Launch at login too."
+        >
+          <Toggle
+            label="Open Alton when the PC starts or wakes"
+            checked={s.openOnWake}
+            onChange={(v) => void update({ openOnWake: v })}
+          />
+        </Field>
         <Field label="Always on top">
           <Toggle
             label="Always on top"

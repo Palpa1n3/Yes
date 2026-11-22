@@ -96,6 +96,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     userName: str('userName', 40).trim(),
     closeToTray: bool('closeToTray'),
     launchAtLogin: bool('launchAtLogin'),
+    openOnWake: bool('openOnWake'),
     persistHistory: bool('persistHistory'),
     weatherPlace: validPlace(r['weatherPlace']),
     tempUnit: r['tempUnit'] === 'f' ? 'f' : r['tempUnit'] === 'c' ? 'c' : d.tempUnit,

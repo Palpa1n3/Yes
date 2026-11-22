@@ -464,6 +464,19 @@ Settings › Connections › **Wake from phone** shows the PC's network (MAC) ad
 - **Search settings** (phone): the box at the top of Settings finds settings and features
   anywhere in the app; or ask _"what can you do?"_.
 
+### Wake the PC and open Alton (0.50.1)
+
+**⏻ Wake my PC** on the phone's PC tab wakes the PC. To have Alton appear by itself, turn on
+**Launch at login** and **Open Alton when the PC starts or wakes** (Settings › General). Windows'
+own sign-in is up to you, because skipping it means anyone at the PC gets in:
+
+- **From sleep:** Windows Settings › Accounts › Sign-in options › _If you've been away, when should
+  Windows require you to sign in again?_ › **Never**.
+- **From off or hibernate:** sign in automatically with Microsoft's
+  [Autologon](https://learn.microsoft.com/sysinternals/downloads/autologon) tool (it stores your
+  password encrypted), or turn off _For improved security, only allow Windows Hello sign-in_ in
+  Sign-in options, then run `netplwiz` and untick _Users must enter a user name and password_.
+
 ### Phone companion (the full Alton on your phone)
 
 **Settings › Connections › Phone companion** (off by default). Turn it on and **scan the QR code** with your phone's camera: it opens and pairs by itself. (Or open the address shown and type the 6-digit code.) Settings also shows a QR code for the phone-only app. Add it to your home screen to use it like an app.

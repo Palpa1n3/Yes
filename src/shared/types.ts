@@ -138,6 +138,8 @@ export interface Settings {
   userName: string;
   closeToTray: boolean;
   launchAtLogin: boolean;
+  /** Show the window at sign-in and whenever the PC wakes or unlocks (e.g. Wake my PC from the phone). */
+  openOnWake: boolean;
   /** Keep the conversation between restarts (stored locally in userData). */
   persistHistory: boolean;
   /** Town for the weather panel (only its coordinates are sent to the weather service). */
@@ -328,6 +330,7 @@ export const DEFAULT_SETTINGS: Settings = {
   userName: '',
   closeToTray: true,
   launchAtLogin: false,
+  openOnWake: false,
   persistHistory: true,
   weatherPlace: null,
   tempUnit: 'c',
