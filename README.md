@@ -244,6 +244,13 @@ Settings › Look. Six space backgrounds drawn in CSS, original designs: **Event
 on the PC in Settings › Appearance › Space background, on the phone in Settings › Look ›
 Background. They sit high or in the corners so text stays readable.
 
+Since 0.51 they're painted, not just gradients (`src/renderer/components/core/spaceArt.ts`): real
+star colours and brightness spread, noise nebulae, shaded planets with bands and rings, an
+atmosphere seen from orbit. The black hole is ray traced: light is stepped through
+Schwarzschild spacetime (d²x/dλ² = −1.5·h²·x/r⁵), a thin disc from the innermost stable orbit
+(3 Rs) with the thin-disc temperature law, Doppler beaming and gravitational redshift, and
+lensed stars. Painted once when chosen (cached), so it costs nothing while you use the app.
+
 ### Saver mode
 
 Click the leaf next to the spending chip (or type `/saver`, or Settings › AI › Spending) to

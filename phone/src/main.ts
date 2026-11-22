@@ -20,6 +20,7 @@ import {
 } from '@shared/phone';
 import { md, plain } from './md';
 import { THEMES } from '../../src/renderer/themes/themes';
+import { isSpaceArt, paintSpace } from '../../src/renderer/components/core/spaceArt';
 import '@shared/space-backdrops.css';
 import { typingDiff } from '@shared/remote-input';
 import { nextSleep, shortGaps, sleepLine, type SleepOptions } from '@shared/sleep';
@@ -2141,6 +2142,8 @@ function applyUi(): void {
   const b = document.body;
   if (S.bg === 'aurora' || (S.bg === 'photo' && !ls.get(BG_KEY))) delete b.dataset.bg;
   else b.dataset.bg = S.bg;
+  // Space scenes are painted (realistic); the CSS version shows until the painting is ready.
+  paintSpace(b, S.bg);
   const photo = ls.get(BG_KEY);
   b.style.setProperty('--bg-photo', photo ? `url("${photo}")` : 'none');
   b.style.setProperty('--bg-dim', String((S.bgDim || 60) / 100));
@@ -2164,6 +2167,7 @@ function renderBgTiles(): void {
     const art = el('span', 'bg-art');
     art.dataset.bg = o.value;
     t.append(art, el('span', 'bg-label', o.value === 'photo' ? '📷 My picture' : o.text));
+    if (isSpaceArt(o.value)) requestAnimationFrame(() => paintSpace(art, o.value, 260));
     t.onclick = () => {
       pick.value = o.value;
       pick.dispatchEvent(new Event('change'));
@@ -7169,6 +7173,12 @@ if (!isApp && window.visualViewport) {
   };
   vv.addEventListener('resize', onVv);
 }
+// Repaint a space background at the new size after turning the phone or resizing.
+let spaceResize: ReturnType<typeof setTimeout> | undefined;
+window.addEventListener('resize', () => {
+  clearTimeout(spaceResize);
+  spaceResize = setTimeout(() => isSpaceArt(S.bg) && paintSpace(document.body, S.bg), 400);
+});
 takeHash();
 wire();
 start();

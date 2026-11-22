@@ -1,5 +1,6 @@
 import '@shared/space-backdrops.css';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
+import { paintSpace } from '@renderer/components/core/spaceArt';
 import { useEffect, useRef } from 'react';
 import { useReducedMotion } from '@renderer/hooks/useReducedMotion';
 
@@ -113,6 +114,31 @@ export function Background({
 /** The chosen space background (Settings › Appearance › Space background). */
 export function SpaceBackdropLayer() {
   const backdrop = useSettingsStore((s) => s.settings.backdrop);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || backdrop === 'none') return;
+    paintSpace(el, backdrop);
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const onResize = (): void => {
+      clearTimeout(t);
+      t = setTimeout(() => paintSpace(el, backdrop), 400);
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [backdrop]);
   if (backdrop === 'none') return null;
-  return <div className="space-bd" data-bg={backdrop} aria-hidden="true" />;
+  return <div ref={ref} className="space-bd" data-bg={backdrop} aria-hidden="true" />;
+}
+
+/** A small preview of a space background (Settings › Appearance). */
+export function SpaceTileArt({ id }: { id: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (ref.current) paintSpace(ref.current, id, 260);
+  }, [id]);
+  return <span ref={ref} className="bg-art" data-bg={id} aria-hidden />;
 }

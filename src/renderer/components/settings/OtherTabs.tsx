@@ -1,4 +1,5 @@
 import { SPACE_BACKDROPS } from '@shared/backdrops';
+import { SpaceTileArt } from '@renderer/components/hud/Background';
 import type { AvatarStyle } from '@shared/types';
 import { PromptsSection } from './PromptsSection';
 import { useUiStore } from '@renderer/stores/uiStore';
@@ -403,7 +404,7 @@ export function AppearanceTab() {
                   onClick={() => void update({ backdrop: b.id })}
                   className={`bg-tile h-16 border bg-void transition-[border-color,box-shadow] ${active ? 'border-accent shadow-glow-sm' : 'border-line hover:border-accent'}`}
                 >
-                  {b.id !== 'none' && <span className="bg-art" data-bg={b.id} aria-hidden />}
+                  {b.id !== 'none' && <SpaceTileArt id={b.id} />}
                   <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 text-left text-[10px] leading-tight text-white">
                     {b.label.replace(/ \(.*\)$/, '')}
                   </span>
