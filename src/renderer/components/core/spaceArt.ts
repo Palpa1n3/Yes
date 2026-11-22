@@ -292,6 +292,8 @@ function bg(c: Ctx, w: number, h: number, top: string, bottom: string): void {
 
 const R_IN = 3;
 const R_OUT = 14;
+/** Doppler beaming (one side much brighter). Off: the even, film-style glow the user prefers. */
+const DOPPLER = false as boolean;
 
 /** Blackbody colour for a temperature in kelvin (a standard fit), 0–1 per channel. */
 function blackbody(T: number): Rgb {
@@ -363,7 +365,7 @@ function paintHorizon(c: Ctx, w: number, h: number): void {
   const halfW = Math.min(w / 2, fpx * 0.5);
   const halfH = Math.min(h / 2, shadowPx * 5.5);
   const area = 4 * halfW * halfH;
-  const k = Math.max(1, Math.ceil(Math.sqrt(area / 70000)));
+  const k = Math.max(1, Math.ceil(Math.sqrt(area / 95000)));
   const rw = Math.ceil((2 * halfW) / k);
   const rh = Math.ceil((2 * halfH) / k);
   const x0 = cx - halfW;
@@ -382,7 +384,7 @@ function paintHorizon(c: Ctx, w: number, h: number): void {
   const UP: [number, number, number] = [0, Math.cos(el), Math.sin(el)];
   // Display exposure. (A real disc is millions of kelvin; its colour is shown as if it were a
   // few thousand, the warm glow eyes and cameras can show, keeping the physics of the shifts.)
-  const exposure = 0.55;
+  const exposure = DOPPLER ? 0.55 : 0.42;
   for (let j = 0; j < rh; j++)
     for (let i = 0; i < rw; i++) {
       const sx = (x0 + (i + 0.5) * k - cx) / fpx;
@@ -452,13 +454,17 @@ function paintHorizon(c: Ctx, w: number, h: number): void {
             const nx = -vx / vn;
             const nz = -vz / vn;
             const doppler = 1 / (gamma * (1 - beta * (ux * nx + uz * nz)));
-            const g = doppler * Math.sqrt(1 - 1 / rp);
+            // Film-style: the Doppler part is left out so both sides glow evenly (real physics
+            // makes the approaching side far brighter). Gravitational redshift stays.
+            const g = (DOPPLER ? doppler : 1) * Math.sqrt(1 - 1 / rp);
             const shape = discShape(rp) / SHAPE_MAX;
-            const T = 4600 * shape * g;
+            const T = (DOPPLER ? 4600 : 3700) * shape * g;
             const phi = Math.atan2(hzp, hxp);
             // Turbulent, slightly spiralling streaks in the gas.
-            const streak = 0.55 + 0.9 * fbm(tex, Math.log(rp) * 9, phi * 2.2 + Math.log(rp) * 3, 4);
-            const I = Math.pow(shape * g, 4) * streak;
+            const streak = 0.3 + 1.4 * fbm(tex, Math.log(rp) * 9, phi * 2.2 + Math.log(rp) * 3, 4);
+            // Energy goes as T⁴; shown with a gentler display curve so the whole disc glows
+            // (like a camera's exposure), not just its hottest inner edge.
+            const I = Math.pow(shape * g, DOPPLER ? 4 : 2.2) * streak;
             const col = blackbody(T);
             const v = 1 - Math.exp(-I * exposure * 3);
             // The outer edge fades out rather than stopping sharply.
@@ -506,7 +512,7 @@ function paintHorizon(c: Ctx, w: number, h: number): void {
   c.drawImage(off, x0, y0, rw * k, rh * k);
   // A soft glow from the brightest gas (how a camera or eye sees it).
   c.globalCompositeOperation = 'lighter';
-  c.globalAlpha = 0.55;
+  c.globalAlpha = 0.35;
   c.filter = `blur(${Math.max(2, shadowPx * 0.12)}px)`;
   c.drawImage(off, x0, y0, rw * k, rh * k);
   c.restore();
