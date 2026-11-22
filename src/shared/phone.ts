@@ -138,6 +138,8 @@ export interface SyncToPc {
   notes?: string[];
   /** Work shifts read from rotas on the phone. */
   shifts?: import('./shifts').Shift[];
+  /** Battery, unread messages and the next payday, for the PC's desktop widget and tray. */
+  phone?: import('./desk').PhoneStatus;
 }
 
 /* ── Encoding for the URL fragment (never sent to any server) ─────────────── */

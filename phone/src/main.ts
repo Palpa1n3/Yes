@@ -1539,7 +1539,10 @@ async function syncWithPc(manual = false): Promise<void> {
     const shifts = upcomingShifts(S.shifts);
     const sk = JSON.stringify(shifts);
     const sendShifts = sk !== S.shiftsSent && shifts.length > 0;
-    if (chats.length || n.m || n.i || n.o || n.t || sendShifts) {
+    const phone = await phoneStatusNow();
+    const pk = JSON.stringify({ ...phone, at: 0 });
+    const sendPhone = pk !== lastPhoneSent;
+    if (chats.length || n.m || n.i || n.o || n.t || sendShifts || sendPhone) {
       const data: SyncToPc = {
         v: 1,
         chats,
@@ -1548,8 +1551,10 @@ async function syncWithPc(manual = false): Promise<void> {
         listOps: S.listOps.slice(0, n.o),
         notes: S.newNotes.slice(0, n.t),
         ...(sendShifts ? { shifts } : {}),
+        phone,
       };
       await pcApi(c, 'POST', '/api/import', { data }, 30_000);
+      lastPhoneSent = pk;
       // Anything added while that was on its way stays for next time.
       S.newMemories = S.newMemories.slice(n.m);
       S.newListItems = S.newListItems.slice(n.i);
@@ -2105,6 +2110,37 @@ function alertRotaChanges(before: Shift[], incoming: Shift[]): void {
   if (!isApp || !S.watchRota || !incoming.length) return;
   for (const n of rotaChangeNotes(rotaChanges(before, incoming)))
     void notifyNow(noteId(n.key), n.title, n.body);
+}
+/** Battery, unread messages and the next payday, for the PC's desktop widget and tray. */
+let lastPhoneSent = '';
+async function phoneStatusNow(): Promise<NonNullable<SyncToPc['phone']>> {
+  let battery: number | null = null;
+  let charging = false;
+  try {
+    const b = await (
+      navigator as Navigator & { getBattery?(): Promise<{ level: number; charging: boolean }> }
+    ).getBattery?.();
+    if (b) {
+      battery = Math.round(b.level * 100);
+      charging = b.charging;
+    }
+  } catch {
+    /* no battery info */
+  }
+  let unread = 0;
+  if (isApp && (await powerStatus())?.messages)
+    unread = await Native.getMessages()
+      .then((r) => r.messages.length)
+      .catch(() => 0);
+  const pd = payInfo();
+  return {
+    // Rounded to 5 % so small changes don't resend.
+    battery: battery === null ? null : Math.round(battery / 5) * 5,
+    charging,
+    unread,
+    payday: pd ? { date: pd.day, net: Math.round(pd.net) } : null,
+    at: Date.now(),
+  };
 }
 function renderWatch(): void {
   for (const [id, on] of [

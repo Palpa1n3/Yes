@@ -1,3 +1,4 @@
+import { setPhoneStatus } from '../services/phone-status';
 import { sanitizeInput, type RemoteInput } from '@shared/remote-input';
 import { phoneAvatarFor, THEME_ACCENT } from '@shared/looks';
 /** The phone app's API (everything after pairing): chats with live replies, notes, PC controls,
@@ -333,6 +334,7 @@ export function makePhoneRoutes(
       for (const n of (Array.isArray(data.notes) ? data.notes : []).slice(0, 50))
         if (typeof n === 'string' && n.trim() && d.notes.addNote(n)) notes++;
       const shifts = ctx.shifts.merge(data.shifts);
+      if (data.phone) setPhoneStatus(data.phone);
       ctx.audit.add(
         'action',
         `Synced from the phone app: ${messages} messages, ${memories} memories, ${items} list items, ${ops} ticked/removed, ${notes} notes, ${shifts} shifts`,

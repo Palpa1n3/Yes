@@ -6,6 +6,13 @@ export interface NowPlaying {
   /** Friendly app name ("Spotify", "Chrome"). */
   app: string;
   playing: boolean;
+  /** Seconds into the song and its length (null when the app doesn't say). */
+  position?: number | null;
+  duration?: number | null;
+  /** When the position was read (ms), so the progress bar can move on between updates. */
+  at?: number;
+  /** Album art as a data URL ('' = none; undefined = unchanged since the last update). */
+  art?: string;
 }
 
 const APPS: Array<[RegExp, string]> = [
@@ -43,11 +50,24 @@ export function parseNowPlaying(line: string): NowPlaying | null {
   const title = s('title');
   if (!title) return null;
   const status = s('status');
-  return {
+  const num = (k: string): number | null =>
+    typeof o[k] === 'number' && Number.isFinite(o[k]) && (o[k] as number) >= 0
+      ? (o[k] as number)
+      : null;
+  const n: NowPlaying = {
     title,
     artist: s('artist'),
     album: s('album'),
     app: appLabel(s('app')),
     playing: /playing/i.test(status),
   };
+  const dur = num('dur');
+  if (dur) {
+    n.duration = dur;
+    n.position = Math.min(dur, num('pos') ?? 0);
+    n.at = Date.now();
+  }
+  if (typeof o['art'] === 'string')
+    n.art = /^[A-Za-z0-9+/=]{100,}$/.test(o['art']) ? `data:image/jpeg;base64,${o['art']}` : '';
+  return n;
 }
