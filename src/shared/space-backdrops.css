@@ -1,4 +1,6 @@
 /* Space backgrounds, shared by the phone app (on <body data-bg>) and the PC (on .space-bd).
+   Sizes use container units (cq*): full screen they act like the screen size, and inside a
+   preview tile (a size container) they shrink with the tile.
    Original designs drawn with CSS gradients only: no images, nothing copied from films. */
 
 [data-bg='horizon'],
@@ -21,9 +23,9 @@
 [data-bg='horizon'] {
   /* High up and soft, so text over it stays easy to read. */
   background:
-    radial-gradient(12vmin 12vmin at 50% 19%, #000 0 92%, transparent 97%),
+    radial-gradient(12cqmin 12cqmin at 50% 19%, #000 0 92%, transparent 97%),
     radial-gradient(
-      44vmin 6vmin at 50% 19.4%,
+      44cqmin 6cqmin at 50% 19.4%,
       transparent 0 50%,
       rgba(255, 214, 160, 0.55) 57%,
       rgba(255, 150, 60, 0.38) 68%,
@@ -31,21 +33,21 @@
       transparent 100%
     ),
     radial-gradient(
-      14.5vmin 14.5vmin at 50% 19%,
+      14.5cqmin 14.5cqmin at 50% 19%,
       transparent 0 80%,
       rgba(255, 220, 170, 0.55) 86%,
       rgba(255, 150, 70, 0.25) 93%,
       transparent 100%
     ),
-    radial-gradient(40vmin 26vmin at 50% 19%, rgba(255, 140, 50, 0.12), transparent 70%), var(--sf),
-    #020103;
+    radial-gradient(40cqmin 26cqmin at 50% 19%, rgba(255, 140, 50, 0.12), transparent 70%),
+    var(--sf), #020103;
 }
 
 /* Wormhole: a bright opening with rings falling away into it. */
 [data-bg='wormhole'] {
   background:
     radial-gradient(
-      26vmin 26vmin at 50% 19%,
+      26cqmin 26cqmin at 50% 19%,
       rgba(235, 246, 255, 0.85) 0,
       rgba(190, 225, 255, 0.6) 12%,
       rgba(120, 175, 255, 0.35) 30%,
@@ -65,7 +67,7 @@
   background:
     /* Up in the corner, out of the way of text. Its night side blends into space. */
     radial-gradient(
-      36vmin 5vmin at 84% 14%,
+      36cqmin 5cqmin at 84% 14%,
       transparent 0 58%,
       rgba(236, 206, 165, 0.45) 65%,
       rgba(236, 206, 165, 0.1) 73%,
@@ -73,38 +75,38 @@
       transparent 88%
     ),
     radial-gradient(
-      19vmin 19vmin at calc(84% + 7vmin) calc(14% + 6vmin),
+      19cqmin 19cqmin at calc(84% + 7cqmin) calc(14% + 6cqmin),
       rgba(2, 1, 4, 0.8) 0 97%,
       transparent 100%
     ),
     radial-gradient(
-      17vmin 17vmin at 84% 14%,
+      17cqmin 17cqmin at 84% 14%,
       #e7c79a 0,
       #b98451 45%,
       #6e4224 92%,
       transparent 100%
     ),
-    radial-gradient(40vmin 30vmin at 84% 14%, rgba(240, 170, 90, 0.1), transparent 70%), var(--sf),
-    #030207;
+    radial-gradient(40cqmin 30cqmin at 84% 14%, rgba(240, 170, 90, 0.1), transparent 70%),
+    var(--sf), #030207;
 }
 
 /* Distant sun: a small fierce star, its glare, and a dark planet with a lit edge. */
 [data-bg='sun'] {
   background:
-    radial-gradient(circle at 70% 72%, #050304 0 9vmin, transparent 9.3vmin),
+    radial-gradient(circle at 70% 72%, #050304 0 9cqmin, transparent 9.3cqmin),
     radial-gradient(
       circle at 69.2% 71.2%,
-      rgba(255, 190, 120, 0.75) 0 9.2vmin,
-      transparent 9.6vmin
+      rgba(255, 190, 120, 0.75) 0 9.2cqmin,
+      transparent 9.6cqmin
     ),
-    radial-gradient(70vmin 0.7vmin at 22% 24%, rgba(255, 235, 200, 0.75), transparent),
+    radial-gradient(70cqmin 0.7cqmin at 22% 24%, rgba(255, 235, 200, 0.75), transparent),
     radial-gradient(
       circle at 22% 24%,
       #ffffff 0,
-      #fff3d6 1.3vmin,
-      rgba(255, 200, 120, 0.6) 3.2vmin,
-      rgba(255, 150, 60, 0.16) 15vmin,
-      transparent 34vmin
+      #fff3d6 1.3cqmin,
+      rgba(255, 200, 120, 0.6) 3.2cqmin,
+      rgba(255, 150, 60, 0.16) 15cqmin,
+      transparent 34cqmin
     ),
     var(--sf), #04030a;
 }
@@ -113,7 +115,7 @@
 [data-bg='orbit'] {
   background:
     radial-gradient(
-      150vmax 150vmax at 50% calc(100% + 139.5vmax - 26vh),
+      150cqmax 150cqmax at 50% calc(100% + 139.5cqmax - 26cqh),
       #071a30 0 93%,
       rgba(140, 215, 255, 0.75) 93.6%,
       rgba(80, 150, 255, 0.35) 94.6%,
@@ -132,7 +134,7 @@
     radial-gradient(1px 1px at 20% 70%, #fffa, transparent) 0 0 / 60px 70px,
     radial-gradient(2.5px 1px at 80% 60%, rgba(255, 232, 185, 0.75), transparent) 0 0 / 110px 90px,
     radial-gradient(1.5px 3px at 10% 15%, rgba(200, 220, 255, 0.7), transparent) 0 0 / 150px 190px,
-    radial-gradient(90vmin 60vmin at 50% 50%, rgba(50, 35, 95, 0.4), transparent 75%),
+    radial-gradient(90cqmin 60cqmin at 50% 50%, rgba(50, 35, 95, 0.4), transparent 75%),
     #02020a;
 }
 
@@ -143,4 +145,15 @@
   pointer-events: none;
   z-index: 0;
   opacity: 0.9;
+}
+
+/* Preview tiles (both apps): a size container, so the art inside scales to the tile. */
+.bg-tile {
+  position: relative;
+  container-type: size;
+  overflow: hidden;
+}
+.bg-tile > .bg-art {
+  position: absolute;
+  inset: 0;
 }

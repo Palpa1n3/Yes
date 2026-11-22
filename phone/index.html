@@ -1020,6 +1020,75 @@
         height: 120px;
         margin: 4px auto 12px;
       }
+      /* Look previews: theme cards and background tiles (tap one to use it). */
+      .theme-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .theme-card {
+        border: 2px solid transparent;
+        border-radius: 12px;
+        padding: 6px;
+        text-align: left;
+      }
+      .theme-card.on {
+        border-color: #fff;
+      }
+      .theme-card .tc-panel {
+        border: 1px solid;
+        border-radius: 8px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .theme-card .tc-text {
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .theme-card .tc-muted {
+        height: 3px;
+        width: 70%;
+        border-radius: 2px;
+      }
+      .theme-card .tc-btn {
+        height: 10px;
+        width: 55%;
+        border-radius: 5px;
+      }
+      .theme-card .tc-name {
+        display: block;
+        font-size: 11px;
+        margin-top: 5px;
+      }
+      .bg-tiles {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .bg-tiles .bg-tile {
+        height: 118px;
+        border-radius: 10px;
+        border: 2px solid var(--line, rgba(255, 255, 255, 0.12));
+        background: var(--bg);
+      }
+      .bg-tiles .bg-tile.on {
+        border-color: #fff;
+      }
+      .bg-tiles .bg-tile .bg-label {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 3px 5px;
+        font-size: 10.5px;
+        line-height: 1.25;
+        background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+        color: #fff;
+      }
       .swatches {
         display: flex;
         flex-wrap: wrap;
@@ -1431,15 +1500,20 @@
       .shift-stats {
         margin-top: 10px;
       }
-      /* ── Backgrounds ── */
-      body[data-bg='grid'] {
+      /* ── Backgrounds (on the page, and in the preview tiles) ── */
+      .bg-art[data-bg='aurora'] {
+        background:
+          radial-gradient(900px 500px at 50% -10%, rgba(63, 208, 255, 0.1), transparent 60%),
+          var(--bg);
+      }
+      :is(body, .bg-art)[data-bg='grid'] {
         background:
           linear-gradient(rgba(63, 208, 255, 0.07) 1px, transparent 1px) 0 0 / 28px 28px,
           linear-gradient(90deg, rgba(63, 208, 255, 0.07) 1px, transparent 1px) 0 0 / 28px 28px,
           radial-gradient(900px 500px at 50% -10%, rgba(63, 208, 255, 0.12), transparent 60%),
           var(--bg);
       }
-      body[data-bg='stars'] {
+      :is(body, .bg-art)[data-bg='stars'] {
         background:
           radial-gradient(1px 1px at 20% 30%, #fff8, transparent),
           radial-gradient(1px 1px at 70% 20%, #fff6, transparent),
@@ -1461,14 +1535,14 @@
           100% 100%,
           100% 100%;
       }
-      body[data-bg='circuit'] {
+      :is(body, .bg-art)[data-bg='circuit'] {
         background:
           repeating-linear-gradient(90deg, transparent 0 46px, rgba(63, 208, 255, 0.06) 46px 47px),
           repeating-linear-gradient(0deg, transparent 0 62px, rgba(63, 208, 255, 0.05) 62px 63px),
           radial-gradient(700px 500px at 100% 0%, rgba(63, 208, 255, 0.1), transparent 60%),
           var(--bg);
       }
-      body[data-bg='nebula'] {
+      :is(body, .bg-art)[data-bg='nebula'] {
         background:
           radial-gradient(600px 420px at 15% 20%, rgba(170, 70, 255, 0.28), transparent 65%),
           radial-gradient(520px 380px at 85% 35%, rgba(255, 70, 160, 0.2), transparent 65%),
@@ -1477,7 +1551,7 @@
           radial-gradient(1px 1px at 70% 80%, #fff6, transparent) 0 0 / 230px 230px,
           #05040d;
       }
-      body[data-bg='ocean'] {
+      :is(body, .bg-art)[data-bg='ocean'] {
         background:
           radial-gradient(900px 400px at 50% -10%, rgba(60, 220, 255, 0.22), transparent 60%),
           repeating-radial-gradient(
@@ -1487,19 +1561,19 @@
           ),
           linear-gradient(180deg, #032033, #020a14 70%);
       }
-      body[data-bg='sunset'] {
+      :is(body, .bg-art)[data-bg='sunset'] {
         background:
           radial-gradient(800px 380px at 50% 105%, rgba(255, 120, 60, 0.35), transparent 65%),
           radial-gradient(600px 300px at 80% 90%, rgba(255, 60, 120, 0.25), transparent 65%),
           linear-gradient(180deg, #0b0718 0%, #1a0b24 55%, #2a0f1e 100%);
       }
-      body[data-bg='forest'] {
+      :is(body, .bg-art)[data-bg='forest'] {
         background:
           radial-gradient(700px 420px at 50% -5%, rgba(120, 255, 180, 0.14), transparent 60%),
           radial-gradient(500px 300px at 10% 100%, rgba(40, 160, 90, 0.2), transparent 65%),
           linear-gradient(180deg, #04110b, #020806);
       }
-      body[data-bg='hex'] {
+      :is(body, .bg-art)[data-bg='hex'] {
         background:
           radial-gradient(
               circle at 50% 50%,
@@ -1518,7 +1592,7 @@
           radial-gradient(800px 500px at 50% 0%, rgba(63, 208, 255, 0.12), transparent 60%),
           var(--bg);
       }
-      body[data-bg='carbon'] {
+      :is(body, .bg-art)[data-bg='carbon'] {
         background:
           linear-gradient(
               45deg,
@@ -1539,7 +1613,7 @@
           radial-gradient(800px 400px at 50% 0%, rgba(255, 255, 255, 0.06), transparent 60%),
           #08090b;
       }
-      body[data-bg='bokeh'] {
+      :is(body, .bg-art)[data-bg='bokeh'] {
         background:
           radial-gradient(40px 40px at 15% 25%, rgba(255, 190, 90, 0.18), transparent 70%),
           radial-gradient(60px 60px at 75% 15%, rgba(90, 200, 255, 0.16), transparent 70%),
@@ -1555,7 +1629,7 @@
           280px 320px,
           100% 100%;
       }
-      body[data-bg='rings'] {
+      :is(body, .bg-art)[data-bg='rings'] {
         background:
           repeating-radial-gradient(
             circle at 50% 38%,
@@ -1565,7 +1639,7 @@
           radial-gradient(400px 400px at 50% 38%, rgba(63, 208, 255, 0.14), transparent 70%),
           var(--bg);
       }
-      body[data-bg='drift'] {
+      :is(body, .bg-art)[data-bg='drift'] {
         background:
           linear-gradient(
               120deg,
@@ -1586,14 +1660,14 @@
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        body[data-bg='drift'] {
+        :is(body, .bg-art)[data-bg='drift'] {
           animation: none;
         }
       }
-      body[data-bg='plain'] {
+      :is(body, .bg-art)[data-bg='plain'] {
         background: var(--bg);
       }
-      body[data-bg='photo'] {
+      :is(body, .bg-art)[data-bg='photo'] {
         background:
           linear-gradient(rgba(3, 7, 12, var(--bg-dim, 0.6)), rgba(3, 7, 12, var(--bg-dim, 0.6))),
           var(--bg-photo) center / cover no-repeat fixed,
@@ -2985,7 +3059,7 @@
               <label class="muted">Avatar</label>
               <select id="avatarPick" class="input" style="margin: 4px 0 10px"></select>
               <label class="muted">Theme</label>
-              <div class="swatches" id="themePick"></div>
+              <div class="theme-cards" id="themePick"></div>
               <label class="muted" style="display: block; margin-top: 10px"
                 >Own colour <input type="color" id="accentPick" class="colorpick" />
                 <button class="btn" id="accentReset" style="padding: 4px 10px; margin-left: 6px">
@@ -3004,7 +3078,8 @@
                 /></label>
               </div>
               <h3 class="sub">Background</h3>
-              <select id="bgPick" class="input" style="margin-top: 4px">
+              <div class="bg-tiles" id="bgTiles"></div>
+              <select id="bgPick" class="input" style="margin-top: 4px" hidden>
                 <option value="aurora">Aurora glow</option>
                 <option value="grid">Holo grid</option>
                 <option value="stars">Starfield</option>

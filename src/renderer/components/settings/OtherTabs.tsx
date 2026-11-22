@@ -1,4 +1,4 @@
-import { SPACE_BACKDROPS, isSpaceBackdrop } from '@shared/backdrops';
+import { SPACE_BACKDROPS } from '@shared/backdrops';
 import type { AvatarStyle } from '@shared/types';
 import { PromptsSection } from './PromptsSection';
 import { useUiStore } from '@renderer/stores/uiStore';
@@ -204,12 +204,33 @@ export function AppearanceTab() {
                 className={`border p-2 text-left transition-[border-color,box-shadow] ${active ? 'border-accent shadow-glow-sm' : 'border-line hover:border-accent'}`}
                 style={{ background: t.colors['bg-void'] }}
               >
+                {/* A mini Alton panel in this theme, to judge it before choosing. */}
+                <div
+                  className="mb-2 flex items-center gap-2 border px-2 py-1.5"
+                  style={{ background: t.colors['bg-panel'], borderColor: t.colors.line }}
+                  aria-hidden
+                >
+                  <span
+                    className="text-[12px] font-semibold"
+                    style={{ color: t.colors['text-primary'] }}
+                  >
+                    Aa
+                  </span>
+                  <span
+                    className="h-[3px] flex-1 rounded"
+                    style={{ background: t.colors['text-muted'] }}
+                  />
+                  <span
+                    className="h-2.5 w-8 rounded-full"
+                    style={{ background: t.colors.accent, boxShadow: `0 0 8px ${t.colors.accent}` }}
+                  />
+                </div>
                 <div className="mb-2 flex gap-1" aria-hidden>
-                  {THEME_TOKENS.filter((k) =>
-                    ['accent', 'ice', 'line', 'amber', 'ok'].includes(k),
-                  ).map((k) => (
-                    <span key={k} className="h-3 flex-1" style={{ background: t.colors[k] }} />
-                  ))}
+                  {THEME_TOKENS.filter((k) => ['accent', 'ice', 'amber', 'ok'].includes(k)).map(
+                    (k) => (
+                      <span key={k} className="h-1.5 flex-1" style={{ background: t.colors[k] }} />
+                    ),
+                  )}
                 </div>
                 <span
                   className="font-mono text-[11px] uppercase tracking-[0.14em]"
@@ -365,16 +386,31 @@ export function AppearanceTab() {
         <Field
           label="Space background"
           hint="A space scene behind the HUD. Goes well with the Event Horizon, Deep Space, Nebula and Exoplanet colours."
+          stacked
         >
-          <Select
-            label="Space background"
-            value={s.backdrop}
-            onChange={(v) => void update({ backdrop: isSpaceBackdrop(v) ? v : 'none' })}
-            options={[
-              { value: 'none', label: 'None (theme colour)' },
-              ...SPACE_BACKDROPS.map((b) => ({ value: b.id, label: b.label })),
-            ]}
-          />
+          {/* Previews: each tile is drawn with the real background. */}
+          <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Space background">
+            {[{ id: 'none' as const, label: 'None' }, ...SPACE_BACKDROPS].map((b) => {
+              const active = s.backdrop === b.id;
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  aria-label={b.label}
+                  title={b.label}
+                  onClick={() => void update({ backdrop: b.id })}
+                  className={`bg-tile h-16 border bg-void transition-[border-color,box-shadow] ${active ? 'border-accent shadow-glow-sm' : 'border-line hover:border-accent'}`}
+                >
+                  {b.id !== 'none' && <span className="bg-art" data-bg={b.id} aria-hidden />}
+                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 text-left text-[10px] leading-tight text-white">
+                    {b.label.replace(/ \(.*\)$/, '')}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </Field>
         <Field
           label="Screensaver starts when"

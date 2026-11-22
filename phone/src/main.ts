@@ -19,6 +19,7 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import { THEMES } from '../../src/renderer/themes/themes';
 import '@shared/space-backdrops.css';
 import { typingDiff } from '@shared/remote-input';
 import { nextSleep, shortGaps, sleepLine, type SleepOptions } from '@shared/sleep';
@@ -2151,7 +2152,27 @@ function applyUi(): void {
   h.classList.toggle('compact', S.uiCompact);
   h.classList.toggle('scan', S.uiScan);
 }
+/** Background previews: one small tile per background, drawn with the real thing. */
+function renderBgTiles(): void {
+  const box = $('bgTiles');
+  box.textContent = '';
+  const pick = $<HTMLSelectElement>('bgPick');
+  for (const o of Array.from(pick.options)) {
+    const t = el('button', 'bg-tile');
+    t.setAttribute('aria-label', o.text);
+    t.classList.toggle('on', S.bg === o.value);
+    const art = el('span', 'bg-art');
+    art.dataset.bg = o.value;
+    t.append(art, el('span', 'bg-label', o.value === 'photo' ? '📷 My picture' : o.text));
+    t.onclick = () => {
+      pick.value = o.value;
+      pick.dispatchEvent(new Event('change'));
+    };
+    box.appendChild(t);
+  }
+}
 function renderUiSettings(): void {
+  renderBgTiles();
   $<HTMLSelectElement>('bgPick').value = S.bg;
   $('bgDimRow').hidden = S.bg !== 'photo';
   $<HTMLInputElement>('bgDim').value = String(S.bgDim);
@@ -2673,12 +2694,27 @@ function renderLook(): void {
   sel.value = S.avatar;
   const sw = $('themePick');
   sw.textContent = '';
+  // A mini Alton panel in each theme's colours, so it can be judged before choosing it.
   for (const id of Object.keys(THEME_ACCENT) as ThemeId[]) {
-    const b = el('button');
-    b.style.background = THEME_ACCENT[id];
+    const c = THEMES[id].colors;
+    const b = el('button', 'theme-card');
+    b.style.background = c['bg-void'];
     b.setAttribute('aria-label', THEME_NAMES[id]);
-    b.title = THEME_NAMES[id];
     b.classList.toggle('on', S.theme === id && !S.accent);
+    const panel = el('span', 'tc-panel');
+    panel.style.background = c['bg-panel'];
+    panel.style.borderColor = c.line;
+    const txt = el('span', 'tc-text', 'Aa');
+    txt.style.color = c['text-primary'];
+    const muted = el('span', 'tc-muted');
+    muted.style.background = c['text-muted'];
+    const btn = el('span', 'tc-btn');
+    btn.style.background = c.accent;
+    btn.style.boxShadow = `0 0 8px ${c.accent}`;
+    panel.append(txt, muted, btn);
+    const name = el('span', 'tc-name', THEME_NAMES[id]);
+    name.style.color = c.accent;
+    b.append(panel, name);
     b.onclick = () => setLook({ theme: id, accent: '' });
     sw.appendChild(b);
   }
