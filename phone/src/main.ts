@@ -614,7 +614,7 @@ function systemText(): string {
       ? 'DRIVING MODE: the user is driving and hears your reply read aloud. Answer in one or two short spoken sentences, no lists, links or formatting. For texts and replies, get them ready (send_message / reply_message): the user confirms by saying "send it". Never ask them to look at or tap the screen unless unavoidable.'
       : '',
     isApp
-      ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a reply to one of them), read_calendar for what's on (add_calendar_event adds straight in; edit_event changes events straight away; delete_event makes a Delete button), find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar), snapchat_message to send Snapchat chats (people's Snapchat nicknames are saved), and media_control for music. Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone powers)."
+      ? "You are in the Alton Android app with extra phone powers: read_messages (texts, WhatsApp… from notifications) and reply_message (a reply to one of them), read_calendar for what's on (add_calendar_event adds straight in; edit_event changes events straight away; delete_event makes a Delete button), find_contact for numbers, and read_shift_app to read the rota from their shift app (then add_shifts, which goes straight into the calendar), snapchat_message to send Snapchat chats (people's Snapchat nicknames are saved), and media_control for music. Tomorrow's shift alarm is set in the Clock app automatically. If a power is switched off, tell them where to turn it on (Settings › Phone access)."
       : '',
     'Alexa: you cannot reach Alexa directly; tell_alexa makes the phone say a command out loud for a nearby Echo (e.g. turning alarms or lights on).',
     isApp
@@ -3066,7 +3066,7 @@ async function appTool(
 ): Promise<{ result: string; action?: PhoneAction; activity?: string } | null> {
   const o = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
   const off = (what: string): { result: string } => ({
-    result: `${what} is switched off on this phone. Tell the user to turn it on in Settings › Phone powers.`,
+    result: `${what} is switched off on this phone. Tell the user to turn it on in Settings › Phone access.`,
   });
   try {
     if (name === 'read_messages') {
@@ -3258,7 +3258,7 @@ async function appTool(
     if (name === 'phone_diagnostics') {
       const r = healthReport(await Native.diagnostics());
       return {
-        result: `${r.lines.join('\n')}\n\n${r.issues.length ? `Found:\n${r.issues.map((i) => `- ${i.what}. Fix: ${i.fix}`).join('\n')}` : 'Nothing obviously wrong.'}${(await powerStatus())?.usage ? '' : '\n(Usage access is off, so the keyboard’s cache size and screen time are missing: the user can allow it in Settings › Phone powers.)'}`,
+        result: `${r.lines.join('\n')}\n\n${r.issues.length ? `Found:\n${r.issues.map((i) => `- ${i.what}. Fix: ${i.fix}`).join('\n')}` : 'Nothing obviously wrong.'}${(await powerStatus())?.usage ? '' : '\n(Usage access is off, so the keyboard’s cache size and screen time are missing: the user can allow it in Settings › Phone access.)'}`,
       };
     }
     if (name === 'set_alarm') {
@@ -3311,7 +3311,7 @@ async function readShiftApp(): Promise<{ ok: boolean; text: string }> {
   if (!st?.screenReader)
     return {
       ok: false,
-      text: 'Reading the shift app (Accessibility) is switched off. The user turns it on in Settings › Phone powers.',
+      text: 'Reading the shift app (Accessibility) is switched off. The user turns it on in Settings › Phone access.',
     };
   const app = S.shiftAppName || 'your shift app';
   toast(`Opening ${app} to read your rota…`);
@@ -3356,7 +3356,7 @@ async function shiftsIntoCalendar(
     const r = await Native.requestAccess({ which: 'calendar' }).catch(() => ({ granted: false }));
     if (!r.granted) {
       out.result +=
-        ' (Tip for the user: allow Calendar in Settings › Phone powers and shifts go in by themselves.)';
+        ' (Tip for the user: allow Calendar in Settings › Phone access and shifts go in by themselves.)';
       return;
     }
   }
@@ -3407,7 +3407,7 @@ async function autoShiftAlarms(): Promise<void> {
   }
 }
 
-/* Settings › Phone powers */
+/* Settings › Phone access */
 /** Tell the phone side what to read while charging (app, tab, next-week button, weeks). */
 async function pushAutoRota(): Promise<void> {
   if (!isApp) return;
@@ -3462,7 +3462,7 @@ async function renderWork(): Promise<void> {
 }
 
 async function renderPowers(): Promise<void> {
-  $('powersGrp').hidden = !isApp;
+  document.querySelectorAll<HTMLElement>('.app-grp').forEach((g) => (g.hidden = !isApp));
   $('workAppCard').hidden = !isApp;
   $('workAtCard').hidden = !isApp;
   $('phoneHead').hidden = !isApp;
@@ -4642,7 +4642,7 @@ async function openContactSheet(forName?: string): Promise<void> {
       const r = await Native.requestAccess({ which: 'contacts' });
       if (!r.granted)
         return toast(
-          'Allow Contacts for Alton (Settings › Phone powers) to add from your contacts.',
+          'Allow Contacts for Alton (Settings › Phone access) to add from your contacts.',
         );
     }
     allContacts = (await Native.findContacts({ name: '' })).contacts.filter((c) => c.phone);
@@ -5016,7 +5016,7 @@ async function shiftsFromMyCalendar(): Promise<void> {
   if (!st?.calendar) {
     const r = await Native.requestAccess({ which: 'calendar' }).catch(() => ({ granted: false }));
     if (!r.granted) {
-      msg.textContent = 'Alton needs Calendar access: allow it in Settings › Phone powers.';
+      msg.textContent = 'Alton needs Calendar access: allow it in Settings › Phone access.';
       return;
     }
   }
@@ -5362,7 +5362,7 @@ function wireSmart(): void {
 async function readTrades(): Promise<string> {
   if (!S.shiftApp) return 'No shift app chosen yet: the user picks it in Work › Your shift app.';
   if (!(await powerStatus())?.screenReader)
-    return 'Reading the shift app (Accessibility) is switched off. The user turns it on in Settings › Phone powers.';
+    return 'Reading the shift app (Accessibility) is switched off. The user turns it on in Settings › Phone access.';
   const tab = S.tradeTab || 'Shift Trade';
   toast(`Opening ${S.shiftAppName || 'your shift app'} to read ${tab}…`);
   try {
@@ -5519,7 +5519,7 @@ function wireShiftsTab(): void {
     toast(
       out.result.startsWith('DONE')
         ? `Added ${todo.length} to your calendar.`
-        : 'Allow Calendar in Settings › Phone powers first.',
+        : 'Allow Calendar in Settings › Phone access first.',
     );
   };
 }
@@ -5581,7 +5581,7 @@ async function readSnapFriends(): Promise<void> {
   const st = await powerStatus();
   if (!st?.screenReader)
     return toast(
-      'Turn on “Read my shift app” in Settings › Phone powers first (Snapchat uses the same permission).',
+      'Turn on “Read my shift app” in Settings › Phone access first (Snapchat uses the same permission).',
     );
   toast('Opening Snapchat to read your chat list…');
   try {
@@ -6803,7 +6803,7 @@ function wire(): void {
     const st = await powerStatus();
     if (!st?.calendar) {
       const r = await Native.requestAccess({ which: 'calendar' }).catch(() => ({ granted: false }));
-      if (!r.granted) return toast('Allow Calendar in Settings › Phone powers first.');
+      if (!r.granted) return toast('Allow Calendar in Settings › Phone access first.');
     }
     try {
       const { added } = await Native.addEvents({

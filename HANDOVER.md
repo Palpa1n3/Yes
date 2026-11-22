@@ -74,6 +74,10 @@ Read this first in a new chat, then README.md for the feature list.
   0 = monthly), `payLag` (paid period ends N days before payday). `paydays`/`nextPayday`/`payPeriod`/
   `periodPay`/`ukTakeHome` in shifts.ts; Shifts tab payday card, 💷 on the calendar, the Claude
   context line, and "Add the next year of paydays to my calendar". Shifts are kept 10 weeks back.
+  Layout (0.50.3): PC tab = "Connection" (Pair & sync, Wake the PC) then "Using your PC" inside `#pcLive`.
+  Settings headings: About you & Alton · Phone (Phone access `powersGrp`, Messages, Alarms & Alexa, Watch &
+  notifications, Hands-free & driving, Widgets — all `.app-grp`, shown in the app by renderPowers — then
+  Smart home, Spending, Phone health) · Account & data · Updates (This app; Alton's code from a zip).
   Layout (0.49): tabs Chat · Today · Work · Lists · PC · Settings. Work = shifts, payday, calendar,
   get-my-shifts, Your shift app (moved from Phone powers) and At work list. Lists (`peopleView`, title
   "Lists") has segments Lists · Notes · People; Reminders sit under Lists. Settings has three

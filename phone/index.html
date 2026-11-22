@@ -2650,8 +2650,9 @@
           </div>
         </section>
         <section id="pcView" class="view">
+          <h2 class="set-h">Connection</h2>
           <div class="card">
-            <div class="lbl"><span class="dot"></span>Connection</div>
+            <div class="lbl"><span class="dot"></span>Pair &amp; sync</div>
             <p id="pcState" style="margin-top: 0"></p>
             <label class="muted" style="display: block"
               >Your PC's Tailscale address
@@ -2689,7 +2690,22 @@
               Disconnect this phone
             </button>
           </div>
+          <div class="card">
+            <div class="lbl"><span class="dot"></span>Wake the PC</div>
+            <button class="btn acc full" id="wakePc" hidden>⏻ Wake my PC</button>
+            <p class="muted small" id="wakeMsg"></p>
+            <p class="muted" style="margin-top: 0" id="wakeHelp">
+              A sleeping PC can be woken from your phone with a free Wake-on-LAN app (Android: “Wake
+              On Lan”; iPhone: “Mocha WOL”). Enter this PC address in the app:
+            </p>
+            <div id="macs" class="muted">Sync from the PC to see it here.</div>
+            <p class="muted">
+              Set up the PC once: on the PC, Settings › Connections › Wake from phone has the steps.
+              Away from home, it also needs Tailscale.
+            </p>
+          </div>
           <div id="pcLive" hidden>
+            <h2 class="set-h">Using your PC</h2>
             <div class="card" id="approvalsCard" hidden>
               <div class="lbl"><span class="dot"></span>Waiting for you</div>
               <div id="approvals"></div>
@@ -2774,46 +2790,10 @@
               </button>
             </div>
             <div class="card">
-              <div class="lbl"><span class="dot"></span>Update Alton (no PC needed)</div>
-              <p class="muted small" style="margin-top: 0" id="projState">
-                Pick the Alton zip from your chat: your PC unpacks it into the project, then commits
-                and pushes it to GitHub for you.
-              </p>
-              <input type="file" id="projFile" accept=".zip,application/zip" class="input" />
-              <input
-                id="projMsg"
-                class="input"
-                placeholder="What changed (optional)"
-                style="margin-top: 8px"
-              />
-              <button class="btn acc full" id="projGo" style="margin-top: 8px">
-                Update and push
-              </button>
-              <pre
-                id="projLog"
-                class="muted small"
-                style="white-space: pre-wrap; margin: 8px 0 0"
-              ></pre>
-            </div>
-            <div class="card">
               <div class="lbl"><span class="dot"></span>Send a file to the PC</div>
               <input type="file" id="pcFile" class="input" />
               <p class="muted" id="pcFileMsg">Saved in Downloads › From phone on the PC.</p>
             </div>
-          </div>
-          <div class="card">
-            <div class="lbl"><span class="dot"></span>Wake the PC</div>
-            <button class="btn acc full" id="wakePc" hidden>⏻ Wake my PC</button>
-            <p class="muted small" id="wakeMsg"></p>
-            <p class="muted" style="margin-top: 0" id="wakeHelp">
-              A sleeping PC can be woken from your phone with a free Wake-on-LAN app (Android: “Wake
-              On Lan”; iPhone: “Mocha WOL”). Enter this PC address in the app:
-            </p>
-            <div id="macs" class="muted">Sync from the PC to see it here.</div>
-            <p class="muted">
-              Set up the PC once: on the PC, Settings › Connections › Wake from phone has the steps.
-              Away from home, it also needs Tailscale.
-            </p>
           </div>
         </section>
         <section id="setView" class="view">
@@ -3171,13 +3151,16 @@
             </div>
           </details>
           <h2 class="set-h" id="phoneHead">Phone</h2>
-          <details class="grp" id="powersGrp" hidden>
+          <details class="grp app-grp" id="powersGrp" hidden>
             <summary>
               <span class="gi"
-                ><svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z" /></svg></span
+                ><svg viewBox="0 0 24 24">
+                  <path
+                    d="M15 7a4 4 0 1 0-3.9 5H12v3h3v3h3v-3l-2.4-2.4A4 4 0 0 0 15 7z"
+                  /></svg></span
               ><span class="gt"
-                ><b>Phone powers</b
-                ><small>Messages, calendar, contacts, alarms, widgets, driving</small></span
+                ><b>Phone access</b
+                ><small>What Alton may use: messages, calendar, contacts, screen</small></span
               >
             </summary>
             <div class="gb">
@@ -3203,12 +3186,30 @@
               </div>
               <div class="li">
                 <span style="flex: 1"
-                  >Shift alarms by themselves<br /><small class="muted"
-                    >The night before a shift, Alton sets (or switches on) the Clock alarm for
-                    it</small
+                  >Read my shift app<br /><small class="muted"
+                    >Turn on <b>Alton: read my shift app</b> in Accessibility (Installed
+                    apps)</small
                   ></span
-                ><button class="check" id="pwAlarms"></button>
+                ><button class="btn" id="pwScreen" style="padding: 6px 10px"></button>
               </div>
+              <p class="muted small">
+                If Android says <b>“Restricted setting”</b> when you turn something on: open App
+                info, tap ⋮ (top right) › <b>Allow restricted settings</b>, then try again. Android
+                asks this for apps installed from outside the Play Store.
+              </p>
+              <button class="btn full" id="pwRestricted">Open Alton’s App info</button>
+            </div>
+          </details>
+          <details class="grp app-grp" id="msgGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z" /></svg></span
+              ><span class="gt"
+                ><b>Messages</b
+                ><small>Sending by themselves, reading out loud, quiet hours</small></span
+              >
+            </summary>
+            <div class="gb">
               <div class="li">
                 <span style="flex: 1"
                   >Send messages by themselves<br /><small class="muted"
@@ -3217,15 +3218,52 @@
                   ></span
                 ><button class="check" id="pwAutoMsg"></button>
               </div>
+              <label class="muted" style="display: block; margin-top: 8px"
+                >Read new messages out loud (even with Alton closed)
+                <select id="pwAnnounce" class="input" style="margin-top: 4px">
+                  <option value="off">Off</option>
+                  <option value="headphones">Only with headphones or car Bluetooth</option>
+                  <option value="always">Always (not when the phone is on silent)</option>
+                </select></label
+              >
+              <div class="row" style="margin: 6px 0 4px">
+                <label class="muted" style="flex: 1"
+                  >Quiet from (hour)
+                  <input id="pwQuietFrom" class="input" type="number" min="0" max="23"
+                /></label>
+                <label class="muted" style="flex: 1"
+                  >until <input id="pwQuietTo" class="input" type="number" min="0" max="23"
+                /></label>
+              </div>
               <div class="li">
                 <span style="flex: 1"
-                  >Read my shift app<br /><small class="muted"
-                    >Turn on <b>Alton: read my shift app</b> in Accessibility (Installed
-                    apps)</small
+                  >Read new messages out in Driving mode<br /><small class="muted"
+                    >Needs “Read &amp; reply to messages”</small
                   ></span
-                ><button class="btn" id="pwScreen" style="padding: 6px 10px"></button>
+                ><button class="check" id="pwReadOut"></button>
               </div>
-              <h3 class="sub">Alarms and Alexa</h3>
+            </div>
+          </details>
+          <details class="grp app-grp" id="alarmGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24">
+                  <path
+                    d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 9v4l2.5 2.5M4 4l3 3M20 4l-3 3"
+                  /></svg></span
+              ><span class="gt"
+                ><b>Alarms &amp; Alexa</b><small>Shift alarms, and alarms on your Echo</small></span
+              >
+            </summary>
+            <div class="gb">
+              <div class="li">
+                <span style="flex: 1"
+                  >Shift alarms by themselves<br /><small class="muted"
+                    >The night before a shift, Alton sets (or switches on) the Clock alarm for
+                    it</small
+                  ></span
+                ><button class="check" id="pwAlarms"></button>
+              </div>
               <label class="muted" style="display: block"
                 >How Alton reaches Alexa
                 <select id="pwAlexaVia" class="input" style="margin-top: 4px">
@@ -3260,44 +3298,19 @@
                   ></span
                 ><button class="check" id="pwShiftAlexa"></button>
               </div>
-              <h3 class="sub">Hands-free &amp; driving</h3>
-              <p class="muted small">
-                Driving mode keeps listening while Alton is on screen (phone in a car mount): say
-                “Alton, text Sam I’m on my way” or “Alton, next song”. It reads new messages out and
-                sends only after you say “send it”.
-              </p>
-              <div class="li">
-                <span style="flex: 1"
-                  >Open Alton with the assistant button<br /><small class="muted"
-                    >Choose Alton as the “Digital assistant app”; then long-press the home button
-                    (or swipe up from a bottom corner) to open it already listening</small
-                  ></span
-                ><button class="btn" id="pwAssist" style="padding: 6px 10px">Set up</button>
-              </div>
-              <h3 class="sub">Home-screen widgets</h3>
-              <p class="muted small">
-                Alton has five widgets: <b>Alton Clock</b>, <b>Alton Battery</b>,
-                <b>Alton Weather</b>, <b>Alton Screen time</b> and <b>Alton</b>. Each one changes
-                with its size: drag its edges smaller or bigger (e.g. the clock shows just the time
-                when small, the weather adds the next four days when big). To swipe between them
-                like your others: add one (long-press the home screen › Widgets › Alton), long-press
-                it › <b>Create stack</b>, and add the others to it.
-              </p>
-              <div class="li">
-                <span style="flex: 1"
-                  >Screen time on the widgets<br /><small class="muted"
-                    >Usage access: switch on Alton</small
-                  ></span
-                ><button class="btn" id="pwUsage" style="padding: 6px 10px"></button>
-              </div>
-              <div class="li">
-                <span style="flex: 1"
-                  >Earbud and watch batteries on the clock<br /><small class="muted"
-                    >Nearby devices permission</small
-                  ></span
-                ><button class="btn" id="pwBt" style="padding: 6px 10px"></button>
-              </div>
-              <h3 class="sub">Watch heads-ups (Fitbit and other watches)</h3>
+            </div>
+          </details>
+          <details class="grp app-grp" id="watchGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24">
+                  <path d="M8 3h8l1 4v10l-1 4H8l-1-4V7zM12 9v3l2 2" /></svg></span
+              ><span class="gt"
+                ><b>Watch &amp; notifications</b
+                ><small>Heads-ups before shifts, time to leave, mornings</small></span
+              >
+            </summary>
+            <div class="gb">
               <p class="muted small">
                 Notifications at the right moments, so your watch buzzes even with Alton closed. In
                 the Fitbit app: Versa 2 › Notifications › App notifications › turn on Alton.
@@ -3340,36 +3353,66 @@
               <button class="btn full" id="wTest" style="margin: 6px 0 12px">
                 Send a test to my watch
               </button>
-              <label class="muted" style="display: block; margin-top: 8px"
-                >Read new messages out loud (even with Alton closed)
-                <select id="pwAnnounce" class="input" style="margin-top: 4px">
-                  <option value="off">Off</option>
-                  <option value="headphones">Only with headphones or car Bluetooth</option>
-                  <option value="always">Always (not when the phone is on silent)</option>
-                </select></label
+            </div>
+          </details>
+          <details class="grp app-grp" id="handsGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24">
+                  <path d="M5 16l1.5-5h11l1.5 5M4 16h16v3H4zM7 19v2M17 19v2" /></svg></span
+              ><span class="gt"
+                ><b>Hands-free &amp; driving</b
+                ><small>Driving mode and the assistant button</small></span
               >
-              <div class="row" style="margin: 6px 0 4px">
-                <label class="muted" style="flex: 1"
-                  >Quiet from (hour)
-                  <input id="pwQuietFrom" class="input" type="number" min="0" max="23"
-                /></label>
-                <label class="muted" style="flex: 1"
-                  >until <input id="pwQuietTo" class="input" type="number" min="0" max="23"
-                /></label>
+            </summary>
+            <div class="gb">
+              <p class="muted small">
+                Driving mode keeps listening while Alton is on screen (phone in a car mount): say
+                “Alton, text Sam I’m on my way” or “Alton, next song”. It reads new messages out and
+                sends only after you say “send it”.
+              </p>
+              <div class="li">
+                <span style="flex: 1"
+                  >Open Alton with the assistant button<br /><small class="muted"
+                    >Choose Alton as the “Digital assistant app”; then long-press the home button
+                    (or swipe up from a bottom corner) to open it already listening</small
+                  ></span
+                ><button class="btn" id="pwAssist" style="padding: 6px 10px">Set up</button>
+              </div>
+            </div>
+          </details>
+          <details class="grp app-grp" id="widgetGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24">
+                  <path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" /></svg></span
+              ><span class="gt"
+                ><b>Widgets</b><small>Home-screen clock, battery, weather, screen time</small></span
+              >
+            </summary>
+            <div class="gb">
+              <p class="muted small">
+                Alton has five widgets: <b>Alton Clock</b>, <b>Alton Battery</b>,
+                <b>Alton Weather</b>, <b>Alton Screen time</b> and <b>Alton</b>. Each one changes
+                with its size: drag its edges smaller or bigger (e.g. the clock shows just the time
+                when small, the weather adds the next four days when big). To swipe between them
+                like your others: add one (long-press the home screen › Widgets › Alton), long-press
+                it › <b>Create stack</b>, and add the others to it.
+              </p>
+              <div class="li">
+                <span style="flex: 1"
+                  >Screen time on the widgets<br /><small class="muted"
+                    >Usage access: switch on Alton</small
+                  ></span
+                ><button class="btn" id="pwUsage" style="padding: 6px 10px"></button>
               </div>
               <div class="li">
                 <span style="flex: 1"
-                  >Read new messages out in Driving mode<br /><small class="muted"
-                    >Needs “Read &amp; reply to messages”</small
+                  >Earbud and watch batteries on the clock<br /><small class="muted"
+                    >Nearby devices permission</small
                   ></span
-                ><button class="check" id="pwReadOut"></button>
+                ><button class="btn" id="pwBt" style="padding: 6px 10px"></button>
               </div>
-              <p class="muted small">
-                If Android says <b>“Restricted setting”</b> when you turn something on: open App
-                info, tap ⋮ (top right) › <b>Allow restricted settings</b>, then try again. Android
-                asks this for apps installed from outside the Play Store.
-              </p>
-              <button class="btn full" id="pwRestricted">Open Alton’s App info</button>
             </div>
           </details>
           <details class="grp" id="smartGrp" hidden>
@@ -3426,7 +3469,7 @@
               <p class="muted" style="margin-top: 0">
                 Pick your bank apps (Monzo, Barclays, Google Wallet…). Alton keeps their payment
                 notifications on this phone only and adds them up since payday. Needs
-                <b>Read &amp; reply to messages</b> (Notification access) on in Phone powers.
+                <b>Read &amp; reply to messages</b> (Notification access) on in Phone access.
               </p>
               <div id="spApps"></div>
               <button class="btn full" id="spPick" style="margin-top: 8px">Choose bank apps</button>
@@ -3450,7 +3493,7 @@
             <div class="gb">
               <p class="muted small" style="margin-top: 0">
                 Checks memory, storage, battery, heat, power saving, your keyboard app and more, and
-                says what to fix. Allow Usage access (Phone powers) for the keyboard’s cache size.
+                says what to fix. Allow Usage access (Phone access) for the keyboard’s cache size.
               </p>
               <div class="row">
                 <button class="btn acc" id="healthRun" style="flex: 1">Check my phone</button>
@@ -3566,6 +3609,7 @@
               </button>
             </div>
           </details>
+          <h2 class="set-h">Updates</h2>
           <details class="grp">
             <summary>
               <span class="gi"
@@ -3573,7 +3617,9 @@
                   <path
                     d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01"
                   /></svg></span
-              ><span class="gt"><b>About &amp; updates</b><small>Versions</small></span>
+              ><span class="gt"
+                ><b>This app</b><small>Version, check for updates, get the Android app</small></span
+              >
             </summary>
             <div class="gb">
               <p id="aboutVer" style="margin-top: 0"></p>
@@ -3585,6 +3631,38 @@
               <p class="muted small web-only">
                 Tip: browser menu › Add to Home Screen to use Alton like an app.
               </p>
+            </div>
+          </details>
+          <details class="grp">
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24">
+                  <path d="M8 9l-4 3 4 3M16 9l4 3-4 3M13 6l-2 12" /></svg></span
+              ><span class="gt"
+                ><b>Alton’s code from a zip</b
+                ><small>Your PC unpacks it, commits and pushes to GitHub</small></span
+              >
+            </summary>
+            <div class="gb">
+              <p class="muted small" style="margin-top: 0" id="projState">
+                Pick the Alton zip from your chat: your PC unpacks it into the project, then commits
+                and pushes it to GitHub for you.
+              </p>
+              <input type="file" id="projFile" accept=".zip,application/zip" class="input" />
+              <input
+                id="projMsg"
+                class="input"
+                placeholder="What changed (optional)"
+                style="margin-top: 8px"
+              />
+              <button class="btn acc full" id="projGo" style="margin-top: 8px">
+                Update and push
+              </button>
+              <pre
+                id="projLog"
+                class="muted small"
+                style="white-space: pre-wrap; margin: 8px 0 0"
+              ></pre>
             </div>
           </details>
         </section>
