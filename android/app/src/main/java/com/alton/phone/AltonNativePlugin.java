@@ -539,6 +539,16 @@ public class AltonNativePlugin extends Plugin {
         call.resolve(new JSObject().put("watching", on));
     }
 
+    /** The app checked where the phone is itself (when it's opened): arrived or left. Covers
+     *  phones where background location isn't allowed. */
+    @PluginMethod
+    public void placeCheck(PluginCall call) {
+        Context ctx = getContext();
+        boolean here = Boolean.TRUE.equals(call.getBoolean("here", false));
+        if (PlaceAlerts.prefs(ctx).getBoolean("here", false) != here) PlaceAlerts.onChange(ctx, here);
+        call.resolve();
+    }
+
     /** A one-off "remind me at work" note, shown next time they arrive. */
     @PluginMethod
     public void addPlaceNote(PluginCall call) {

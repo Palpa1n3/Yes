@@ -11,20 +11,104 @@ html[data-ui-font] textarea {
 }
 
 /* ── Panels and glass: see-through, frosted blur ── */
+/* Glass tint colours (the phone keeps colours as hex, the PC as "r g b" channels). */
+html[data-ui-tint='theme'] {
+  --ui-tint: var(--accent);
+}
+html.pc[data-ui-tint='theme'] {
+  --ui-tint: rgb(var(--accent));
+}
+html[data-ui-tint='warm'] {
+  --ui-tint: #ff9a3c;
+}
+html[data-ui-tint='cool'] {
+  --ui-tint: #3c9aff;
+}
+html[data-ui-tint='dark'] {
+  --ui-tint: #000;
+}
 html[data-ui-glass] .card,
 html[data-ui-glass] details.grp {
-  background: color-mix(in srgb, var(--panel) calc(var(--ui-glass) * 100%), transparent);
-  backdrop-filter: blur(var(--ui-blur));
-  -webkit-backdrop-filter: blur(var(--ui-blur));
+  background: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--panel), var(--ui-tint, var(--panel)) var(--ui-tint-amt, 0%))
+      calc(var(--ui-glass) * 100%),
+    transparent
+  );
+  backdrop-filter: blur(var(--ui-blur)) saturate(var(--ui-vivid, 100%));
+  -webkit-backdrop-filter: blur(var(--ui-blur)) saturate(var(--ui-vivid, 100%));
 }
 html[data-ui-glass] .hud-panel {
   background: linear-gradient(
     180deg,
-    rgb(var(--bg-panel-raised) / calc(var(--ui-glass) * 0.85)) 0%,
-    rgb(var(--bg-panel) / calc(var(--ui-glass) * 0.95)) 38%,
-    rgb(var(--bg-panel) / var(--ui-glass)) 100%
+    color-mix(
+        in srgb,
+        color-mix(
+            in srgb,
+            rgb(var(--bg-panel-raised)),
+            var(--ui-tint, rgb(var(--bg-panel-raised))) var(--ui-tint-amt, 0%)
+          )
+          calc(var(--ui-glass) * 85%),
+        transparent
+      )
+      0%,
+    color-mix(
+        in srgb,
+        color-mix(
+            in srgb,
+            rgb(var(--bg-panel)),
+            var(--ui-tint, rgb(var(--bg-panel))) var(--ui-tint-amt, 0%)
+          )
+          calc(var(--ui-glass) * 100%),
+        transparent
+      )
+      100%
   );
-  backdrop-filter: blur(var(--ui-blur));
+  backdrop-filter: blur(var(--ui-blur)) saturate(var(--ui-vivid, 100%));
+}
+
+/* ── Panel borders ── */
+html[data-ui-border='none'] .card,
+html[data-ui-border='none'] details.grp {
+  border-color: transparent;
+}
+html[data-ui-border='none'] .hud-panel {
+  border-color: transparent;
+}
+html[data-ui-border='none'] .hud-panel::before,
+html[data-ui-border='none'] .hud-panel::after {
+  display: none;
+}
+html[data-ui-border='bold'] .card,
+html[data-ui-border='bold'] details.grp,
+html[data-ui-border='bold'] .hud-panel {
+  border-width: 2px;
+}
+html[data-ui-border='neon'] .card,
+html[data-ui-border='neon'] details.grp {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--accent) 55%, transparent),
+    inset 0 0 6px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+html[data-ui-border='neon'] .hud-panel {
+  border-color: rgb(var(--accent) / 0.9);
+  box-shadow:
+    0 0 8px rgb(var(--accent) / 0.5),
+    inset 0 0 6px rgb(var(--accent) / 0.22);
+}
+
+/* ── Dim the background (behind the panels and text) ── */
+html[data-ui-dim]:not(.pc) body {
+  box-shadow: inset 0 0 0 100vmax rgba(0, 0, 0, var(--ui-dim));
+}
+html.pc[data-ui-dim] .app-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: rgba(0, 0, 0, var(--ui-dim));
 }
 
 /* ── Glow around panels (0 = none) ── */

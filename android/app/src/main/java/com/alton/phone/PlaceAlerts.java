@@ -11,13 +11,20 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Build;
+import android.annotation.SuppressLint;
+import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofencingClient;
+import com.google.android.gms.location.GeofencingRequest;
+import com.google.android.gms.location.LocationServices;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
  * "When I get to work": a proximity alert around the user's workplace. Arriving shows a
  * notification with what's left on their chosen lists and any "remind me at work" notes.
- * Uses the platform LocationManager (no Google services); needs location "Allow all the time".
+ * Uses Google Play services geofencing (works in the background and saves battery), falling
+ * back to the platform LocationManager's proximity alert when Play services aren't there.
+ * Needs location "Allow all the time".
  */
 final class PlaceAlerts {
 
@@ -45,26 +52,46 @@ final class PlaceAlerts {
     }
 
     /** (Re)registers the alert from the saved place. False when there is no place or no permission. */
+    @SuppressLint("MissingPermission")
     static boolean register(Context ctx) {
-        LocationManager lm = (LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
-        if (lm == null) return false;
-        PendingIntent pi = pending(ctx);
+        final LocationManager lm = (LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
+        final PendingIntent pi = pending(ctx);
         try {
-            lm.removeProximityAlert(pi);
+            if (lm != null) lm.removeProximityAlert(pi);
         } catch (SecurityException ignored) {}
+        GeofencingClient gc = null;
+        try {
+            gc = LocationServices.getGeofencingClient(ctx);
+            gc.removeGeofences(pi);
+        } catch (Throwable ignored) {}
         SharedPreferences p = prefs(ctx);
         if (!p.contains("lat") || !background(ctx)) return false;
+        final double lat = Double.longBitsToDouble(p.getLong("lat", 0));
+        final double lon = Double.longBitsToDouble(p.getLong("lon", 0));
+        final int radius = p.getInt("radius", 150);
+        final Runnable fallback = () -> {
+            try {
+                if (lm != null) lm.addProximityAlert(lat, lon, radius, -1, pi);
+            } catch (SecurityException ignored) {}
+        };
+        if (gc == null) {
+            fallback.run();
+            return lm != null;
+        }
         try {
-            lm.addProximityAlert(
-                Double.longBitsToDouble(p.getLong("lat", 0)),
-                Double.longBitsToDouble(p.getLong("lon", 0)),
-                p.getInt("radius", 150),
-                -1,
-                pi
-            );
+            Geofence g = new Geofence.Builder()
+                .setRequestId("work")
+                .setCircularRegion(lat, lon, radius)
+                .setExpirationDuration(Geofence.NEVER_EXPIRE)
+                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_EXIT)
+                .setNotificationResponsiveness(60_000)
+                .build();
+            GeofencingRequest req = new GeofencingRequest.Builder().setInitialTrigger(0).addGeofence(g).build();
+            gc.addGeofences(req, pi).addOnFailureListener(e -> fallback.run());
             return true;
-        } catch (SecurityException e) {
-            return false;
+        } catch (Throwable t) {
+            fallback.run();
+            return lm != null;
         }
     }
 
@@ -73,6 +100,9 @@ final class PlaceAlerts {
         try {
             if (lm != null) lm.removeProximityAlert(pending(ctx));
         } catch (SecurityException ignored) {}
+        try {
+            LocationServices.getGeofencingClient(ctx).removeGeofences(pending(ctx));
+        } catch (Throwable ignored) {}
         prefs(ctx).edit().clear().apply();
     }
 

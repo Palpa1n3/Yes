@@ -11,6 +11,13 @@ export interface UiStyle {
   blur: number;
   /** Panel glow: 1 = as designed, 0 none, up to 3. */
   glow: number;
+  /** A colour cast in the glass. */
+  tint: 'none' | 'theme' | 'warm' | 'cool' | 'dark';
+  border: 'standard' | 'none' | 'bold' | 'neon';
+  /** Colour boost behind frosted glass, % (100 = none). */
+  vivid: number;
+  /** Darken the background behind everything, % (0 = none). */
+  dim: number;
   bubble: 'standard' | 'round' | 'square' | 'plain';
   bubbleColour: 'standard' | 'accent' | 'grey' | 'clear';
   width: 'narrow' | 'normal' | 'wide';
@@ -26,6 +33,10 @@ export const DEFAULT_UI_STYLE: UiStyle = {
   glass: 100,
   blur: 0,
   glow: 1,
+  tint: 'none',
+  border: 'standard',
+  vivid: 100,
+  dim: 0,
   bubble: 'standard',
   bubbleColour: 'standard',
   width: 'normal',
@@ -102,6 +113,49 @@ export const UI_STYLE_GROUPS: Array<{ title: string; fields: Field[] }> = [
       },
       { key: 'blur', label: 'Frosted blur', kind: 'range', min: 0, max: 20, step: 1, unit: 'px' },
       { key: 'glow', label: 'Glow', kind: 'range', min: 0, max: 3, step: 0.5, unit: '×' },
+      {
+        key: 'tint',
+        label: 'Glass tint',
+        kind: 'select',
+        options: [
+          ['none', 'None'],
+          ['theme', 'Theme colour'],
+          ['warm', 'Warm'],
+          ['cool', 'Cool'],
+          ['dark', 'Dark'],
+        ],
+      },
+      {
+        key: 'border',
+        label: 'Panel border',
+        kind: 'select',
+        options: [
+          ['standard', 'Standard'],
+          ['none', 'None'],
+          ['bold', 'Bold'],
+          ['neon', 'Neon'],
+        ],
+      },
+      {
+        key: 'vivid',
+        label: 'Colour boost',
+        kind: 'range',
+        min: 100,
+        max: 200,
+        step: 10,
+        unit: '%',
+        hint: 'Makes colours behind frosted glass richer.',
+      },
+      {
+        key: 'dim',
+        label: 'Dim the background',
+        kind: 'range',
+        min: 0,
+        max: 80,
+        step: 5,
+        unit: '%',
+        hint: 'Darkens the background behind everything, for easier reading.',
+      },
     ],
   },
   {
@@ -205,6 +259,10 @@ export function cleanUiStyle(raw: unknown): UiStyle {
     glass: num(o.glass, 30, 100, d.glass),
     blur: num(o.blur, 0, 20, d.blur),
     glow: num(o.glow, 0, 3, d.glow),
+    tint: pick(o.tint, ['none', 'theme', 'warm', 'cool', 'dark'], d.tint),
+    border: pick(o.border, ['standard', 'none', 'bold', 'neon'], d.border),
+    vivid: num(o.vivid, 100, 200, d.vivid),
+    dim: num(o.dim, 0, 80, d.dim),
     bubble: pick(o.bubble, ['standard', 'round', 'square', 'plain'], d.bubble),
     bubbleColour: pick(o.bubbleColour, ['standard', 'accent', 'grey', 'clear'], d.bubbleColour),
     width: pick(o.width, ['narrow', 'normal', 'wide'], d.width),
@@ -233,7 +291,20 @@ export function applyUiStyle(root: StyleTarget, s: UiStyle): void {
   };
   set('font', s.font !== d.font, s.font);
   root.style.setProperty('--ui-font', FONT_STACKS[s.font] || 'inherit');
-  set('glass', s.glass !== d.glass || s.blur !== d.blur, '1');
+  set(
+    'glass',
+    s.glass !== d.glass || s.blur !== d.blur || s.tint !== d.tint || s.vivid !== d.vivid,
+    '1',
+  );
+  set('tint', s.tint !== d.tint, s.tint);
+  root.style.setProperty(
+    '--ui-tint-amt',
+    s.tint === 'none' ? '0%' : s.tint === 'dark' ? '30%' : '18%',
+  );
+  root.style.setProperty('--ui-vivid', `${s.vivid}%`);
+  set('border', s.border !== d.border, s.border);
+  set('dim', s.dim !== d.dim, '1');
+  root.style.setProperty('--ui-dim', String(s.dim / 100));
   root.style.setProperty('--ui-glass', String(s.glass / 100));
   root.style.setProperty('--ui-blur', `${s.blur}px`);
   set('glow', s.glow !== d.glow, '1');

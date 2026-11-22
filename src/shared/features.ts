@@ -68,7 +68,7 @@ export const FEATURES: Feature[] = [
     where: 'Work › At work list',
     view: 'work',
     say: 'Remind me at work to…',
-    words: 'arrive workplace location shopping',
+    words: 'arrive workplace location shopping map workplace location geofence',
   },
   {
     name: 'Spending since payday',

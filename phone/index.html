@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://*.ts.net https://*.github.io https://api.github.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://routing.openstreetmap.de https://api.fish.audio; media-src 'self' blob: data:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; worker-src 'self'"
+      content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.open-meteo.com https://geocoding-api.open-meteo.com https://*.ts.net https://*.github.io https://api.github.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://routing.openstreetmap.de https://api.fish.audio; media-src 'self' blob: data:; img-src 'self' data: blob: https://tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; worker-src 'self'"
     />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon-192.png" />
@@ -2631,6 +2631,41 @@
               <button class="btn acc" id="wkHere">I'm there now</button>
             </div>
             <p class="muted small" id="wkMsg"></p>
+            <div
+              id="wkMap"
+              style="
+                height: 240px;
+                border-radius: 12px;
+                border: 1px solid var(--line);
+                margin-top: 6px;
+              "
+            ></div>
+            <div class="row" style="gap: 8px; margin-top: 8px">
+              <input
+                class="input"
+                id="wkSearch"
+                placeholder="Search for your workplace or address"
+                style="flex: 1"
+              />
+              <button class="btn" id="wkFind">Find</button>
+            </div>
+            <label class="muted" style="display: block; margin-top: 6px"
+              >How close counts as “at work”
+              <select class="input" id="wkRadius">
+                <option value="100">100 m (a small shop)</option>
+                <option value="150">150 m</option>
+                <option value="200">200 m (a supermarket)</option>
+                <option value="300">300 m</option>
+                <option value="500">500 m (a big site)</option>
+              </select></label
+            >
+            <button class="btn acc full" id="wkSave" style="margin-top: 8px">
+              Save this spot as my workplace
+            </button>
+            <p class="muted small" id="wkMapMsg">
+              Tap the map where you work, or search for it, then save. Or tap “I'm there now” at
+              work.
+            </p>
             <div class="li">
               <span style="flex: 1"
                 >Works with Alton closed<br /><small class="muted" id="wkBgNote"

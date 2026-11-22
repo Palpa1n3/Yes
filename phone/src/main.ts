@@ -19,6 +19,7 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import { metresBetween, mountWorkMap, type WorkMap } from './workmap';
 import '@shared/ui-style.css';
 import '@fontsource/rajdhani/500.css';
 import '@fontsource/orbitron/400.css';
@@ -300,6 +301,10 @@ interface State {
   autoRotaLast: number;
   workName: string;
   workSet: boolean;
+  /** The workplace on the map, and how close counts as there (metres). */
+  workLat: number;
+  workLon: number;
+  workRadius: number;
   workLists: string[];
   workEnd: boolean;
   workEndLead: number;
@@ -441,6 +446,9 @@ const DEFAULTS: State = {
   autoRotaLast: 0,
   workName: '',
   workSet: false,
+  workLat: 0,
+  workLon: 0,
+  workRadius: 150,
   workLists: ['Shopping'],
   workEnd: true,
   workEndLead: 0,
@@ -3609,6 +3617,8 @@ async function renderWork(): Promise<void> {
   $('wkEnd').textContent = S.workEnd ? '✓' : '';
   $<HTMLSelectElement>('wkLead').value = String(S.workEndLead);
   $('wkLead').hidden = !S.workEnd;
+  $<HTMLSelectElement>('wkRadius').value = String(S.workRadius);
+  showWorkMap();
   const ps = await Native.placeStatus().catch(() => null);
   if (ps) atWork = { here: ps.here, since: ps.since };
   const bg = $<HTMLButtonElement>('wkBg');
@@ -3828,6 +3838,7 @@ function wirePowers(): void {
   // Back from Android's settings: show what changed.
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && view === 'set') void renderPowers();
+    if (!document.hidden) checkAtWorkNow();
     if (!document.hidden && S.workSet)
       void Native.placeStatus()
         .then((ps) => (atWork = { here: ps.here, since: ps.since }))
@@ -3867,29 +3878,46 @@ function wirePowers(): void {
     if (!navigator.geolocation) return void ($('wkMsg').textContent = 'Location isn’t available.');
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        void (async () => {
-          const r = await Native.setPlace({
-            name: S.workName || 'work',
-            lat: p.coords.latitude,
-            lon: p.coords.longitude,
-            radius: Math.max(120, Math.min(300, Math.round(p.coords.accuracy * 2))),
-            items: workItems(S.lists, S.workLists),
-            listLabel: S.workLists.join(' & ') || 'Shopping',
-          });
-          S.workSet = true;
-          if (!S.workName) S.workName = 'work';
-          save();
-          await renderWork();
-          toast(
-            r.watching
-              ? `Saved. Alton will show your list when you get to ${S.workName}.`
-              : 'Saved. Now tap Allow and pick “Allow all the time” so it works with Alton closed.',
-          );
-        })();
+        const radius = Math.max(S.workRadius, Math.min(300, Math.round(p.coords.accuracy * 2)));
+        workMap?.show(p.coords.latitude, p.coords.longitude, true);
+        void saveWorkplace(p.coords.latitude, p.coords.longitude, radius);
       },
       () => ($('wkMsg').textContent = 'Couldn’t get your location: allow Location for Alton.'),
       { enableHighAccuracy: true, timeout: 20_000, maximumAge: 0 },
     );
+  };
+  $<HTMLSelectElement>('wkRadius').onchange = (e) => {
+    S.workRadius = Number((e.target as HTMLSelectElement).value) || 150;
+    save();
+    workMap?.setRadius(S.workRadius);
+  };
+  $('wkSave').onclick = () => {
+    const p = workMap?.pin();
+    if (!p) return void ($('wkMapMsg').textContent = 'Tap the map where you work first.');
+    void saveWorkplace(p.lat, p.lon, S.workRadius);
+  };
+  const find = async (): Promise<void> => {
+    const q = $<HTMLInputElement>('wkSearch').value.trim();
+    if (!q) return;
+    $('wkMapMsg').textContent = 'Searching…';
+    try {
+      const r = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=gb&q=${encodeURIComponent(q)}`,
+        { headers: { Accept: 'application/json' } },
+      );
+      const j = (await r.json()) as Array<{ lat: string; lon: string; display_name: string }>;
+      const hit = j[0];
+      if (!hit) return void ($('wkMapMsg').textContent = `Couldn’t find “${q}”. Try the town too.`);
+      workMap?.show(Number(hit.lat), Number(hit.lon), true);
+      $('wkMapMsg').textContent =
+        `${hit.display_name.split(',').slice(0, 3).join(',')}: move the pin if needed, then save.`;
+    } catch {
+      $('wkMapMsg').textContent = 'Couldn’t search (no signal?).';
+    }
+  };
+  $('wkFind').onclick = () => void find();
+  $<HTMLInputElement>('wkSearch').onkeydown = (e) => {
+    if (e.key === 'Enter') void find();
   };
   $('wkBg').onclick = () => {
     toast('Permissions › Location › “Allow all the time”');
@@ -3912,6 +3940,8 @@ function wirePowers(): void {
   $('wkClear').onclick = async () => {
     await Native.clearPlace().catch(() => undefined);
     S.workSet = false;
+    S.workLat = 0;
+    S.workLon = 0;
     save();
     void scheduleWatch();
     void renderWork();
@@ -3920,6 +3950,7 @@ function wirePowers(): void {
   if (S.workSet) {
     lastWorkItems = '';
     queueWorkSync();
+    checkAtWorkNow();
   }
   void autoShiftAlarms();
   setInterval(() => void autoShiftAlarms(), 30 * 60_000);
@@ -5601,6 +5632,65 @@ function searchSettings(q: string): void {
   }
   found.hidden = !feats.length;
   $('setNone').hidden = !words.length || shown > 0 || feats.length > 0;
+}
+
+/* ── At work on a map ── */
+let workMap: WorkMap | null = null;
+function showWorkMap(): void {
+  if (workMap || !isApp) return;
+  const box = $('wkMap');
+  const saved = S.workLat || S.workLon ? { lat: S.workLat, lon: S.workLon } : null;
+  // No workplace yet: start at the phone's location (or the middle of the UK).
+  workMap = mountWorkMap(box, saved ?? { lat: 52.48, lon: -1.9 }, {
+    pin: saved,
+    radius: S.workRadius,
+    onPin: () => ($('wkMapMsg').textContent = 'Pin placed. Tap “Save this spot” to use it.'),
+  });
+  if (!saved && navigator.geolocation)
+    navigator.geolocation.getCurrentPosition(
+      (p) => workMap?.show(p.coords.latitude, p.coords.longitude),
+      () => undefined,
+      { timeout: 10_000, maximumAge: 600_000 },
+    );
+}
+async function saveWorkplace(lat: number, lon: number, radius: number): Promise<void> {
+  const r = await Native.setPlace({
+    name: S.workName || 'work',
+    lat,
+    lon,
+    radius,
+    items: workItems(S.lists, S.workLists),
+    listLabel: S.workLists.join(' & ') || 'Shopping',
+  });
+  S.workSet = true;
+  S.workLat = lat;
+  S.workLon = lon;
+  S.workRadius = radius;
+  if (!S.workName) S.workName = 'work';
+  save();
+  await renderWork();
+  $('wkMapMsg').textContent = r.watching
+    ? `Saved. Alton will show your list when you get to ${S.workName}.`
+    : 'Saved. Now tap Allow and choose “Allow all the time”, so it works with Alton closed.';
+  toast(r.watching ? 'Workplace saved.' : 'Saved: now allow location all the time.');
+}
+/** On opening Alton: check for ourselves whether we're at work (helps when Android's
+ *  background check is slow or location isn't allowed all the time). */
+function checkAtWorkNow(): void {
+  if (!isApp || !S.workSet || !(S.workLat || S.workLon) || !navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (p) => {
+      const d = metresBetween(
+        { lat: p.coords.latitude, lon: p.coords.longitude },
+        { lat: S.workLat, lon: S.workLon },
+      );
+      const here = d <= S.workRadius + Math.min(150, p.coords.accuracy);
+      void Native.placeCheck({ here }).catch(() => undefined);
+      atWork = { here, since: Date.now() };
+    },
+    () => undefined,
+    { timeout: 15_000, maximumAge: 120_000 },
+  );
 }
 
 function wireShiftsTab(): void {

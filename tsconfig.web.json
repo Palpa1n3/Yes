@@ -18,6 +18,6 @@
       "@renderer/*": ["./src/renderer/*"]
     }
   },
-  "include": ["src/renderer/**/*", "src/shared/**/*", "tests/**/*", "tailwind.config.ts", "phone/src/tools.ts", "phone/src/md.ts"],
+  "include": ["src/renderer/**/*", "src/shared/**/*", "tests/**/*", "tailwind.config.ts", "phone/src/tools.ts", "phone/src/md.ts", "phone/src/workmap.ts"],
   "exclude": ["tests/main/**/*"]
 }

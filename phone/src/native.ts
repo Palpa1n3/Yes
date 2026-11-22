@@ -390,6 +390,8 @@ interface AltonNativePlugin {
     listLabel?: string;
   }): Promise<{ watching: boolean }>;
   addPlaceNote(o: { text: string }): Promise<void>;
+  /** The app's own check on opening: is the phone at work right now? */
+  placeCheck(o: { here: boolean }): Promise<void>;
   placeStatus(): Promise<{
     set: boolean;
     name: string;

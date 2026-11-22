@@ -101,6 +101,10 @@ Read this first in a new chat, then README.md for the feature list.
   lock and runs `AppReader` (shared with `readApp`), saves the text and returns to Alton; JS
   `takeAutoRota` on resume sends it to Claude (phone-only) to add the shifts. Once per 20 h, or
   sooner after the shift app posts a notification (`MessageListener` → `AutoRota.notePosted`).
+  At work (0.53): set on a map (`phone/src/workmap.ts`, OSM tiles, CSP img-src tile.openstreetmap.org;
+  search via Nominatim; S.workLat/workLon/workRadius) or "I'm there now". Android uses Play services
+  geofencing (play-services-location) with the LocationManager proximity alert as fallback; the app also
+  checks on open (`checkAtWorkNow` → native `placeCheck`). Glass options added: tint, border, colour boost, dim.
   At work (Settings › Phone powers › At work): "I'm there now" saves the spot natively
   (`setPlace`; `PlaceAlerts` uses `LocationManager.addProximityAlert`, `PlaceReceiver`; `BootReceiver`
   re-registers after a restart; needs background location). Arriving posts a notification with
