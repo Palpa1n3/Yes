@@ -509,7 +509,7 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
   {
     name: 'get_calendar',
     description:
-      "The user's upcoming calendar events (from yesterday to two weeks ahead) with local start/end times. Use for questions about their schedule, appointments, meetings or plans.",
+      "The user's upcoming calendar events (from yesterday to two weeks ahead) with local start/end times. Use for questions about their schedule, appointments, meetings or plans. This is read-only on the PC: to add, move or delete an event, tell the user to ask Alton in the phone app (it changes their calendar straight away), or give them a Google Calendar link to add one.",
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {

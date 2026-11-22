@@ -395,6 +395,11 @@ export function needsPhone(text: string): boolean {
     ) ||
     /\b(at work|get to work|shift app|rota|my schedule|my (calendar|contacts|notifications)|alarm|alexa|phone (battery|health|storage|diagnostics))\b/.test(
       t,
+    ) ||
+    // The calendar: the phone can add, move and delete events; the PC's calendar is read-only.
+    /\b(calendar|diary|appointments?|reschedule|rearrange)\b/.test(t) ||
+    /\b(add|put|book|move|change|cancel|delete|remove|push|bring|shift)\b.*\b(event|meeting|appointment|booking|dentist|doctors?|gp|hair ?cut|hairdressers?|birthday|party)\b/.test(
+      t,
     )
   );
 }

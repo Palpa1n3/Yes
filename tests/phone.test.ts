@@ -248,6 +248,10 @@ describe('needsPhone', () => {
     expect(needsPhone('tell Sam I am running late')).toBe(true);
     expect(needsPhone('let mum know I am home')).toBe(true);
     expect(needsPhone('remind me at work to buy bin bags')).toBe(true);
+    expect(needsPhone('move my dentist appointment to Friday at 3')).toBe(true);
+    expect(needsPhone('put a meeting with Sam in for Tuesday')).toBe(true);
+    expect(needsPhone('cancel the party on Saturday')).toBe(true);
+    expect(needsPhone("what's in my calendar this week")).toBe(true);
     expect(needsPhone('free up space on drive D')).toBe(false);
     expect(needsPhone('what is the weather')).toBe(false);
   });
