@@ -19,6 +19,7 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import '@shared/space-backdrops.css';
 import { typingDiff } from '@shared/remote-input';
 import { nextSleep, shortGaps, sleepLine, type SleepOptions } from '@shared/sleep';
 import { gbp, paymentsFrom, spendSummary, type Payment } from '@shared/spending';
@@ -261,7 +262,8 @@ interface State {
     | 'carbon'
     | 'bokeh'
     | 'rings'
-    | 'drift';
+    | 'drift'
+    | import('@shared/backdrops').SpaceBackdrop;
   bgDim: number;
   uiText: 's' | 'm' | 'l' | 'xl';
   uiCorners: 'round' | 'soft' | 'sharp';

@@ -3,7 +3,7 @@ import { AmbientBack, AmbientTint } from '@renderer/components/hud/Ambient';
 import { Screensaver, SCREENSAVER_EVENT } from '@renderer/components/hud/Screensaver';
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion';
 import { useEffect, useState, type ComponentType, useCallback } from 'react';
-import { Background } from '@renderer/components/hud/Background';
+import { Background, SpaceBackdropLayer } from '@renderer/components/hud/Background';
 import { StatusBar } from '@renderer/components/hud/StatusBar';
 import { TopBar } from '@renderer/components/hud/TopBar';
 import { AppsTab } from '@renderer/components/tabs/AppsTab';
@@ -204,6 +204,7 @@ export function App() {
     <MotionConfig reducedMotion={reduced ? 'always' : 'never'}>
       <div className="app-shell" data-maximized={maximized}>
         <Background scanlines={settings.scanlines} particles={settings.particles} />
+        <SpaceBackdropLayer />
         <AmbientBack />
         <AmbientTint />
         {screensaver && <Screensaver onClose={closeScreensaver} />}

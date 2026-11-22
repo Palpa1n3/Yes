@@ -127,7 +127,17 @@ export interface ToolDef {
   parameters: Record<string, unknown>; // JSON schema
 }
 
-export type ThemeId = 'arc-cyan' | 'solar-gold' | 'crimson' | 'sentinel' | 'violet' | 'mono';
+export type ThemeId =
+  | 'arc-cyan'
+  | 'solar-gold'
+  | 'crimson'
+  | 'sentinel'
+  | 'violet'
+  | 'mono'
+  | 'event-horizon'
+  | 'deep-space'
+  | 'nebula'
+  | 'exoplanet';
 
 export type ReduceMotion = 'system' | 'on' | 'off';
 
@@ -257,6 +267,8 @@ export interface Settings {
   /** What starts it: the whole PC idle, or Alton's own window not being used (it may then
    *  go full-screen on its own screen while you work on another). */
   screensaverWhen: 'idle' | 'alton';
+  /** A space background behind the HUD ('none' = the plain theme colour). */
+  backdrop: import('./backdrops').SpaceBackdrop | 'none';
   /** Saver mode: cheapest model for chat and research, fewer web searches, no background
    *  memory learning. Agent Mode keeps its own model. */
   saver: boolean;
@@ -407,6 +419,7 @@ export const DEFAULT_SETTINGS: Settings = {
   timeTint: true,
   screensaverMinutes: 10,
   screensaverWhen: 'idle',
+  backdrop: 'none',
   saver: false,
   onboarded: false,
   prompts: DEFAULT_PROMPTS.map((p) => ({ ...p })),

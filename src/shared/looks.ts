@@ -9,6 +9,10 @@ export const THEME_ACCENT: Record<ThemeId, string> = {
   sentinel: '#FF2E3F',
   violet: '#A97BFF',
   mono: '#FFFFFF',
+  'event-horizon': '#FF9F43',
+  'deep-space': '#9EC3FF',
+  nebula: '#FF5FD2',
+  exoplanet: '#3BE8C0',
 };
 
 /** Every PC avatar runs on the phone too (plus "none"). */
@@ -39,4 +43,8 @@ export const THEME_NAMES: Record<ThemeId, string> = {
   sentinel: 'Sentinel',
   violet: 'Violet',
   mono: 'Mono',
+  'event-horizon': 'Event horizon',
+  'deep-space': 'Deep space',
+  nebula: 'Nebula',
+  exoplanet: 'Exoplanet',
 };

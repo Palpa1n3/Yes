@@ -235,6 +235,15 @@ Settings › Appearance › Effects:
   that long instead: on its own screen even while you work on another, on the same screen only
   when Alton is the window in front.
 
+### Space themes and backgrounds (0.50.8)
+
+Four colour themes: **Event Horizon** (gold on black), **Deep Space** (cold starlight blue),
+**Nebula** (magenta) and **Exoplanet** (alien teal), in the PC's palette and the phone's
+Settings › Look. Six space backgrounds drawn in CSS, original designs: **Event horizon**
+(black hole), **Wormhole**, **Ringed giant**, **Distant sun**, **From orbit** and **Deep field**:
+on the PC in Settings › Appearance › Space background, on the phone in Settings › Look ›
+Background. They sit high or in the corners so text stays readable.
+
 ### Saver mode
 
 Click the leaf next to the spending chip (or type `/saver`, or Settings › AI › Spending) to

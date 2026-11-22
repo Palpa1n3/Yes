@@ -1,3 +1,4 @@
+import { SPACE_BACKDROPS, isSpaceBackdrop } from '@shared/backdrops';
 import type { AvatarStyle } from '@shared/types';
 import { PromptsSection } from './PromptsSection';
 import { useUiStore } from '@renderer/stores/uiStore';
@@ -358,6 +359,20 @@ export function AppearanceTab() {
               { value: '20', label: 'After 20 minutes' },
               { value: '30', label: 'After 30 minutes' },
               { value: '60', label: 'After 1 hour' },
+            ]}
+          />
+        </Field>
+        <Field
+          label="Space background"
+          hint="A space scene behind the HUD. Goes well with the Event Horizon, Deep Space, Nebula and Exoplanet colours."
+        >
+          <Select
+            label="Space background"
+            value={s.backdrop}
+            onChange={(v) => void update({ backdrop: isSpaceBackdrop(v) ? v : 'none' })}
+            options={[
+              { value: 'none', label: 'None (theme colour)' },
+              ...SPACE_BACKDROPS.map((b) => ({ value: b.id, label: b.label })),
             ]}
           />
         </Field>

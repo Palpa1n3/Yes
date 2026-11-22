@@ -1,5 +1,6 @@
 /** Pure validation for stored settings: unknown keys dropped, wrong types replaced by
  *  defaults, so a hand-edited or corrupted settings.json can't break the app. */
+import { isSpaceBackdrop } from './backdrops';
 import { sanitizePersonality } from './personalities';
 import { sanitizePrompts } from './prompts';
 import type { WeatherPlace } from './weather';
@@ -15,7 +16,18 @@ import {
   type ThemeId,
 } from './types';
 
-const THEMES: ThemeId[] = ['arc-cyan', 'solar-gold', 'crimson', 'sentinel', 'violet', 'mono'];
+const THEMES: ThemeId[] = [
+  'arc-cyan',
+  'solar-gold',
+  'crimson',
+  'sentinel',
+  'violet',
+  'mono',
+  'event-horizon',
+  'deep-space',
+  'nebula',
+  'exoplanet',
+];
 const MOTION: ReduceMotion[] = ['system', 'on', 'off'];
 
 function validPlace(v: unknown): WeatherPlace | null {
@@ -234,6 +246,7 @@ export function sanitizeSettings(raw: unknown): Settings {
       ? (r['screensaverMinutes'] as number)
       : d.screensaverMinutes,
     screensaverWhen: r['screensaverWhen'] === 'alton' ? 'alton' : 'idle',
+    backdrop: isSpaceBackdrop(r['backdrop']) ? r['backdrop'] : 'none',
     homeAddress: str('homeAddress', 200).trim(),
   };
 }

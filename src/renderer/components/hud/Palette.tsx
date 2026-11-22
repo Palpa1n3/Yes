@@ -9,6 +9,10 @@ const SHORT: Record<ThemeId, string> = {
   sentinel: 'Sentinel',
   violet: 'Violet',
   mono: 'Mono',
+  'event-horizon': 'Horizon',
+  'deep-space': 'Deep space',
+  nebula: 'Nebula',
+  exoplanet: 'Exoplanet',
 };
 
 export function Palette() {

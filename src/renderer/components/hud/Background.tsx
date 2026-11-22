@@ -1,3 +1,5 @@
+import '@shared/space-backdrops.css';
+import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { useEffect, useRef } from 'react';
 import { useReducedMotion } from '@renderer/hooks/useReducedMotion';
 
@@ -106,4 +108,11 @@ export function Background({
       )}
     </div>
   );
+}
+
+/** The chosen space background (Settings › Appearance › Space background). */
+export function SpaceBackdropLayer() {
+  const backdrop = useSettingsStore((s) => s.settings.backdrop);
+  if (backdrop === 'none') return null;
+  return <div className="space-bd" data-bg={backdrop} aria-hidden="true" />;
 }
