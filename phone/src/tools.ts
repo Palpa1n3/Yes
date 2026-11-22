@@ -1,6 +1,7 @@
 /** Phone tools for Claude. Each action becomes a button the user taps (and then confirms in
  *  the app that opens): Alton never sends a message or makes a call by itself. */
 import type Anthropic from '@anthropic-ai/sdk';
+import { featuresText } from '@shared/features';
 import {
   buildIcs,
   cleanShifts,
@@ -254,6 +255,12 @@ export const PHONE_TOOLS: Anthropic.Tool[] = [
     input_schema: obj({ query: { type: 'string' } }, ['query']),
   },
   {
+    name: 'alton_features',
+    description:
+      'What Alton on this phone can do and where each thing is (screen › section), with something to say to try it. Use for "what can you do?", "where do I set…?", "can you…?". Give a short, friendly pick, not the whole list, unless asked.',
+    input_schema: obj({ query: { type: 'string', description: 'Optional topic, e.g. "sleep"' } }),
+  },
+  {
     name: 'get_weather',
     description:
       'Weather where the user is now: current conditions and the next 3 days (or for a named place).',
@@ -365,6 +372,35 @@ export const APP_TOOLS: Anthropic.Tool[] = [
     description:
       'Open the user\'s shift/rota app on the phone and read the rota off the screen (no screenshot needed). Then call add_shifts with the shifts you find. Use for "add my shifts", "check my rota", "have my shifts changed?".',
     input_schema: obj({}),
+  },
+  {
+    name: 'spending',
+    description:
+      'What the user has spent, from their bank apps\' notifications on this phone (they pick the apps in Settings › Phone › Spending). Defaults to since the last payday; or give days. Returns totals, top places and recent payments. Use for "how much have I spent?", "what did I spend at Tesco?", "how much is left till payday?". Amounts come from notifications, so mention it may miss payments the bank didn\'t notify about.',
+    input_schema: obj({ days: { type: 'number' }, merchant: { type: 'string' } }),
+  },
+  {
+    name: 'read_shift_trades',
+    description:
+      'Open the shift app\'s Shift Trade tab (open shifts, swaps) and read it off the screen. Then call check_shift_fit with the shifts on offer to see which fit around their rota, and tell the user the ones that fit, what they pay and on which payday. Use for "any shifts going?", "can I pick up extra?", "check shift trades".',
+    input_schema: obj({}),
+  },
+  {
+    name: 'check_shift_fit',
+    description:
+      'Check shifts on offer (open shifts, trades, a swap someone asked for) against the user\'s saved rota: clashes, under 11 hours\' rest, a week over 48 hours, plus pay and payday. Times are local "2026-11-24T07:00".',
+    input_schema: obj(
+      {
+        shifts: {
+          type: 'array',
+          items: obj(
+            { title: { type: 'string' }, start: { type: 'string' }, end: { type: 'string' } },
+            ['start', 'end'],
+          ),
+        },
+      },
+      ['shifts'],
+    ),
   },
   {
     name: 'remind_at_work',
@@ -628,6 +664,8 @@ export function runPhoneTool(name: string, input: unknown, st: ToolState): ToolO
         },
       };
     }
+    case 'alton_features':
+      return { result: featuresText(s(o.query, 80)) };
     case 'share': {
       const text = s(o.text, 4000);
       return { result: READY, action: { label: 'Share…', sub: text.slice(0, 80), share: text } };

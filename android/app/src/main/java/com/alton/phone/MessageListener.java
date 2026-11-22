@@ -64,6 +64,8 @@ public class MessageListener extends NotificationListenerService {
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
         if (sbn != null) AutoRota.notePosted(this, sbn.getPackageName());
+        if (sbn != null && SpendLog.watched(this, sbn.getPackageName()))
+            SpendLog.note(this, sbn, appLabel(sbn.getPackageName()));
         Entry e = take(sbn);
         if (e != null) {
             JSObject o = new JSObject();

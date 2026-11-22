@@ -23,6 +23,7 @@ import { VoiceTraining } from './VoiceTraining';
 import { CalendarSection } from './CalendarSection';
 import { EmailSection } from './EmailSection';
 import { DiscordSection } from './DiscordSection';
+import { SmartHomeSection } from './SmartHomeSection';
 import { PhoneAppSection, PhoneSection } from './PrivacyTab';
 import { SpendingSection } from './SpendingSection';
 import { OVERVIEW_PANELS } from '@renderer/components/tabs/OverviewTab';
@@ -924,6 +925,7 @@ export function ConnectionsTab() {
       <PhoneAppSection />
       <CalendarSection />
       <EmailSection />
+      <SmartHomeSection />
       <DiscordSection />
     </>
   );

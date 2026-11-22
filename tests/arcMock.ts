@@ -115,6 +115,11 @@ export function installArcMock(): ArcAPI {
       onChange: vi.fn(() => () => undefined),
       onHealth: vi.fn(() => () => undefined),
     },
+    smarthome: {
+      status: vi.fn(async () => false),
+      set: vi.fn(async () => ({ ok: true, message: 'Connected' })),
+      clear: vi.fn(async () => false),
+    },
     discord: {
       status: vi.fn(async () => false),
       set: vi.fn(async () => ({ ok: true, message: 'Saved' })),

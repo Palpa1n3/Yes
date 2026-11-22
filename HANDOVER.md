@@ -116,6 +116,24 @@ Read this first in a new chat, then README.md for the feature list.
   action that `MainActivity.modeFor` turns into "talk" or "drive". Watch heads-ups: pure planner in
   `src/shared/headsups.ts`, scheduled as local notifications. Weather on the phone background:
   `refreshWeather`/`applyAmbient` (rain, snow, storm flashes, fog, frost).
+  0.50 life tools (pure logic in `src/shared`, tests in `tests/lifeTools.test.ts`):
+  Sleep planner (`sleep.ts`: `planFor`/`nextSleep`/`sleepLine`/`shortGaps`; bed = alarm − `sleepHours`,
+  wind-down `windDown` min before, a 90-min nap before night shifts, <11 h gaps flagged) → Work › Sleep
+  card, Today line, Claude context, and `planHeadsUps(..., {sleep})` notifications (`S.sleepOn`).
+  Spending (`spending.ts`: `parsePayment`/`paymentsFrom`/`spendSummary`): `SpendLog.java` keeps
+  notifications from the bank apps picked in Settings › Phone › Spending (`setSpendApps`, prefs
+  `alton_spend`, last 400, phone only; `MessageListener` calls it) → Today › Spending, `spending` tool,
+  "since payday" from `paydays`. Smart home (`smartthings.ts`, one `smartHome(fetch, input, confirm)`
+  for both apps; unlock/open always confirm): PC token encrypted (`smartthings-token.bin`, IPC
+  `smarthome`, Settings › Connections › Smart home, tool `smart_home` in toolbox.ts); phone token in
+  localStorage `alton-st` (not in backups), CapacitorHttp, Settings › Phone › Smart home. Shift
+  trades (`shiftFit.ts`: clash / <11 h rest / >48 h week, pay and payday): `read_shift_trades` reads
+  the `S.tradeTab` tab ("Shift Trade") via `readApp`, then `check_shift_fit`; Work › 🔁 button.
+  Feature finder (`features.ts`, keep `where` in step with index.html): Settings search box filters
+  the groups and links features on other tabs; `alton_features` tool for "what can you do?".
+  Keyboard: targetSdk 35 draws edge to edge, so the keyboard overlays the WebView. `MainActivity.watchKeyboard`
+  measures how much of the WebView the IME covers and sets `--kb` + `html.kb` (body padding, tab bar hidden);
+  the page keeps the chat scrolled down on `altonkb`. Browsers use `visualViewport` instead.
   Driving mode (phone/src/main.ts) listens for the wake word
   while on screen; a true background wake word is not built (Android limits it). Claude gets them as `APP_TOOLS`. The app's origin is
   `https://localhost`, which the PC's CORS also allows. The release workflow's `android` job

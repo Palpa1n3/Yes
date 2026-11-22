@@ -1,6 +1,7 @@
 /** Watch heads-ups: notifications the phone app schedules so a paired watch (e.g. a Fitbit)
  *  buzzes at the right moments: the evening before a shift, time to leave, and a morning summary. */
 import { alarmFor, type Shift, type ShiftAlarmRule } from './shifts';
+import { hhmm as hm2, planFor, shortGaps, type SleepOptions } from './sleep';
 
 export interface HeadsUpOptions {
   shiftEve: boolean;
@@ -12,6 +13,9 @@ export interface HeadsUpOptions {
   morningHour: number;
   alarmRules: ShiftAlarmRule[];
   alarmLead: number;
+  /** Sleep planner: a wind-down nudge before each shift's bedtime (or nap), and a warning the
+   *  evening before a short gap between shifts. Off when missing. */
+  sleep?: Omit<SleepOptions, 'alarmRules' | 'alarmLead' | 'travel'>;
 }
 
 export interface HeadsUp {
@@ -71,6 +75,45 @@ export function planHeadsUps(
           title: 'Leave in 10 minutes',
           body: `${s.title} at ${hm(start)} · ${o.travel} min journey`,
         });
+    }
+  }
+  if (o.sleep) {
+    const so: SleepOptions = {
+      ...o.sleep,
+      alarmRules: o.alarmRules,
+      alarmLead: o.alarmLead,
+      travel: o.travel,
+    };
+    for (const s of shifts) {
+      const p = planFor(s, so, now);
+      if (!p || p.windDownAt.getTime() <= t0 || p.windDownAt.getTime() > week) continue;
+      out.push(
+        p.kind === 'nap'
+          ? {
+              key: `sleep:${s.start}`,
+              at: p.windDownAt.getTime(),
+              title: 'Nap before your night shift',
+              body: `Nap ${hm2(p.bed)}–${hm2(p.wake)} · shift ${s.start.slice(11, 16)}`,
+            }
+          : {
+              key: `sleep:${s.start}`,
+              at: p.windDownAt.getTime(),
+              title: `Wind down: bed by ${hm2(p.bed)}`,
+              body: `${o.sleep.hours} h before your ${hm2(p.wake)} alarm · ${s.title} ${s.start.slice(11, 16)}`,
+            },
+      );
+    }
+    for (const g of shortGaps(shifts, 11, now)) {
+      const end = local(g.after.end);
+      if (!end) continue;
+      const when = new Date(end.getTime() - 60 * 60_000);
+      if (when.getTime() <= t0 || when.getTime() > week) continue;
+      out.push({
+        key: `gap:${g.before.start}`,
+        at: when.getTime(),
+        title: `Only ${g.hours} h before your next shift`,
+        body: `Finish ${g.after.end.slice(11, 16)}, back at ${g.before.start.slice(11, 16)}. Head straight home and to bed.`,
+      });
     }
   }
   if (o.morning)

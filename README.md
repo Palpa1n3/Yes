@@ -447,6 +447,23 @@ A separate version of Alton for your phone that talks to Claude directly, so it 
 
 Settings › Connections › **Wake from phone** shows the PC's network (MAC) address and the one-time setup (network adapter power settings, turn off Fast startup, BIOS if needed). Install a free Wake-on-LAN app (Android "Wake On Lan", iPhone "Mocha WOL") and add the PC. Use **Sleep PC** on the PC page of the phone version to put it to sleep. Away from home, install **Tailscale** on the PC and phone: the full phone version then works over the internet at the PC's Tailscale address.
 
+### Sleep, spending, smart home and shift trades (0.50)
+
+- **Sleep planner** (phone, Work › Sleep): works back from each shift's alarm to "in bed by" and
+  "wind down from" (8 hours by default), suggests a nap before night shifts and warns when there
+  are under 11 hours between shifts. A notification arrives when it's time to wind down.
+- **Spending** (phone, Settings › Phone › Spending): pick your bank apps; Alton adds up their
+  payment notifications since payday (Today › Spending, or ask _"how much have I spent?"_). Kept on
+  the phone only.
+- **Smart home** (Samsung SmartThings): add a token from account.smartthings.com/tokens in PC
+  Settings › Connections › Smart home (or on the phone, Settings › Phone › Smart home), then say
+  _"turn the lamp off"_, _"set the heating to 20"_ or _"run Good night"_. Unlocking or opening a door
+  always asks first.
+- **Open shifts and trades** (phone, Work › Get my shifts › 🔁): reads your shift app's Shift Trade
+  tab and says which shifts fit around your rota, what they pay and on which payday.
+- **Search settings** (phone): the box at the top of Settings finds settings and features
+  anywhere in the app; or ask _"what can you do?"_.
+
 ### Phone companion (the full Alton on your phone)
 
 **Settings › Connections › Phone companion** (off by default). Turn it on and **scan the QR code** with your phone's camera: it opens and pairs by itself. (Or open the address shown and type the 6-digit code.) Settings also shows a QR code for the phone-only app. Add it to your home screen to use it like an app.

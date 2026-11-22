@@ -390,6 +390,9 @@ export function needsPhone(text: string): boolean {
     /\bsend (it|this|that|them|him|her|a|the|my)\b/.test(t) ||
     /\b(tell|let) \w+ (know|that|i\b|i'm|im\b)/.test(t) ||
     // This phone's own apps and settings
+    /\b(spent|spending|spend|my bank|since payday|shift trades?|open shifts?|swap (a |my )?shifts?|pick up (a |an |extra )?shifts?)\b/.test(
+      t,
+    ) ||
     /\b(at work|get to work|shift app|rota|my schedule|my (calendar|contacts|notifications)|alarm|alexa|phone (battery|health|storage|diagnostics))\b/.test(
       t,
     )

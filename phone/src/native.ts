@@ -316,6 +316,10 @@ interface AltonNativePlugin {
   }): Promise<void>;
   requestAccess(o: { which: 'calendar' | 'contacts' | 'bluetooth' }): Promise<{ granted: boolean }>;
   getMessages(): Promise<{ messages: AppMessage[] }>;
+  /** Spending: keep notifications from these bank apps (on the phone only). */
+  setSpendApps(o: { packages: string[] }): Promise<void>;
+  getSpendLog(): Promise<{ items: import('@shared/spending').BankNote[] }>;
+  clearSpendLog(): Promise<void>;
   setWallpaper(o: {
     position: string;
     variant: string;

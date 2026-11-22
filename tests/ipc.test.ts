@@ -40,6 +40,7 @@ describe('IPC channel contract', () => {
         'remote',
         'routines',
         'settings',
+        'smarthome',
         'storage',
         'system',
         'tasks',

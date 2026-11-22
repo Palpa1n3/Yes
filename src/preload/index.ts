@@ -101,6 +101,11 @@ const api: ArcAPI = {
     onChange: (cb) => subscribe(IPC.clipboard.onChange, cb),
     onHealth: (cb) => subscribe(IPC.clipboard.onHealth, cb),
   },
+  smarthome: {
+    status: () => invoke(IPC.smarthome.status),
+    set: (t) => invoke(IPC.smarthome.set, t),
+    clear: () => invoke(IPC.smarthome.clear),
+  },
   discord: {
     status: () => invoke(IPC.discord.status),
     set: (u) => invoke(IPC.discord.set, u),

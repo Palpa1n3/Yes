@@ -256,7 +256,7 @@ describe('self-debugging', () => {
     const shipped = mkdtempSync(join(tmpdir(), 'arc-shipped-'));
     mkdirSync(join(shipped, 'src', 'main'), { recursive: true });
     writeFileSync(join(shipped, 'src', 'main', 'index.ts'), 'export const x = 1;');
-    expect(new SourceReader(() => shipped).files()).toContain(join('src', 'main', 'index.ts'));
+    expect(new SourceReader(() => shipped).files()).toContain('src/main/index.ts');
   });
 });
 

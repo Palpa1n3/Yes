@@ -91,12 +91,19 @@ describe('spending from bank notifications', () => {
     expect(
       parsePayment({ app: 'Monzo', title: 'Payment received', text: 'Sam sent you £20.00', at }),
     ).toMatchObject({ kind: 'in', amount: 20 });
-    expect(parsePayment({ app: 'Monzo', title: 'Refund', text: '£9.99 from Amazon', at })?.kind).toBe(
-      'refund',
-    );
-    expect(parsePayment({ app: 'HSBC', title: 'Balance', text: 'Your balance is £1,240.00', at })).toBeNull();
     expect(
-      parsePayment({ app: 'Monzo', title: 'Declined', text: 'Payment of £5 at Shell declined', at }),
+      parsePayment({ app: 'Monzo', title: 'Refund', text: '£9.99 from Amazon', at })?.kind,
+    ).toBe('refund');
+    expect(
+      parsePayment({ app: 'HSBC', title: 'Balance', text: 'Your balance is £1,240.00', at }),
+    ).toBeNull();
+    expect(
+      parsePayment({
+        app: 'Monzo',
+        title: 'Declined',
+        text: 'Payment of £5 at Shell declined',
+        at,
+      }),
     ).toBeNull();
   });
   it('counts a payment shown twice once and sums since payday', () => {
@@ -169,18 +176,26 @@ describe('open shifts and trades', () => {
   };
   const rota = [{ title: 'Work', start: '2026-11-24T14:00', end: '2026-11-24T22:00' }];
   it('flags clashes and short rest, and prices the ones that fit', () => {
-    expect(fitShift({ title: 'Open', start: '2026-11-24T16:00', end: '2026-11-24T20:00' }, rota, o).verdict).toBe(
-      'clash',
+    expect(
+      fitShift({ title: 'Open', start: '2026-11-24T16:00', end: '2026-11-24T20:00' }, rota, o)
+        .verdict,
+    ).toBe('clash');
+    expect(
+      fitShift({ title: 'Open', start: '2026-11-25T06:00', end: '2026-11-25T14:00' }, rota, o)
+        .verdict,
+    ).toBe('short_rest');
+    const ok = fitShift(
+      { title: 'Open', start: '2026-11-26T09:00', end: '2026-11-26T17:00' },
+      rota,
+      o,
     );
-    expect(fitShift({ title: 'Open', start: '2026-11-25T06:00', end: '2026-11-25T14:00' }, rota, o).verdict).toBe(
-      'short_rest',
-    );
-    const ok = fitShift({ title: 'Open', start: '2026-11-26T09:00', end: '2026-11-26T17:00' }, rota, o);
     expect(ok.verdict).toBe('ok');
     expect(ok.pay).toBe(93);
     expect(ok.payday).toBe('2026-11-28');
     expect(paydayFor('2026-11-27', '2026-11-28', 28, 0)).toBe('2026-11-28');
-    expect(fitReport([{ start: '2026-11-26T09:00', end: '2026-11-26T17:00' }], rota, o)).toContain('OK');
+    expect(fitReport([{ start: '2026-11-26T09:00', end: '2026-11-26T17:00' }], rota, o)).toContain(
+      'OK',
+    );
   });
 });
 

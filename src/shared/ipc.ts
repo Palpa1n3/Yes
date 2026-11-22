@@ -48,6 +48,11 @@ import type { EndTaskResult, TaskList } from './tasks';
 import type { CalEvent, CalendarState, CalendarUrlResult } from './calendar';
 
 export const IPC = {
+  smarthome: {
+    status: 'smarthome:status',
+    set: 'smarthome:set',
+    clear: 'smarthome:clear',
+  },
   discord: {
     status: 'discord:status',
     set: 'discord:set',
@@ -292,6 +297,9 @@ export interface InvokeMap {
   [IPC.email.state]: { args: []; result: EmailState };
   [IPC.updates.state]: { args: []; result: UpdateState };
   [IPC.agent.status]: { args: []; result: AgentStatus };
+  [IPC.smarthome.status]: { args: []; result: boolean };
+  [IPC.smarthome.set]: { args: [token: string]; result: { ok: boolean; message: string } };
+  [IPC.smarthome.clear]: { args: []; result: boolean };
   [IPC.discord.status]: { args: []; result: boolean };
   [IPC.discord.set]: { args: [url: string]; result: { ok: boolean; message: string } };
   [IPC.discord.clear]: { args: []; result: boolean };
@@ -485,6 +493,13 @@ export interface ArcAPI {
     /** Find towns by name (Open-Meteo geocoding). */
     search(query: string): Promise<WeatherPlace[]>;
     onChange(cb: (s: WeatherState) => void): Unsubscribe;
+  };
+  smarthome: {
+    /** Is a SmartThings token saved (the token itself never comes back)? */
+    status(): Promise<boolean>;
+    /** Checks the token with SmartThings, then stores it encrypted. */
+    set(token: string): Promise<{ ok: boolean; message: string }>;
+    clear(): Promise<boolean>;
   };
   discord: {
     /** Is a webhook saved (the link itself never comes back)? */

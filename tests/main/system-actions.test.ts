@@ -160,7 +160,7 @@ describe('system-actions safety and helpers', () => {
     const hits = await searchFiles([root], 'october invoice');
     expect(hits.map((h) => h.path.replace(root, ''))).toEqual([
       join('/sub', 'invoice-october-final.pdf'),
-      '/Invoice October.pdf',
+      join('/', 'Invoice October.pdf'),
     ]);
   });
 

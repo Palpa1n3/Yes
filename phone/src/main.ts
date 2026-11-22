@@ -19,6 +19,17 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import { nextSleep, shortGaps, sleepLine, type SleepOptions } from '@shared/sleep';
+import { gbp, paymentsFrom, spendSummary, type Payment } from '@shared/spending';
+import {
+  SMART_HOME_TOOL,
+  ST_API,
+  cleanSmartInput,
+  smartHome,
+  type StFetch,
+} from '@shared/smartthings';
+import { fitReport, type FitOptions } from '@shared/shiftFit';
+import { findFeatures } from '@shared/features';
 import { CapacitorHttp } from '@capacitor/core';
 import { fishRequest } from '../../src/main/services/fish-tts';
 import { DEFAULT_FISH_VOICE, FISH_MODELS, type FishModel } from '@shared/voice';
@@ -317,6 +328,15 @@ interface State {
   /** Last backup saved, and when the reminder was last put off (ms). */
   lastBackup: number;
   backupSnooze: number;
+  /** Sleep planner: bedtime nudges on, hours wanted, minutes of wind-down. */
+  sleepOn: boolean;
+  sleepHours: number;
+  windDown: number;
+  /** Spending: bank apps whose payment notifications are kept (packages and names). */
+  spendApps: string[];
+  spendNames: string[];
+  /** The shift app's tab with open shifts / swaps. */
+  tradeTab: string;
 }
 const KEY = 'alton-phone-v1';
 const DEFAULTS: State = {
@@ -430,6 +450,12 @@ const DEFAULTS: State = {
   shiftWords: 'shift, work',
   lastBackup: 0,
   backupSnooze: 0,
+  sleepOn: true,
+  sleepHours: 8,
+  windDown: 45,
+  spendApps: [],
+  spendNames: [],
+  tradeTab: 'Shift Trade',
 };
 const ls = {
   get: (k: string): string | null => {
@@ -679,7 +705,12 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
           model: model(),
           max_tokens: 16000,
           system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
-          tools: [...PHONE_TOOLS, ...(isApp ? APP_TOOLS : []), ...webTools()],
+          tools: [
+            ...PHONE_TOOLS,
+            ...(isApp ? APP_TOOLS : []),
+            ...(isApp && stToken ? [SMART_HOME_TOOL as Anthropic.Tool] : []),
+            ...webTools(),
+          ],
           messages,
           thinking: { type: 'adaptive' },
           output_config: { effort: research ? 'medium' : 'low' },
@@ -1121,8 +1152,11 @@ function shiftLine(): string {
   const payday = pd
     ? ` Next payday: ${pd.label} (${pd.when}).${pd.gross > 0 ? ` From the shifts saved for that pay period (${pd.hours}h) it should be about ${money(pd.gross)} before tax, roughly ${money(pd.net)} after tax and NI (a rough estimate).` : ''}`
     : '';
+  const sl = sleepText();
+  const gap = shortGaps(S.shifts)[0];
+  const sleep = `${sl ? ` Sleep plan (${S.sleepHours} h wanted): ${sl}` : ''}${gap ? ` Short gap: only ${gap.hours} h between ${describeShift(gap.after)} and ${describeShift(gap.before)}.` : ''}`;
   return n
-    ? `${now}Next work shift: ${n.when === 'later' ? '' : `${n.when}, `}${describeShift(n.shift)} ${n.shift.title}. Mention it in briefings.${rate}${travel}${payday}`
+    ? `${now}Next work shift: ${n.when === 'later' ? '' : `${n.when}, `}${describeShift(n.shift)} ${n.shift.title}. Mention it in briefings.${rate}${travel}${payday}${sleep}`
     : S.shifts.length || pd
       ? `${now}No other work shift in the next two days.${rate}${payday}`
       : '';
@@ -1927,6 +1961,7 @@ async function scheduleWatch(): Promise<void> {
       morningHour: S.morningHour,
       alarmRules: S.shiftRules,
       alarmLead: S.shiftLead,
+      ...(S.sleepOn ? { sleep: { hours: S.sleepHours, windDown: S.windDown } } : {}),
     },
     new Date(),
     extras,
@@ -3202,6 +3237,10 @@ async function appTool(
         },
       };
     }
+    if (name === 'smart_home') return { result: await smartTool(input) };
+    if (name === 'spending') return { result: await spendingTool(o) };
+    if (name === 'read_shift_trades') return { result: await readTrades() };
+    if (name === 'check_shift_fit') return { result: fitReport(o.shifts, S.shifts, fitOpts()) };
     if (name === 'remind_at_work') {
       const text = String(o.text ?? '').trim();
       if (!text) return { result: 'Nothing to remind them of.' };
@@ -5021,6 +5060,378 @@ async function shiftsFromMyCalendar(): Promise<void> {
   }
 }
 
+/* ── Sleep planner (Work › Sleep, Today, bedtime notifications) ── */
+const sleepOpts = (): SleepOptions => ({
+  hours: S.sleepHours,
+  windDown: S.windDown,
+  alarmRules: S.shiftRules,
+  alarmLead: S.shiftLead,
+  travel: S.travel,
+});
+function sleepText(): string {
+  const p = nextSleep(S.shifts, sleepOpts());
+  return p ? sleepLine(p) : '';
+}
+function renderSleep(): void {
+  const line = sleepText();
+  $('slLine').textContent =
+    line ||
+    (S.shifts.length
+      ? 'No shift in the next day and a half: sleep as you like.'
+      : 'Add your shifts and Alton plans your bedtimes around them.');
+  const gaps = $('slGaps');
+  gaps.textContent = '';
+  for (const g of shortGaps(S.shifts).slice(0, 3))
+    gaps.appendChild(
+      el(
+        'p',
+        'muted',
+        `⚠️ Only ${g.hours} h between ${describeShift(g.after)} and ${describeShift(g.before)}.`,
+      ),
+    );
+  $('slOn').classList.toggle('on', S.sleepOn);
+  $('slOn').textContent = S.sleepOn ? '✓' : '';
+  $<HTMLSelectElement>('slHours').value = String(S.sleepHours);
+  $<HTMLSelectElement>('slWind').value = String(S.windDown);
+}
+function wireSleep(): void {
+  $('slOn').onclick = () => {
+    S.sleepOn = !S.sleepOn;
+    save();
+    renderSleep();
+    void scheduleWatch();
+  };
+  $<HTMLSelectElement>('slHours').onchange = (e) => {
+    S.sleepHours = Number((e.target as HTMLSelectElement).value) || 8;
+    save();
+    renderSleep();
+    void scheduleWatch();
+  };
+  $<HTMLSelectElement>('slWind').onchange = (e) => {
+    S.windDown = Number((e.target as HTMLSelectElement).value) || 0;
+    save();
+    renderSleep();
+    void scheduleWatch();
+  };
+}
+
+/* ── Spending from bank notifications (Settings › Phone › Spending, Today, the spending tool) ── */
+/** From the last payday (or 30 days ago without one) to now. */
+function spendPeriod(days?: number): { from: number; label: string } {
+  const now = new Date();
+  if (days && days > 0)
+    return { from: now.getTime() - days * 86_400_000, label: `the last ${days} days` };
+  const last = S.payNext
+    ? paydays(S.payNext, S.payCycle, new Date(now.getTime() - 45 * 86_400_000), now).pop()
+    : undefined;
+  if (last) {
+    const d = new Date(`${last}T00:00`);
+    return {
+      from: d.getTime(),
+      label: `payday (${d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })})`,
+    };
+  }
+  return { from: now.getTime() - 30 * 86_400_000, label: 'the last 30 days' };
+}
+async function payments(): Promise<Payment[]> {
+  if (!isApp || !S.spendApps.length) return [];
+  try {
+    return paymentsFrom((await Native.getSpendLog()).items);
+  } catch {
+    return [];
+  }
+}
+async function renderTodaySpend(): Promise<void> {
+  const card = $('tdSpendCard');
+  if (!isApp || !S.spendApps.length) {
+    card.hidden = true;
+    return;
+  }
+  const p = spendPeriod();
+  const s = spendSummary(await payments(), p.from);
+  const box = $('tdSpend');
+  box.textContent = '';
+  box.appendChild(el('p', undefined, `${gbp(s.spent - s.refunds)} spent since ${p.label}`));
+  const pd = payInfo();
+  if (pd && pd.net > 0)
+    box.appendChild(
+      el(
+        'p',
+        'muted',
+        `Next pay about ${money(pd.net)} ${pd.when} · ${gbp(s.perDay)} a day so far`,
+      ),
+    );
+  if (s.top.length)
+    box.appendChild(
+      el(
+        'p',
+        'muted',
+        s.top
+          .slice(0, 3)
+          .map((t) => `${t.merchant} ${gbp(t.total)}`)
+          .join(' · '),
+      ),
+    );
+  card.hidden = false;
+}
+async function renderSpendSettings(): Promise<void> {
+  $('spendGrp').hidden = !isApp;
+  if (!isApp) return;
+  $('spApps').textContent = S.spendNames.length
+    ? `Watching: ${S.spendNames.join(', ')}`
+    : 'No bank apps chosen yet.';
+  const n = (await payments()).length;
+  const access = (await powerStatus())?.messages;
+  $('spState').textContent = S.spendApps.length
+    ? `${n} payment${n === 1 ? '' : 's'} saved on this phone.${access ? '' : ' Notification access is off, so new ones are missed.'}`
+    : '';
+}
+function wireSpend(): void {
+  if (!isApp) return;
+  $('spPick').onclick = async () => {
+    const box = $('spPicker');
+    if (!box.hidden) {
+      box.hidden = true;
+      return;
+    }
+    box.textContent = 'Loading your apps…';
+    box.hidden = false;
+    try {
+      const { apps } = await Native.listApps();
+      box.textContent = '';
+      for (const a of apps) {
+        const row = el('div', 'li');
+        const name = el('span', undefined, a.name);
+        name.style.flex = '1';
+        row.appendChild(name);
+        const c = el('button', 'check');
+        const on = (): boolean => S.spendApps.includes(a.package);
+        const paint = (): void => {
+          c.classList.toggle('on', on());
+          c.textContent = on() ? '✓' : '';
+        };
+        paint();
+        c.onclick = () => {
+          const i = S.spendApps.indexOf(a.package);
+          if (i >= 0) {
+            S.spendApps.splice(i, 1);
+            S.spendNames.splice(i, 1);
+          } else {
+            S.spendApps.push(a.package);
+            S.spendNames.push(a.name);
+          }
+          save();
+          paint();
+          void Native.setSpendApps({ packages: S.spendApps });
+          void renderSpendSettings();
+          void renderTodaySpend();
+        };
+        row.appendChild(c);
+        box.appendChild(row);
+      }
+    } catch {
+      box.textContent = 'Couldn’t list your apps.';
+    }
+  };
+  $('spClear').onclick = async () => {
+    if (!confirm('Forget every payment Alton saved from your bank notifications?')) return;
+    await Native.clearSpendLog();
+    void renderSpendSettings();
+    void renderTodaySpend();
+    toast('Saved payments removed.');
+  };
+}
+async function spendingTool(o: Record<string, unknown>): Promise<string> {
+  if (!S.spendApps.length)
+    return 'Spending isn’t set up: the user picks their bank apps in Settings › Phone › Spending (it reads their payment notifications, on the phone only).';
+  const days = typeof o.days === 'number' ? Math.min(366, Math.max(1, Math.round(o.days))) : 0;
+  const p = spendPeriod(days);
+  let list = await payments();
+  const who = typeof o.merchant === 'string' ? o.merchant.trim().toLowerCase() : '';
+  if (who) list = list.filter((x) => x.merchant.toLowerCase().includes(who));
+  const s = spendSummary(list, p.from);
+  const recent = list
+    .filter((x) => x.at >= p.from)
+    .slice(-15)
+    .map(
+      (x) =>
+        `${new Date(x.at).toLocaleString([], { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} ${x.kind === 'spend' ? '' : `(${x.kind}) `}${gbp(x.amount)} ${x.merchant || x.app}`,
+    );
+  const pd = payInfo();
+  return [
+    `Since ${p.label}${who ? ` at “${String(o.merchant)}”` : ''}: spent ${gbp(s.spent)} in ${s.count} payments${s.refunds ? `, refunds ${gbp(s.refunds)}` : ''}${s.income ? `, money in ${gbp(s.income)}` : ''}. About ${gbp(s.perDay)} a day.`,
+    s.top.length
+      ? `Top: ${s.top.map((t) => `${t.merchant} ${gbp(t.total)} (${t.count})`).join(', ')}`
+      : '',
+    pd
+      ? `Next payday ${pd.label} (${pd.when})${pd.net > 0 ? `, about ${money(pd.net)} after tax` : ''}.`
+      : '',
+    recent.length ? `Recent:\n${recent.join('\n')}` : 'No payments seen in that time.',
+    '(From bank notifications on this phone; payments without a notification are missing.)',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/* ── Smart home: SmartThings with a token kept on this phone only ── */
+let stToken = ls.get('alton-st') ?? '';
+const stFetch: StFetch = async (method, path, body) => {
+  const r = await CapacitorHttp.request({
+    url: `${ST_API}${path}`,
+    method,
+    headers: {
+      Authorization: `Bearer ${stToken}`,
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(body ? { data: body } : {}),
+    connectTimeout: 15_000,
+    readTimeout: 15_000,
+  });
+  let json: unknown = r.data;
+  if (typeof json === 'string')
+    try {
+      json = JSON.parse(json);
+    } catch {
+      /* not JSON */
+    }
+  return { status: r.status, json };
+};
+async function smartTool(raw: unknown): Promise<string> {
+  const i = cleanSmartInput(raw);
+  if (!i) return 'Unknown smart-home action.';
+  if (!stToken)
+    return 'SmartThings isn’t connected on this phone: the user adds a token in Settings › Phone › Smart home.';
+  try {
+    return await smartHome(stFetch, i, async (q) => confirm(q));
+  } catch {
+    return 'Couldn’t reach SmartThings. Check the internet.';
+  }
+}
+function renderSmart(): void {
+  $('smartGrp').hidden = !isApp;
+  $('stState').textContent = stToken ? 'Connected to SmartThings.' : 'Not connected.';
+  $('stForm').hidden = !!stToken;
+  $('stList').hidden = !stToken;
+  $('stClear').hidden = !stToken;
+}
+function wireSmart(): void {
+  if (!isApp) return;
+  $('stSave').onclick = async () => {
+    const t = $<HTMLInputElement>('stToken').value.trim();
+    if (!/^[\w-]{20,100}$/.test(t)) {
+      $('stOut').textContent = 'That doesn’t look like a SmartThings token.';
+      return;
+    }
+    const old = stToken;
+    stToken = t;
+    $('stOut').textContent = 'Checking…';
+    try {
+      const r = await stFetch('GET', '/devices');
+      if (r.status !== 200) {
+        stToken = old;
+        $('stOut').textContent =
+          r.status === 401 || r.status === 403
+            ? 'SmartThings refused that token.'
+            : `SmartThings said ${r.status}.`;
+      } else {
+        ls.set('alton-st', t);
+        $<HTMLInputElement>('stToken').value = '';
+        $('stOut').textContent = 'Connected. Try “turn the lamp off”.';
+      }
+    } catch {
+      stToken = old;
+      $('stOut').textContent = 'Couldn’t reach SmartThings.';
+    }
+    renderSmart();
+  };
+  $('stList').onclick = async () => {
+    $('stOut').textContent = 'Loading…';
+    $('stOut').textContent = await smartTool({ action: 'list' });
+  };
+  $('stClear').onclick = () => {
+    stToken = '';
+    ls.del('alton-st');
+    $('stOut').textContent = '';
+    renderSmart();
+  };
+}
+
+/* ── Open shifts and trades (the shift app's Shift Trade tab) ── */
+async function readTrades(): Promise<string> {
+  if (!S.shiftApp) return 'No shift app chosen yet: the user picks it in Work › Your shift app.';
+  if (!(await powerStatus())?.screenReader)
+    return 'Reading the shift app (Accessibility) is switched off. The user turns it on in Settings › Phone powers.';
+  const tab = S.tradeTab || 'Shift Trade';
+  toast(`Opening ${S.shiftAppName || 'your shift app'} to read ${tab}…`);
+  try {
+    const r = await Native.readApp({ package: S.shiftApp, tap: tab, weeks: 1 });
+    if (r.front && r.front !== S.shiftApp)
+      return `The shift app didn't stay on screen (Alton saw ${r.front}).`;
+    return `Text on the shift app's "${tab}" screen (read just now):\n${r.text.slice(0, 12000)}\n\nIf this is their own rota rather than shifts on offer, the tab wasn't found: say so. Otherwise call check_shift_fit with the shifts on offer (local times).`;
+  } catch (e) {
+    return `Couldn't read it: ${(e as Error).message}`;
+  }
+}
+const fitOpts = (): FitOptions => ({
+  rate: S.payRate,
+  unpaidBreak: S.unpaidBreak,
+  breakOver: S.breakAll ? 0 : 6,
+  minRest: 11,
+  maxWeek: 48,
+  payNext: S.payNext,
+  payCycle: S.payCycle,
+  payLag: S.payLag,
+});
+
+/* ── Settings search: filters the groups and suggests features elsewhere ── */
+function searchSettings(q: string): void {
+  const view = $('setView');
+  const query = q.trim().toLowerCase();
+  const words = query.split(/\s+/).filter((w) => w.length > 1);
+  let shown = 0;
+  for (const g of view.querySelectorAll<HTMLDetailsElement>('details.grp')) {
+    // Leave groups the app itself hid (e.g. phone-only ones in the browser).
+    if (g.hidden && !g.dataset.searchHidden) continue;
+    const hit = !words.length || words.some((w) => (g.textContent ?? '').toLowerCase().includes(w));
+    g.hidden = !hit;
+    if (hit) delete g.dataset.searchHidden;
+    else g.dataset.searchHidden = '1';
+    g.open = words.length > 0 && hit;
+    if (hit) shown++;
+  }
+  for (const h of view.querySelectorAll<HTMLElement>('h2.set-h')) {
+    let n = h.nextElementSibling;
+    let any = false;
+    while (n && !n.matches('h2.set-h')) {
+      if (n.matches('details.grp') && !(n as HTMLElement).hidden) any = true;
+      n = n.nextElementSibling;
+    }
+    h.hidden = words.length > 0 && !any;
+  }
+  const found = $('setFound');
+  found.textContent = '';
+  const feats = words.length
+    ? findFeatures(query, undefined, 4).filter((f) => f.view !== 'set')
+    : [];
+  for (const f of feats) {
+    const b = el('button', 'li');
+    b.style.width = '100%';
+    b.style.textAlign = 'left';
+    b.appendChild(
+      el('span', undefined, `${f.name} → ${f.where}${f.say ? ` · say “${f.say}”` : ''}`),
+    );
+    b.onclick = () => {
+      $<HTMLInputElement>('setSearch').value = '';
+      searchSettings('');
+      setView(f.view);
+    };
+    found.appendChild(b);
+  }
+  found.hidden = !feats.length;
+  $('setNone').hidden = !words.length || shown > 0 || feats.length > 0;
+}
+
 function wireShiftsTab(): void {
   $('shGetApp').onclick = () => {
     if (!S.shiftApp) {
@@ -5031,6 +5442,18 @@ function wireShiftsTab(): void {
     phoneOnlyNext = true;
     send(
       'Use the read_shift_app tool to read my shift app now, then add every upcoming shift with add_shifts.',
+    );
+  };
+  $('shGetTrade').hidden = !isApp;
+  $('shGetTrade').onclick = () => {
+    if (!S.shiftApp) {
+      $('shGetMsg').textContent = 'First pick your shift app below in Your shift app.';
+      return;
+    }
+    setView('chat');
+    phoneOnlyNext = true;
+    send(
+      'Use read_shift_trades to read the open shifts and trades in my shift app, then check_shift_fit, and tell me which ones fit around my rota and what they pay.',
     );
   };
   $('shGetPic').onclick = () => {
@@ -5351,6 +5774,10 @@ function renderToday(): void {
     sh.appendChild(
       el('p', 'muted', 'No shifts yet. Share a screenshot of your rota with Alton to add them.'),
     );
+  else {
+    const sl = sleepText();
+    if (sl) sh.appendChild(el('p', 'muted', `😴 ${sl}`));
+  }
   // Reminders.
   const rem = $('tdRems');
   rem.textContent = '';
@@ -5363,6 +5790,7 @@ function renderToday(): void {
       ),
     );
   $('tdRemCard').hidden = !rem.childElementCount;
+  void renderTodaySpend();
   // Lists with things still to do.
   const lists = $('tdLists');
   lists.textContent = '';
@@ -6110,12 +6538,15 @@ function setView(v: string): void {
   if (v === 'people') renderPeople();
   if (v === 'work') {
     renderShifts();
+    renderSleep();
     void renderPowers();
   }
   if (v === 'today') renderToday();
   if (v === 'pc') renderPc();
   if (v === 'set') {
     renderSettings();
+    renderSmart();
+    void renderSpendSettings();
     renderAbout();
     renderLook();
     renderUiSettings();
@@ -6255,6 +6686,7 @@ function wire(): void {
     save();
     apiKey = '';
     ls.del('alton-key');
+    ls.del('alton-st');
     $('lock').hidden = true;
     start();
   };
@@ -6280,6 +6712,11 @@ function wire(): void {
     if (!document.hidden && (view === 'chat' || view === 'today')) renderShiftCard();
   }, 60_000);
   wireShiftsTab();
+  wireSleep();
+  wireSpend();
+  wireSmart();
+  $<HTMLInputElement>('setSearch').oninput = (e) =>
+    searchSettings((e.target as HTMLInputElement).value);
   $('shiftLead').onchange = () => {
     const v = Number($<HTMLInputElement>('shiftLead').value);
     S.shiftLead = v >= 0 && v <= 600 ? Math.round(v) : 90;
@@ -6596,11 +7033,37 @@ function wire(): void {
   $('wipe').onclick = () => {
     if (!confirm('Remove your key, chats, people and memories from this phone?')) return;
     ls.del('alton-key');
+    ls.del('alton-st');
     ls.del(KEY);
     location.reload();
   };
 }
 
+/* ── Keyboard: keep what you're typing in view ── */
+// The Android app reports the covered height itself (MainActivity → --kb, 'altonkb'). In a
+// browser, work it out from the visual viewport (for browsers that overlay the keyboard).
+function keepTypingInView(): void {
+  const a = document.activeElement as HTMLElement | null;
+  if (view === 'chat') {
+    const m = $('main');
+    m.scrollTop = m.scrollHeight;
+  } else if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))
+    a.scrollIntoView({ block: 'center' });
+}
+window.addEventListener('altonkb', () => requestAnimationFrame(keepTypingInView));
+if (!isApp && window.visualViewport) {
+  const vv = window.visualViewport;
+  const onVv = (): void => {
+    const covered = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    const d = document.documentElement;
+    const kb = covered > 80 ? covered : 0;
+    if (d.style.getPropertyValue('--kb') === `${kb}px`) return;
+    d.style.setProperty('--kb', `${kb}px`);
+    d.classList.toggle('kb', kb > 0);
+    requestAnimationFrame(keepTypingInView);
+  };
+  vv.addEventListener('resize', onVv);
+}
 takeHash();
 wire();
 start();

@@ -592,6 +592,26 @@ public class AltonNativePlugin extends Plugin {
         call.resolve(new JSObject().put("messages", MessageListener.recentMessages()));
     }
 
+    /** Spending: which bank apps' notifications to keep (package names). */
+    @PluginMethod
+    public void setSpendApps(PluginCall call) {
+        JSArray pkgs = call.getArray("packages");
+        SpendLog.setApps(getContext(), pkgs == null ? new JSArray() : pkgs);
+        call.resolve();
+    }
+
+    /** Spending: the kept bank notifications, oldest first. */
+    @PluginMethod
+    public void getSpendLog(PluginCall call) {
+        call.resolve(new JSObject().put("items", SpendLog.log(getContext())));
+    }
+
+    @PluginMethod
+    public void clearSpendLog(PluginCall call) {
+        SpendLog.clear(getContext());
+        call.resolve();
+    }
+
     @PluginMethod
     public void replyMessage(PluginCall call) {
         String id = call.getString("id");

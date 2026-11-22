@@ -123,8 +123,10 @@ export function commandFor(d: StDevice, a: SmartAction, value?: number): StComma
     case 'set_level': {
       if (value === undefined) return 'Say what level (0–100).';
       const v = Math.round(Math.min(100, Math.max(0, value)));
-      if (has('switchLevel')) return { capability: 'switchLevel', command: 'setLevel', arguments: [v] };
-      if (has('audioVolume')) return { capability: 'audioVolume', command: 'setVolume', arguments: [v] };
+      if (has('switchLevel'))
+        return { capability: 'switchLevel', command: 'setLevel', arguments: [v] };
+      if (has('audioVolume'))
+        return { capability: 'audioVolume', command: 'setVolume', arguments: [v] };
       if (has('windowShadeLevel'))
         return { capability: 'windowShadeLevel', command: 'setShadeLevel', arguments: [v] };
       return `${d.name} has no brightness or volume to set.`;
@@ -133,9 +135,17 @@ export function commandFor(d: StDevice, a: SmartAction, value?: number): StComma
       if (value === undefined) return 'Say what temperature.';
       const v = Math.min(30, Math.max(5, value));
       if (has('thermostatHeatingSetpoint'))
-        return { capability: 'thermostatHeatingSetpoint', command: 'setHeatingSetpoint', arguments: [v] };
+        return {
+          capability: 'thermostatHeatingSetpoint',
+          command: 'setHeatingSetpoint',
+          arguments: [v],
+        };
       if (has('thermostatCoolingSetpoint'))
-        return { capability: 'thermostatCoolingSetpoint', command: 'setCoolingSetpoint', arguments: [v] };
+        return {
+          capability: 'thermostatCoolingSetpoint',
+          command: 'setCoolingSetpoint',
+          arguments: [v],
+        };
       return `${d.name} isn't a thermostat.`;
     }
     case 'lock':
@@ -203,9 +213,12 @@ export async function smartHome(
     if (r.status !== 200) return errorText(r.status);
     const scenes = parseScenes(r.json);
     if (!input.device)
-      return scenes.length ? `Scenes: ${scenes.map((s) => s.name).join(', ')}` : 'No scenes set up.';
+      return scenes.length
+        ? `Scenes: ${scenes.map((s) => s.name).join(', ')}`
+        : 'No scenes set up.';
     const s = matchByName(scenes, input.device);
-    if (!s) return `No scene called “${input.device}”. Scenes: ${scenes.map((x) => x.name).join(', ') || 'none'}.`;
+    if (!s)
+      return `No scene called “${input.device}”. Scenes: ${scenes.map((x) => x.name).join(', ') || 'none'}.`;
     const x = await f('POST', `/scenes/${encodeURIComponent(s.id)}/execute`);
     return x.status < 300 ? `Ran the “${s.name}” scene.` : errorText(x.status);
   }
@@ -237,7 +250,10 @@ export async function smartHome(
   }
   const c = commandFor(d, input.action, input.value);
   if (typeof c === 'string') return c;
-  if (needsConfirm(d, input.action) && !(await confirm(`${input.action === 'unlock' ? 'Unlock' : 'Open'} ${d.name}?`)))
+  if (
+    needsConfirm(d, input.action) &&
+    !(await confirm(`${input.action === 'unlock' ? 'Unlock' : 'Open'} ${d.name}?`))
+  )
     return `The user said no; ${d.name} was left as it was.`;
   const r = await f('POST', `/devices/${encodeURIComponent(d.id)}/commands`, {
     commands: [{ component: 'main', ...c }],

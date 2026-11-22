@@ -40,7 +40,11 @@ function merchantOf(text: string, title: string): string {
     ) ?? /^([A-Z0-9][\w&'’.*\- ]{1,40}?)\s*[-–:]\s*£/.exec(text);
   if (m?.[1]) return tidy(m[1]);
   // Monzo-style: the title is the shop, the text is the amount.
-  if (title && !AMOUNT.test(title) && !/\b(payment|spent|bank|card|alert|transaction)\b/i.test(title))
+  if (
+    title &&
+    !AMOUNT.test(title) &&
+    !/\b(payment|spent|bank|card|alert|transaction)\b/i.test(title)
+  )
     return tidy(title);
   return '';
 }

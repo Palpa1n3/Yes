@@ -36,7 +36,8 @@ const ISO = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/;
 const at = (s: string): Date | null => {
   const m = ISO.exec(s);
   if (!m) return null;
-  const d = new Date(+m[1]!, +m[2]! - 1, +m[3]!, +m[4]!, +m[5]!);
+  const [y, mo, da, h, mi] = m.slice(1, 6).map(Number) as [number, number, number, number, number];
+  const d = new Date(y, mo - 1, da, h, mi);
   return Number.isNaN(d.getTime()) ? null : d;
 };
 const p2 = (n: number): string => String(n).padStart(2, '0');
@@ -100,7 +101,11 @@ export function sleepLine(p: SleepPlan, now = new Date()): string {
     const a = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const b = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     const n = Math.round((b - a) / 86_400_000);
-    return n === 0 ? '' : n === 1 ? ' tomorrow' : ` ${d.toLocaleDateString([], { weekday: 'long' })}`;
+    return n === 0
+      ? ''
+      : n === 1
+        ? ' tomorrow'
+        : ` ${d.toLocaleDateString([], { weekday: 'long' })}`;
   };
   if (p.kind === 'nap')
     return `Night shift at ${p.shift.start.slice(11, 16)}: nap ${hhmm(p.bed)}–${hhmm(p.wake)}${day(p.bed)}.`;
@@ -117,9 +122,9 @@ export function shortGaps(shifts: Shift[], minRest = 11, now = new Date()): Shor
     .sort((x, y) => x.a.getTime() - y.a.getTime());
   const out: ShortGap[] = [];
   for (let i = 1; i < list.length; i++) {
-    const prev = list[i - 1]!;
-    const cur = list[i]!;
-    if (cur.a.getTime() <= now.getTime()) continue;
+    const prev = list[i - 1];
+    const cur = list[i];
+    if (!prev || !cur || cur.a.getTime() <= now.getTime()) continue;
     const hours = (cur.a.getTime() - prev.b.getTime()) / 3_600_000;
     if (hours >= 0 && hours < minRest)
       out.push({ after: prev.s, before: cur.s, hours: Math.round(hours * 10) / 10 });

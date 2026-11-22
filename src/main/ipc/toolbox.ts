@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import si from 'systeminformation';
 import { IPC } from '@shared/ipc';
+import { ST_API, cleanSmartInput, smartHome, type StFetch } from '@shared/smartthings';
 import type { MainContext } from '../context';
 import type { NotesStore } from '../services/notes-store';
 import { SecretStore } from '../services/secret-store';
@@ -47,6 +48,22 @@ export function registerToolbox(
   const undoFile = join(userData, 'tidy-undo.json');
   const benchFile = join(userData, 'benchmarks.json');
   const discord = new SecretStore(join(userData, 'discord-webhook.bin'), safeStorage);
+  const smartToken = new SecretStore(join(userData, 'smartthings-token.bin'), safeStorage);
+  const stFetch =
+    (token: string): StFetch =>
+    async (method, path, body) => {
+      const r = await fetch(`${ST_API}${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/json',
+          ...(body ? { 'content-type': 'application/json' } : {}),
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+        signal: AbortSignal.timeout(15_000),
+      });
+      return { status: r.status, json: await r.json().catch(() => null) };
+    };
   const tasks: BackgroundTask[] = [];
   const folders = (): Record<string, string> => ({
     downloads: app.getPath('downloads'),
@@ -56,6 +73,31 @@ export function registerToolbox(
   const input = (i: unknown): Record<string, unknown> =>
     i && typeof i === 'object' ? (i as Record<string, unknown>) : {};
 
+  // Settings › Connections › Smart home: SmartThings personal access token.
+  handle(IPC.smarthome.status, () => smartToken.has());
+  handle(IPC.smarthome.set, async (raw) => {
+    const t = String(raw ?? '').trim();
+    if (!/^[\w-]{20,100}$/.test(t))
+      return {
+        ok: false,
+        message:
+          'That doesn’t look like a SmartThings token (make one at account.smartthings.com/tokens).',
+      };
+    try {
+      const r = await stFetch(t)('GET', '/devices');
+      if (r.status === 401 || r.status === 403)
+        return { ok: false, message: 'SmartThings refused that token.' };
+      if (r.status !== 200) return { ok: false, message: `SmartThings said ${r.status}.` };
+    } catch {
+      return { ok: false, message: 'Couldn’t reach SmartThings. Check the internet.' };
+    }
+    await smartToken.set(t);
+    return { ok: true, message: 'Connected. Try “turn the living room lights off”.' };
+  });
+  handle(IPC.smarthome.clear, async () => {
+    await smartToken.clear();
+    return false;
+  });
   // Settings › Connections › Discord: save / remove the webhook.
   handle(IPC.discord.status, () => discord.has());
   handle(IPC.discord.set, async (url) => {
@@ -202,6 +244,26 @@ export function registerToolbox(
       } catch {
         await shell.openExternal(`https://open.spotify.com/search/${encodeURIComponent(q)}`);
         return { opened: `Spotify web search for “${q}”.` };
+      }
+    },
+    smart_home: async (raw) => {
+      const i = cleanSmartInput(raw);
+      if (!i) return { error: 'Unknown smart-home action.' };
+      const token = await smartToken.get();
+      if (!token)
+        return {
+          error:
+            'SmartThings isn’t connected. The user adds a token in Settings › Connections › Smart home.',
+        };
+      try {
+        const result = await smartHome(stFetch(token), i, async (q) =>
+          Boolean(await ctx.askApproval?.(q, 'Alton will do this through SmartThings.')),
+        );
+        if (i.action !== 'list' && i.action !== 'status')
+          ctx.audit.add('action', `Smart home: ${result.slice(0, 80)}`, true);
+        return { result };
+      } catch {
+        return { error: 'Couldn’t reach SmartThings.' };
       }
     },
     post_to_discord: async (raw) => {

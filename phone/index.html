@@ -552,6 +552,14 @@
         font-size: 13px;
         color: var(--text);
       }
+      /* Keyboard open (the app sets --kb to the height it covers): lift everything above it and
+         hide the tab bar so the chat box sits right on top of the keyboard. */
+      html.kb body {
+        padding-bottom: var(--kb, 0px);
+      }
+      html.kb nav.tabs {
+        display: none;
+      }
       .composer {
         position: sticky;
         bottom: 0;
@@ -2288,6 +2296,10 @@
               Shifts &amp; pay
             </button>
           </div>
+          <div class="card" id="tdSpendCard" hidden>
+            <div class="lbl"><span class="dot"></span>Spending</div>
+            <div id="tdSpend"></div>
+          </div>
           <div class="card" id="tdRemCard">
             <div class="lbl"><span class="dot"></span>Coming up</div>
             <div id="tdRems"></div>
@@ -2313,6 +2325,46 @@
         <section id="workView" class="view">
           <div class="card shift-hero" id="shiftNext"></div>
           <div class="card shift-hero pay-card" id="payCard"></div>
+          <div class="card" id="sleepCard">
+            <div class="lbl"><span class="dot"></span>Sleep</div>
+            <p id="slLine" style="margin: 0"></p>
+            <div id="slGaps"></div>
+            <details style="margin-top: 8px">
+              <summary class="muted">Sleep settings</summary>
+              <div class="li">
+                <span style="flex: 1"
+                  >Bedtime nudges<br /><small class="muted"
+                    >A notification when it’s time to wind down, and a warning before a short gap
+                    between shifts</small
+                  ></span
+                ><button class="check" id="slOn"></button>
+              </div>
+              <div class="row" style="gap: 10px; margin-top: 6px">
+                <label class="muted" style="flex: 1"
+                  >Sleep wanted
+                  <select id="slHours" class="input">
+                    <option value="6">6 h</option>
+                    <option value="6.5">6½ h</option>
+                    <option value="7">7 h</option>
+                    <option value="7.5">7½ h</option>
+                    <option value="8">8 h</option>
+                    <option value="8.5">8½ h</option>
+                    <option value="9">9 h</option>
+                  </select></label
+                >
+                <label class="muted" style="flex: 1"
+                  >Wind down
+                  <select id="slWind" class="input">
+                    <option value="0">None</option>
+                    <option value="15">15 min</option>
+                    <option value="30">30 min</option>
+                    <option value="45">45 min</option>
+                    <option value="60">1 hour</option>
+                  </select></label
+                >
+              </div>
+            </details>
+          </div>
           <div class="card">
             <div class="lbl"><span class="dot"></span>Get my shifts</div>
             <div class="shift-get">
@@ -2320,6 +2372,7 @@
               <button class="btn" id="shGetPic">🖼️ From a screenshot</button>
               <button class="btn" id="shGetCal">📅 From my calendar</button>
               <button class="btn" id="shAddOpen">✍️ Type one in</button>
+              <button class="btn" id="shGetTrade">🔁 Open shifts &amp; trades</button>
             </div>
             <div id="shCalRow" hidden style="margin-top: 10px">
               <label class="muted" style="display: block"
@@ -2768,6 +2821,18 @@
             <div class="pav" id="setInitial">A</div>
             <div><b id="setName">You</b><small class="muted" id="setSub"></small></div>
           </div>
+          <input
+            id="setSearch"
+            class="input"
+            type="search"
+            placeholder="🔍 Search settings and features (e.g. sleep, lights, pay)"
+            aria-label="Search settings and features"
+            style="margin: 0 0 10px"
+          />
+          <div id="setFound" class="card" hidden></div>
+          <p id="setNone" class="muted" hidden style="margin: 0 0 10px">
+            Nothing in Settings matches. Try fewer words, or ask Alton.
+          </p>
           <h2 class="set-h">About you &amp; Alton</h2>
           <details class="grp">
             <summary>
@@ -3305,6 +3370,73 @@
                 asks this for apps installed from outside the Play Store.
               </p>
               <button class="btn full" id="pwRestricted">Open Alton’s App info</button>
+            </div>
+          </details>
+          <details class="grp" id="smartGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9H3zM9 20v-6h6v6" /></svg></span
+              ><span class="gt"
+                ><b>Smart home</b><small>SmartThings lights, plugs, heating, scenes</small></span
+              >
+            </summary>
+            <div class="gb">
+              <p class="muted" id="stState" style="margin-top: 0"></p>
+              <div id="stForm">
+                <p class="muted" style="margin-top: 0">
+                  Go to <b>account.smartthings.com/tokens</b>, sign in with your Samsung account,
+                  <b>Generate new token</b>, tick Devices (List, See, Control) and Scenes (See,
+                  Control), then paste it here. It stays on this phone only.
+                </p>
+                <div class="row">
+                  <input
+                    id="stToken"
+                    class="input"
+                    type="password"
+                    placeholder="SmartThings token"
+                    autocomplete="off"
+                    style="flex: 1"
+                  />
+                  <button class="btn acc" id="stSave">Connect</button>
+                </div>
+              </div>
+              <div class="row" style="margin-top: 8px">
+                <button class="btn" id="stList" style="flex: 1">Show my devices</button>
+                <button class="btn" id="stClear" style="flex: 1">Disconnect</button>
+              </div>
+              <p class="muted" id="stOut" style="white-space: pre-line"></p>
+              <small class="muted"
+                >Say “turn the lamp off”, “set the heating to 20” or “run Good night”. Unlocking or
+                opening a door always asks first. When chats go to the PC, it uses the PC’s own
+                SmartThings connection (PC Settings › Connections › Smart home).</small
+              >
+            </div>
+          </details>
+          <details class="grp" id="spendGrp" hidden>
+            <summary>
+              <span class="gi"
+                ><svg viewBox="0 0 24 24">
+                  <path d="M3 7h18v12H3zM3 11h18M7 15h3" /></svg></span
+              ><span class="gt"
+                ><b>Spending</b
+                ><small>What you’ve spent since payday, from bank alerts</small></span
+              >
+            </summary>
+            <div class="gb">
+              <p class="muted" style="margin-top: 0">
+                Pick your bank apps (Monzo, Barclays, Google Wallet…). Alton keeps their payment
+                notifications on this phone only and adds them up since payday. Needs
+                <b>Read &amp; reply to messages</b> (Notification access) on in Phone powers.
+              </p>
+              <div id="spApps"></div>
+              <button class="btn full" id="spPick" style="margin-top: 8px">Choose bank apps</button>
+              <div
+                id="spPicker"
+                hidden
+                style="margin-top: 8px; max-height: 260px; overflow: auto"
+              ></div>
+              <p class="muted" id="spState"></p>
+              <button class="btn full" id="spClear">Forget saved payments</button>
             </div>
           </details>
           <details class="grp" id="healthGrp" hidden>

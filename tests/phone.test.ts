@@ -199,6 +199,9 @@ describe('Android app tools', () => {
       'phone_diagnostics',
       'media_control',
       'read_shift_app',
+      'spending',
+      'read_shift_trades',
+      'check_shift_fit',
       'remind_at_work',
     ]);
   });

@@ -1,5 +1,6 @@
 /** Descriptions of the local tools added in batch 6 (handled by the `extra` map in main). */
 import type Anthropic from '@anthropic-ai/sdk';
+import { SMART_HOME_TOOL } from '@shared/smartthings';
 
 const none = { type: 'object' as const, properties: {}, additionalProperties: false };
 
@@ -66,6 +67,7 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
       additionalProperties: false,
     },
   },
+  SMART_HOME_TOOL,
   {
     name: 'post_to_discord',
     description:
