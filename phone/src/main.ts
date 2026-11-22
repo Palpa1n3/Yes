@@ -54,6 +54,7 @@ import {
   canSpeak,
   setAudioVoice,
   installSpeechShim,
+  notifyNow,
   setSpeechVocab,
   isApp,
   isSpeaking,
@@ -117,6 +118,7 @@ import {
   timeLeft,
   leaveBy,
   replaceRota,
+  rotaChanges,
   nextShift,
   parseAlarmRules,
   shiftKey,
@@ -158,7 +160,7 @@ import {
   type DayUsage,
 } from '@shared/usage';
 import { APP_TOOLS, PHONE_TOOLS, WMO, nearbyLink, runPhoneTool, weatherSummary } from './tools';
-import { noteId, planHeadsUps } from '@shared/headsups';
+import { noteId, planHeadsUps, rotaChangeNotes, type HourWeather } from '@shared/headsups';
 import { healthReport } from '@shared/diagnostics';
 import {
   DEFAULT_PROMPTS,
@@ -238,6 +240,17 @@ interface State {
   /** Watch heads-ups (notifications a Fitbit etc. shows): shift the evening before (hour),
    *  time to leave, morning summary (hour). */
   watchEve: boolean;
+  /** New watch heads-ups: rota changes, 30 min left (and the usual break, minutes after the
+   *  start; 0 = off), the trip's weather with leave-by, payday, and the end-of-shift summary. */
+  watchRota: boolean;
+  watchShiftLeft: boolean;
+  breakAfter: number;
+  watchLeaveWx: boolean;
+  watchPayday: boolean;
+  watchSummary: boolean;
+  /** "Running late" on the leave-by heads-up: who (a saved person or a number) and the text. */
+  lateTo: string;
+  lateText: string;
   eveHour: number;
   watchLeave: boolean;
   watchMorning: boolean;
@@ -412,6 +425,14 @@ const DEFAULTS: State = {
   pcVoice: null,
   fishVoiceId: '',
   watchEve: true,
+  watchRota: true,
+  watchShiftLeft: true,
+  breakAfter: 0,
+  watchLeaveWx: true,
+  watchPayday: true,
+  watchSummary: true,
+  lateTo: '',
+  lateText: 'Running 10 min late',
   eveHour: 20,
   watchLeave: true,
   watchMorning: true,
@@ -833,6 +854,7 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
           breakOver: S.breakAll ? 0 : 6,
         });
         if (out.shifts?.length) {
+          alertRotaChanges(S.shifts, out.shifts);
           S.shifts = replaceRota(S.shifts, out.shifts);
           void scheduleWatch();
         }
@@ -1945,19 +1967,27 @@ let watchExtras: {
   at: number;
   forecast: Record<string, string>;
   events: Array<{ title: string; start: number; allDay?: boolean }>;
+  hourly: HourWeather[];
 } | null = null;
 async function morningExtras(): Promise<NonNullable<typeof watchExtras>> {
   if (watchExtras && Date.now() - watchExtras.at < 3 * 3600_000) return watchExtras;
   const forecast: Record<string, string> = {};
+  const hourly: HourWeather[] = [];
   let events: Array<{ title: string; start: number; allDay?: boolean }> = [];
   try {
     const f = lastFix ?? (await locate());
     if (f) {
       const j = (await (
         await fetch(
-          `https://api.open-meteo.com/v1/forecast?latitude=${f.lat}&longitude=${f.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=4`,
+          `https://api.open-meteo.com/v1/forecast?latitude=${f.lat}&longitude=${f.lon}&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&hourly=precipitation_probability,temperature_2m,weather_code&timezone=auto&forecast_days=4`,
         )
       ).json()) as {
+        hourly?: {
+          time: string[];
+          precipitation_probability: number[];
+          temperature_2m: number[];
+          weather_code: number[];
+        };
         daily?: {
           time: string[];
           weather_code: number[];
@@ -1966,6 +1996,15 @@ async function morningExtras(): Promise<NonNullable<typeof watchExtras>> {
           precipitation_probability_max: number[];
         };
       };
+      const hh = j.hourly;
+      hh?.time.forEach((t, i) =>
+        hourly.push({
+          t: new Date(t).getTime(),
+          rain: hh.precipitation_probability[i] ?? 0,
+          temp: hh.temperature_2m[i] ?? 10,
+          code: hh.weather_code[i] ?? 0,
+        }),
+      );
       const d = j.daily;
       d?.time.forEach((day, i) => {
         const rain = d.precipitation_probability_max[i] ?? 0;
@@ -1984,7 +2023,7 @@ async function morningExtras(): Promise<NonNullable<typeof watchExtras>> {
   } catch {
     /* no calendar */
   }
-  watchExtras = { at: Date.now(), forecast, events };
+  watchExtras = { at: Date.now(), forecast, events, hourly };
   return watchExtras;
 }
 async function scheduleWatch(): Promise<void> {
@@ -1997,7 +2036,9 @@ async function scheduleWatch(): Promise<void> {
       body: 'Reminder',
       at: r.at,
     }));
-  const extras = S.watchMorning ? await morningExtras() : undefined;
+  const extras = S.watchMorning || S.watchLeaveWx ? await morningExtras() : undefined;
+  const pay = payInfo();
+  const items = workItems(S.lists, S.workLists);
   const ups = planHeadsUps(
     S.shifts,
     {
@@ -2010,12 +2051,36 @@ async function scheduleWatch(): Promise<void> {
       alarmRules: S.shiftRules,
       alarmLead: S.shiftLead,
       ...(S.sleepOn ? { sleep: { hours: S.sleepHours, windDown: S.windDown } } : {}),
+      shiftLeft: S.watchShiftLeft,
+      breakAfter: S.breakAfter,
+      leaveWeather: S.watchLeaveWx,
+      payday: S.watchPayday,
+      summary: S.watchSummary,
+      endLead: S.workEndLead,
     },
     new Date(),
-    extras,
+    {
+      ...(extras ?? {}),
+      ...(pay ? { payday: { date: pay.day, net: pay.net } } : {}),
+      items,
+      reminders: S.reminders,
+    },
   );
-  for (const u of ups) notes.push({ id: noteId(u.key), title: u.title, body: u.body, at: u.at });
-  if (S.workEnd)
+  // Leave-by with a "Running late" button goes through the app's own alarm (so the button can
+  // send the text without opening Alton); everything else is a normal notification.
+  const late = lateNumber();
+  const lateUps = late ? ups.filter((u) => u.key.startsWith('leave:')) : [];
+  for (const u of ups)
+    if (!lateUps.includes(u))
+      notes.push({ id: noteId(u.key), title: u.title, body: u.body, at: u.at });
+  void Native.scheduleLate({
+    items: lateUps.map((u) => ({ id: noteId(u.key), at: u.at, title: u.title, body: u.body })),
+    to: late,
+    text: S.lateText,
+    name: S.lateTo,
+  }).catch(() => undefined);
+  // The end-of-shift summary already has the list: no separate "Before you leave".
+  if (S.workEnd && !S.watchSummary)
     for (const u of shiftEndNotes(
       S.shifts,
       workItems(S.lists, S.workLists),
@@ -2026,17 +2091,45 @@ async function scheduleWatch(): Promise<void> {
   await scheduleNotes(notes);
   void updateWidget();
 }
+/** The number for "Running late": a saved person's number, or the number typed in. */
+function lateNumber(): string {
+  const who = S.lateTo.trim();
+  if (!who || !S.lateText.trim()) return '';
+  if (/^\+?[\d\s()-]{7,}$/.test(who)) return who.replace(/[^\d+]/g, '');
+  const p = S.people.find((x) => x.name.toLowerCase() === who.toLowerCase());
+  return p?.phone ? p.phone.replace(/[^\d+]/g, '') : '';
+}
+/** Rota changes straight to the watch, after shifts are read (shift app, screenshot, calendar,
+ *  the read while charging). */
+function alertRotaChanges(before: Shift[], incoming: Shift[]): void {
+  if (!isApp || !S.watchRota || !incoming.length) return;
+  for (const n of rotaChangeNotes(rotaChanges(before, incoming)))
+    void notifyNow(noteId(n.key), n.title, n.body);
+}
 function renderWatch(): void {
   for (const [id, on] of [
     ['wEve', S.watchEve],
     ['wLeave', S.watchLeave],
     ['wMorning', S.watchMorning],
+    ['wRota', S.watchRota],
+    ['wShiftLeft', S.watchShiftLeft],
+    ['wLeaveWx', S.watchLeaveWx],
+    ['wPayday', S.watchPayday],
+    ['wSummary', S.watchSummary],
   ] as const) {
     $(id).classList.toggle('on', on);
     $(id).textContent = on ? '✓' : '';
   }
   $<HTMLInputElement>('wEveHour').value = String(S.eveHour);
   $<HTMLInputElement>('wMorningHour').value = String(S.morningHour);
+  $<HTMLInputElement>('wBreak').value = S.breakAfter ? String(S.breakAfter) : '';
+  $<HTMLInputElement>('wLateTo').value = S.lateTo;
+  $<HTMLInputElement>('wLateText').value = S.lateText;
+  $('wLateNote').textContent = S.lateTo
+    ? lateNumber()
+      ? `Tap “Running late” on the leave heads-up to text ${S.lateTo}. Needs permission to send texts.`
+      : `No number for “${S.lateTo}”: type a number, or save them in Lists › People with a number.`
+    : 'Optional: a “Running late” button on the leave heads-up.';
   $('wLeaveNote').textContent = S.travel
     ? `${S.travel} min journey (from Work › Alarms, pay & travel)`
     : 'Set “Travel to work” in Work › Alarms, pay & travel first';
@@ -2047,6 +2140,11 @@ function wireWatch(): void {
     ['wEve', 'watchEve'],
     ['wLeave', 'watchLeave'],
     ['wMorning', 'watchMorning'],
+    ['wRota', 'watchRota'],
+    ['wShiftLeft', 'watchShiftLeft'],
+    ['wLeaveWx', 'watchLeaveWx'],
+    ['wPayday', 'watchPayday'],
+    ['wSummary', 'watchSummary'],
   ] as const)
     $(id).onclick = () => {
       S[key] = !S[key];
@@ -2064,6 +2162,23 @@ function wireWatch(): void {
         Math.max(0, Math.round(Number((e.target as HTMLInputElement).value) || 0)),
       );
       save();
+      void scheduleWatch();
+    };
+  $<HTMLInputElement>('wBreak').onchange = (e) => {
+    const v = Math.round(Number((e.target as HTMLInputElement).value) || 0);
+    S.breakAfter = v > 0 && v < 720 ? v : 0;
+    save();
+    renderWatch();
+    void scheduleWatch();
+  };
+  for (const [id, key] of [
+    ['wLateTo', 'lateTo'],
+    ['wLateText', 'lateText'],
+  ] as const)
+    $<HTMLInputElement>(id).onchange = (e) => {
+      S[key] = (e.target as HTMLInputElement).value.trim().slice(0, 160);
+      save();
+      renderWatch();
       void scheduleWatch();
     };
   $('wTest').onclick = () => {
@@ -3459,6 +3574,21 @@ async function appTool(
 }
 
 let lastRead = '';
+/** The reader's step log from the last read (what it saw and tapped), for "Copy log". */
+async function showReadLog(): Promise<void> {
+  if (!isApp) return;
+  try {
+    const r = await Native.readLog();
+    if (!r.log) return;
+    $('pwPreview').hidden = false;
+    $('pwLog').textContent = r.log;
+    $('pwLogAt').textContent = r.at
+      ? new Date(r.at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+      : '';
+  } catch {
+    /* older app */
+  }
+}
 function showPreview(lines: number, front: string): void {
   const box = $('pwPreview');
   box.hidden = false;
@@ -3490,6 +3620,7 @@ async function readShiftApp(): Promise<{ ok: boolean; text: string }> {
     });
     lastRead = r.text;
     showPreview(r.lines, r.front);
+    void showReadLog();
     if (r.front && r.front !== S.shiftApp)
       return {
         ok: false,
@@ -3505,6 +3636,7 @@ async function readShiftApp(): Promise<{ ok: boolean; text: string }> {
       text: `${r.text}${r.note ? `\n(Note: ${r.note} Tell the user.)` : ''}\n(Lines after "— next week —" are the following week: check the dates shown.)`,
     };
   } catch (e) {
+    void showReadLog();
     return { ok: false, text: `Couldn't read it: ${(e as Error).message}` };
   }
 }
@@ -3594,6 +3726,7 @@ async function takeAutoRota(): Promise<void> {
   try {
     const r = await Native.takeAutoRota();
     if (r.last) S.autoRotaLast = r.last;
+    void showReadLog();
     if (!r.text.trim()) return;
     setView('chat');
     newChat(false);
@@ -3872,6 +4005,15 @@ function wirePowers(): void {
     save();
     void scheduleWatch();
     void renderWork();
+  };
+  $('pwLogCopy').onclick = async () => {
+    const text = `Alton ${__APP_VERSION__} shift app read\n${S.shiftAppName || S.shiftApp} · tab ${S.shiftTab || '(auto)'} · next ${S.shiftNext || '(auto)'}\n\n${$('pwLog').textContent ?? ''}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Log copied: paste it into your message.');
+    } catch {
+      void shareText('Alton read log', text);
+    }
   };
   $('wkHere').onclick = () => {
     $('wkMsg').textContent = 'Finding where you are…';
@@ -5200,7 +5342,8 @@ function editShift(s: Shift | null): void {
   $('shForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function addShifts(fresh: Shift[], replace?: Shift): void {
+function addShifts(fresh: Shift[], replace?: Shift, alert = false): void {
+  if (alert) alertRotaChanges(S.shifts, fresh);
   const kept = replace ? S.shifts.filter((x) => x !== replace) : S.shifts;
   S.shifts = mergeShifts(kept, fresh);
   save();
@@ -5253,7 +5396,7 @@ async function shiftsFromMyCalendar(): Promise<void> {
     const added = found.filter((x) => !before.has(shiftKey(x))).length;
     // Already in the calendar, so "Add all to my calendar" skips them.
     S.addedShifts = [...new Set([...S.addedShifts, ...found.map(shiftKey)])].slice(-500);
-    addShifts(found);
+    addShifts(found, undefined, true);
     msg.textContent = `Found ${found.length} shift${found.length > 1 ? 's' : ''} (${added} new).`;
   } catch (e) {
     msg.textContent = `Couldn't read the calendar: ${(e as Error).message}`;
@@ -5565,7 +5708,9 @@ async function readTrades(): Promise<string> {
   const tab = S.tradeTab || 'Shift Trade';
   toast(`Opening ${S.shiftAppName || 'your shift app'} to read ${tab}…`);
   try {
-    const r = await Native.readApp({ package: S.shiftApp, tap: tab, weeks: 1 });
+    const r = await Native.readApp({ package: S.shiftApp, tap: tab, weeks: 1 }).finally(
+      () => void showReadLog(),
+    );
     if (r.front && r.front !== S.shiftApp)
       return `The shift app didn't stay on screen (Alton saw ${r.front}).`;
     if (r.note)
@@ -6837,6 +6982,7 @@ function setView(v: string): void {
   if (v === 'people') renderPeople();
   if (v === 'work') {
     renderShifts();
+    void showReadLog();
     renderSleep();
     void renderPowers();
   }

@@ -251,6 +251,16 @@ Schwarzschild spacetime (d²x/dλ² = −1.5·h²·x/r⁵), a thin disc from the
 (3 Rs) with the thin-disc temperature law, Doppler beaming and gravitational redshift, and
 lensed stars. Painted once when chosen (cached), so it costs nothing while you use the app.
 
+### More watch heads-ups (0.54)
+
+Settings › Phone › Watch & notifications, all on by default and short enough for a Fitbit:
+rota changes ("Tue shift moved: 12:00–16:00"), 30 min left before a shift ends (and "Break in
+10 min" if you set your usual break), the trip's weather with "Leave in 10 min", payday the day
+before and that morning, and one end-of-shift summary (tomorrow's shift, your list, today's
+reminders). **Running late**: set who and the message, and the leave heads-up gets a button that
+texts them without opening Alton. If reading the shift app goes wrong, Work › What Alton read
+last time has a step log with **Copy log**.
+
 ### Interface customisation (0.52)
 
 Phone: Settings › Look › Interface. PC: Settings › Appearance. The same options on both:

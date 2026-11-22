@@ -2601,6 +2601,16 @@
                 class="muted small"
                 style="white-space: pre-wrap; max-height: 260px; overflow-y: auto"
               ></pre>
+              <div class="row" style="gap: 8px; align-items: center; margin-top: 6px">
+                <b style="flex: 1; font-size: 13px">Step log</b>
+                <small class="muted" id="pwLogAt"></small>
+                <button class="btn" id="pwLogCopy" style="padding: 6px 10px">Copy log</button>
+              </div>
+              <pre
+                id="pwLog"
+                class="muted small"
+                style="white-space: pre-wrap; max-height: 260px; overflow-y: auto; font-size: 11px"
+              ></pre>
             </details>
             <div class="li">
               <span style="flex: 1"
@@ -3469,6 +3479,68 @@
                   ></span
                 ><button class="check" id="wMorning"></button>
               </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Rota changes<br /><small class="muted"
+                    >“Tue shift moved: 12:00–16:00” when a read finds a change</small
+                  ></span
+                ><button class="check" id="wRota"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >During a shift<br /><small class="muted"
+                    >“30 min left · finish 18:45”</small
+                  ></span
+                ><button class="check" id="wShiftLeft"></button>
+              </div>
+              <label class="muted" style="display: block; margin: 4px 0 8px"
+                >Usual break, minutes after the start (blank = no break reminder)
+                <input
+                  id="wBreak"
+                  class="input"
+                  type="number"
+                  min="0"
+                  max="720"
+                  placeholder="e.g. 240"
+              /></label>
+              <div class="li">
+                <span style="flex: 1"
+                  >Weather with “time to leave”<br /><small class="muted"
+                    >“Leave in 10 min · rain from 17:00, take a coat”</small
+                  ></span
+                ><button class="check" id="wLeaveWx"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >Payday<br /><small class="muted"
+                    >“💷 Payday tomorrow ≈ £293”, and that morning</small
+                  ></span
+                ><button class="check" id="wPayday"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >End-of-shift summary<br /><small class="muted"
+                    >Tomorrow’s shift, your list and today’s reminders, in one note (instead of
+                    “Before you leave”)</small
+                  ></span
+                ><button class="check" id="wSummary"></button>
+              </div>
+              <h3 class="sub">Running late</h3>
+              <p class="muted small" id="wLateNote" style="margin-top: 0"></p>
+              <div class="row" style="gap: 8px">
+                <input
+                  id="wLateTo"
+                  class="input"
+                  placeholder="Who (a saved person, or a number)"
+                  style="flex: 1"
+                />
+              </div>
+              <input
+                id="wLateText"
+                class="input"
+                placeholder="Running 10 min late"
+                style="margin-top: 6px"
+              />
               <button class="btn full" id="wTest" style="margin: 6px 0 12px">
                 Send a test to my watch
               </button>

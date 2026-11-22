@@ -228,6 +228,19 @@ export function installSpeechShim(): void {
 }
 
 /* ── Reminders that buzz even when the app is closed ── */
+/** A notification straight away (rota changes); not affected by re-scheduling. */
+export async function notifyNow(id: number, title: string, body: string): Promise<void> {
+  if (!isApp) return;
+  try {
+    let p = await LocalNotifications.checkPermissions();
+    if (p.display !== 'granted') p = await LocalNotifications.requestPermissions();
+    if (p.display !== 'granted') return;
+    await LocalNotifications.schedule({ notifications: [{ id, title, body }] });
+  } catch {
+    /* no notifications */
+  }
+}
+
 /** Replaces everything Alton has scheduled with this list (reminders and watch heads-ups). */
 export async function scheduleNotes(
   list: Array<{ id: number; title: string; body: string; at: number }>,
@@ -390,6 +403,15 @@ interface AltonNativePlugin {
     listLabel?: string;
   }): Promise<{ watching: boolean }>;
   addPlaceNote(o: { text: string }): Promise<void>;
+  /** Leave-by heads-ups with a "Running late" button that texts `to` (replaces earlier ones). */
+  scheduleLate(o: {
+    items: Array<{ id: number; at: number; title: string; body: string }>;
+    to: string;
+    text: string;
+    name: string;
+  }): Promise<void>;
+  /** The shift-app reader's step log from the last read. */
+  readLog(): Promise<{ log: string; at: number }>;
   /** The app's own check on opening: is the phone at work right now? */
   placeCheck(o: { here: boolean }): Promise<void>;
   placeStatus(): Promise<{

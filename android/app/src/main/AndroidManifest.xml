@@ -47,6 +47,10 @@
 
         <!-- Home-screen widget -->
         <receiver
+            android:name=".LateReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".AltonWidget"
             android:exported="false"
             android:label="Alton">

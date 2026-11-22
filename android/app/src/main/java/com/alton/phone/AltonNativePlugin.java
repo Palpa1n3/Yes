@@ -549,6 +549,22 @@ public class AltonNativePlugin extends Plugin {
         call.resolve();
     }
 
+    /** Leave-by heads-ups with a "Running late" button (see LateReceiver). */
+    @PluginMethod
+    public void scheduleLate(PluginCall call) {
+        JSArray items = call.getArray("items");
+        LateReceiver.schedule(getContext(), items == null ? new JSArray() : items,
+            call.getString("to", ""), call.getString("text", ""), call.getString("name", ""));
+        call.resolve();
+    }
+
+    /** The shift-app reader's step log from the last read (manual or while charging). */
+    @PluginMethod
+    public void readLog(PluginCall call) {
+        android.content.SharedPreferences p = getContext().getSharedPreferences(AppReader.PREFS, Context.MODE_PRIVATE);
+        call.resolve(new JSObject().put("log", p.getString("log", "")).put("at", p.getLong("at", 0)));
+    }
+
     /** A one-off "remind me at work" note, shown next time they arrive. */
     @PluginMethod
     public void addPlaceNote(PluginCall call) {

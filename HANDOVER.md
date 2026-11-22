@@ -101,6 +101,14 @@ Read this first in a new chat, then README.md for the feature list.
   lock and runs `AppReader` (shared with `readApp`), saves the text and returns to Alton; JS
   `takeAutoRota` on resume sends it to Claude (phone-only) to add the shifts. Once per 20 h, or
   sooner after the shift app posts a notification (`MessageListener` → `AutoRota.notePosted`).
+  Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
+  (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
+  usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
+  payday eve/morning (payInfo), end-of-shift summary (replaces shiftEndNotes). "Running late": leave-by
+  goes through `LateReceiver` (AlarmManager → notification with a Running late action → SmsManager);
+  `lateTo` is a saved person or number. Shift reader step log: AppReader logs each step (ScreenReader.lastTap
+  says what was tapped / which labels were seen), saved in prefs `alton_reader`; native `readLog`; shown
+  under Work › What Alton read last time with Copy log.
   At work (0.53): set on a map (`phone/src/workmap.ts`, OSM tiles, CSP img-src tile.openstreetmap.org;
   search via Nominatim; S.workLat/workLon/workRadius) or "I'm there now". Android uses Play services
   geofencing (play-services-location) with the LocationManager proximity alert as fallback; the app also
