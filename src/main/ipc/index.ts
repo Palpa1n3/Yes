@@ -1,6 +1,6 @@
 import { notifyUser } from '../holo';
 import { JourneyService, LeaveReminders } from '../services/journey';
-import { shell, powerMonitor } from 'electron';
+import { shell, powerMonitor, screen } from 'electron';
 import type { MainContext } from '../context';
 import { SkillRegistry, systemReportSkill } from '../services/skills';
 import { toWebUrl } from '../services/command-executor';
@@ -123,13 +123,23 @@ export function registerIpc(ctx: MainContext): void {
   {
     let active = false;
     let wasVisible = true;
+    /** "Alton isn't being used": when the user last used Alton's window (ms). */
+    let lastAltonUse = Date.now();
+    const cursorOnAlton = (w: Electron.BrowserWindow): boolean =>
+      screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).id ===
+      screen.getDisplayMatching(w.getBounds()).id;
     const tick = (): void => {
       const s = ctx.settings.get();
       const w = ctx.getWindow();
       if (!w || w.isDestroyed()) return;
       const idle = powerMonitor.getSystemIdleTime();
+      // While Alton is the window in front, any recent input counts as using it.
+      if (!active && w.isFocused()) lastAltonUse = Math.max(lastAltonUse, Date.now() - idle * 1000);
       if (active) {
-        if (idle < 3) {
+        // Alton mode on its own screen: only input on that screen (or focusing Alton) ends it.
+        const backOnAlton = s.screensaverWhen !== 'alton' || cursorOnAlton(w) || w.isFocused();
+        if (idle < 3 && backOnAlton) {
+          lastAltonUse = Date.now();
           active = false;
           w.setFullScreen(false);
           if (!wasVisible) w.hide();
@@ -137,8 +147,19 @@ export function registerIpc(ctx: MainContext): void {
         }
         return;
       }
-      if (!s.screensaverMinutes || idle < s.screensaverMinutes * 60) return;
-      if (awareness.foreground()?.fullscreen) return;
+      if (!s.screensaverMinutes) return;
+      const wait = s.screensaverMinutes * 60;
+      if (s.screensaverWhen === 'alton') {
+        // Not used for long enough, on screen (not minimised or in the tray)…
+        if (Date.now() - lastAltonUse < wait * 1000) return;
+        if (!w.isVisible() || w.isMinimized()) return;
+        // …and it won't cover your work: Alton is in front, or you're working on another screen.
+        const elsewhere = !cursorOnAlton(w);
+        if (!w.isFocused() && !elsewhere) return;
+        if (w.isFocused() && idle < wait) return;
+        if (!elsewhere && awareness.foreground()?.fullscreen) return;
+      } else if (idle < wait) return;
+      else if (awareness.foreground()?.fullscreen) return;
       if (media.get()?.playing) return;
       if (s.gamingMode && gaming.get().active) return;
       active = true;

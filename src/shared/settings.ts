@@ -233,6 +233,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     screensaverMinutes: [0, 5, 10, 20, 30, 60].includes(r['screensaverMinutes'] as number)
       ? (r['screensaverMinutes'] as number)
       : d.screensaverMinutes,
+    screensaverWhen: r['screensaverWhen'] === 'alton' ? 'alton' : 'idle',
     homeAddress: str('homeAddress', 200).trim(),
   };
 }

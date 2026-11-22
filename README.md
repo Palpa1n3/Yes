@@ -231,6 +231,9 @@ Settings › Appearance › Effects:
 - **Screensaver** (default after 10 idle minutes): Alton goes full-screen with a big clock,
   the weather, your next shift and the avatar. Move the mouse or press a key to close it. It
   won't start while a video or music is playing, a full-screen app is in front, or you're gaming.
+  **Screensaver starts when › Alton isn't being used** starts it once you haven't used Alton for
+  that long instead: on its own screen even while you work on another, on the same screen only
+  when Alton is the window in front.
 
 ### Saver mode
 

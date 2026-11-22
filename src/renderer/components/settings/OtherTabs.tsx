@@ -362,6 +362,24 @@ export function AppearanceTab() {
           />
         </Field>
         <Field
+          label="Screensaver starts when"
+          hint={
+            s.screensaverWhen === 'alton'
+              ? 'When you haven’t used Alton for that long. On its own screen it starts even while you work on another one; on the same screen only when Alton is the window in front, so it never covers your work.'
+              : 'When you haven’t touched the PC for that long.'
+          }
+        >
+          <Select
+            label="Screensaver starts when"
+            value={s.screensaverWhen}
+            onChange={(v) => void update({ screensaverWhen: v === 'alton' ? 'alton' : 'idle' })}
+            options={[
+              { value: 'idle', label: 'The PC isn’t being used' },
+              { value: 'alton', label: 'Alton isn’t being used' },
+            ]}
+          />
+        </Field>
+        <Field
           label="Desktop widget"
           hint="A small see-through panel in the top-right of your desktop: time, CPU, next shift and weather. Stays when Alton is closed to the tray; clicks go straight through it."
         >

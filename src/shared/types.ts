@@ -254,6 +254,9 @@ export interface Settings {
   timeTint: boolean;
   /** Full-screen clock after this many idle minutes (0 = off). */
   screensaverMinutes: number;
+  /** What starts it: the whole PC idle, or Alton's own window not being used (it may then
+   *  go full-screen on its own screen while you work on another). */
+  screensaverWhen: 'idle' | 'alton';
   /** Saver mode: cheapest model for chat and research, fewer web searches, no background
    *  memory learning. Agent Mode keeps its own model. */
   saver: boolean;
@@ -403,6 +406,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ambient: true,
   timeTint: true,
   screensaverMinutes: 10,
+  screensaverWhen: 'idle',
   saver: false,
   onboarded: false,
   prompts: DEFAULT_PROMPTS.map((p) => ({ ...p })),
