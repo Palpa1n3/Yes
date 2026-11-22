@@ -251,6 +251,21 @@ Schwarzschild spacetime (d²x/dλ² = −1.5·h²·x/r⁵), a thin disc from the
 (3 Rs) with the thin-disc temperature law, Doppler beaming and gravitational redshift, and
 lensed stars. Painted once when chosen (cached), so it costs nothing while you use the app.
 
+### Desktop & taskbar (0.55)
+
+Settings › Appearance › Desktop widget / Taskbar. The **desktop widget** is a stack of floating
+frosted tiles: a big clock, Alton (tap to talk), now playing (art, progress, controls), work (next
+shift countdown and payday), PC health rings, weather with the next hours, today (timers, reminders,
+shopping list) and your phone (battery, unread). Clean glass or HUD style, Small / Medium / Large,
+tiles on/off and in any order, any corner of either screen (drag the clock; it snaps), lock,
+opacity, and hidden while gaming or full-screen. Clicks pass through except on its buttons.
+
+**Taskbar**: buttons on the taskbar preview (talk, previous, play/pause, next, new chat), a jump
+list (right-click Alton: talk, new chat, Agent Mode, lock, sleep, widget, phone settings), a status
+badge (green listening, blue thinking, amber Agent Mode needs you, red PC warning), progress on the
+taskbar button (timer, update, or your shift), a live tray tooltip, left-click the tray to talk,
+and an optional **taskbar strip** above the taskbar.
+
 ### More watch heads-ups (0.54)
 
 Settings › Phone › Watch & notifications, all on by default and short enough for a Fitbit:

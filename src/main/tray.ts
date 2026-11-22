@@ -2,12 +2,17 @@ import { Menu, Tray, nativeImage, type BrowserWindow } from 'electron';
 import { join } from 'node:path';
 import type { MainContext } from './context';
 import { prettyAccelerator } from './hotkey';
+import type { DeskAction } from '@shared/ipc';
 
 export const resourcePath = (file: string): string => join(__dirname, '../../resources', file);
 
 /** System-tray icon: click toggles the window; menu has Show/Hide, compact, mute, settings, quit. */
 export class ArcTray {
   private tray: Tray | null = null;
+  /** Live tooltip ("Next shift … · Payday in 3 days · CPU 12%"), or null for the plain one. */
+  private live: string | null = null;
+  /** Desktop & taskbar actions (set once the desk service is running). */
+  deskAct: ((a: DeskAction) => void) | null = null;
 
   constructor(private readonly ctx: MainContext) {}
 
@@ -18,7 +23,8 @@ export class ArcTray {
       this.tray = null; // no system tray available (some Linux desktops)
       return;
     }
-    this.tray.on('click', () => this.ctx.toggleWindow());
+    // Left-click talks (as the desktop widget does); the menu has everything else.
+    this.tray.on('click', () => (this.deskAct ? this.deskAct('talk') : this.ctx.toggleWindow()));
     this.refresh();
   }
 
@@ -34,14 +40,30 @@ export class ArcTray {
     const s = this.ctx.settings.get();
     const hotkey = this.ctx.hotkey.active;
     this.tray.setToolTip(
-      `${s.assistantName}${hotkey ? ` · ${prettyAccelerator(hotkey)} to show/hide` : ''}`,
+      this.live ??
+        `${s.assistantName}${hotkey ? ` · ${prettyAccelerator(hotkey)} to show/hide` : ''}`,
     );
+    const act = (a: DeskAction) => () => this.deskAct?.(a);
     this.tray.setContextMenu(
       Menu.buildFromTemplate([
         {
           label: visible ? `Hide ${s.assistantName}` : `Show ${s.assistantName}`,
           click: () => this.ctx.toggleWindow(),
         },
+        { label: 'Talk', click: act('talk') },
+        { label: 'New chat', click: act('new-chat') },
+        { label: 'Agent Mode…', click: act('agent') },
+        { type: 'separator' },
+        { label: 'Lock PC', click: act('lock') },
+        { label: 'Sleep', click: act('sleep') },
+        {
+          label: 'Desktop widget',
+          type: 'checkbox',
+          checked: s.desktopWidget,
+          click: act('widget'),
+        },
+        { label: 'Phone settings…', click: act('phone') },
+        { type: 'separator' },
         {
           label: 'Compact mode',
           type: 'checkbox',
@@ -60,6 +82,13 @@ export class ArcTray {
         { label: `Quit ${s.assistantName}`, click: () => this.ctx.quit() },
       ]),
     );
+  }
+
+  /** Set the live tooltip (null = back to the plain one). */
+  setLive(text: string | null): void {
+    this.live = text;
+    if (this.tray && !this.tray.isDestroyed())
+      this.tray.setToolTip(text ?? this.ctx.settings.get().assistantName);
   }
 
   /** One-time hint when closing hides to the tray (Windows balloon). */

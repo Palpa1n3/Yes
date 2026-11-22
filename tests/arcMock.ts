@@ -1,3 +1,4 @@
+import { DEFAULT_DESK } from '@shared/desk';
 import { vi } from 'vitest';
 import type { ArcAPI } from '@shared/ipc';
 import { DEFAULT_SETTINGS } from '@shared/types';
@@ -114,6 +115,27 @@ export function installArcMock(): ArcAPI {
       clear: vi.fn(async () => []),
       onChange: vi.fn(() => () => undefined),
       onHealth: vi.fn(() => () => undefined),
+    },
+    desk: {
+      get: vi.fn(async () => ({
+        look: { desk: DEFAULT_DESK, theme: 'arc-cyan' },
+        assistant: 'idle',
+        name: 'Alton',
+        music: null,
+        shift: null,
+        payday: null,
+        weather: null,
+        timers: [],
+        reminders: [],
+        list: null,
+        phone: null,
+        agentWaiting: false,
+        warning: null,
+      })),
+      action: vi.fn(),
+      hover: vi.fn(),
+      resize: vi.fn(),
+      onSnapshot: vi.fn(() => () => undefined),
     },
     smarthome: {
       status: vi.fn(async () => false),
@@ -330,6 +352,7 @@ export function installArcMock(): ArcAPI {
       onChange: vi.fn(() => () => undefined),
     },
     app: {
+      reportState: vi.fn(),
       onCommand: vi.fn(() => () => undefined),
       getInfo: vi.fn(async () => ({
         version: '0.1.0',

@@ -100,6 +100,9 @@ export function App() {
   useEffect(() => {
     if (loaded && booting === null) setBooting(shouldBoot(settings.bootSequence, reduced));
   }, [loaded, booting, settings.bootSequence, reduced]);
+  // Tell main what Alton is doing (taskbar badge, desktop widget's avatar).
+  const assistantState = useAssistantStore((s) => s.state);
+  useEffect(() => window.arc.app.reportState(assistantState), [assistantState]);
   const tab = useUiStore((s) => s.tab);
   const { maximized, compact } = useWindowState();
   useTelemetry();

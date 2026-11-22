@@ -101,6 +101,13 @@ const api: ArcAPI = {
     onChange: (cb) => subscribe(IPC.clipboard.onChange, cb),
     onHealth: (cb) => subscribe(IPC.clipboard.onHealth, cb),
   },
+  desk: {
+    get: () => invoke(IPC.desk.get),
+    action: (a) => send(IPC.desk.action, a),
+    hover: (on) => send(IPC.desk.hover, on),
+    resize: (h) => send(IPC.desk.resize, h),
+    onSnapshot: (cb) => subscribe(IPC.desk.onSnapshot, cb),
+  },
   smarthome: {
     status: () => invoke(IPC.smarthome.status),
     set: (t) => invoke(IPC.smarthome.set, t),
@@ -228,6 +235,7 @@ const api: ArcAPI = {
     onChange: (cb) => subscribe(IPC.chats.onChange, cb),
   },
   app: {
+    reportState: (s) => send(IPC.app.reportState, s),
     onCommand: (cb) => subscribe(IPC.app.onCommand, cb),
     getInfo: () => invoke(IPC.app.getInfo),
     openPath: (t) => send(IPC.app.openPath, t),

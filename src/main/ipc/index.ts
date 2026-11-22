@@ -1,3 +1,5 @@
+import { startDesk } from '../desk';
+import { deskHooks } from '../desk-state';
 import { notifyUser } from '../holo';
 import { JourneyService, LeaveReminders } from '../services/journey';
 import { shell, powerMonitor, screen } from 'electron';
@@ -294,4 +296,21 @@ export function registerIpc(ctx: MainContext): void {
         .slice(-20),
   });
   registerInfoIpc();
+  // Desktop widget, taskbar strip and taskbar features.
+  startDesk({
+    ctx,
+    media: () => media.get(),
+    notes: () => notes.state(),
+    weather: () => weather.get().data,
+    gaming: () => gaming.get().active,
+    fullscreen: () => awareness.foreground()?.fullscreen === true,
+    mediaKey: (key) =>
+      void commands.execute({
+        id: `desk-${Date.now()}`,
+        action: 'media_control',
+        target: key,
+        risk: 'safe',
+      }),
+    syncTelemetry: () => deskHooks.syncTelemetry(),
+  });
 }

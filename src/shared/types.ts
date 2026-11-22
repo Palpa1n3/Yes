@@ -1,4 +1,5 @@
 import { DEFAULT_UI_STYLE } from './ui-style';
+import { DEFAULT_DESK } from './desk';
 import { DEFAULT_PROMPTS } from './prompts';
 import { DEFAULT_FISH_VOICE, type FishModel, type VoiceEngine, type WhisperModel } from './voice';
 import type { TempUnit, WeatherPlace, WindUnit } from './weather';
@@ -149,6 +150,8 @@ export interface Settings {
   userName: string;
   closeToTray: boolean;
   launchAtLogin: boolean;
+  /** Desktop widget and taskbar: style, size, tiles, position, opacity, taskbar features. */
+  desk: import('./desk').DeskSettings;
   /** Font, glass panels, chat look, tab bar, spacing and motion (shared with the phone). */
   uiStyle: import('./ui-style').UiStyle;
   /** Show the window at sign-in and whenever the PC wakes or unlocks (e.g. Wake my PC from the phone). */
@@ -351,6 +354,7 @@ export const DEFAULT_SETTINGS: Settings = {
   openOnWake: false,
   persistHistory: true,
   uiStyle: DEFAULT_UI_STYLE,
+  desk: DEFAULT_DESK,
   weatherPlace: null,
   tempUnit: 'c',
   windUnit: 'kmh',
@@ -471,7 +475,9 @@ export type AppCommand =
   | { type: 'remote-cancel' }
   | { type: 'clipboard-actions'; text: string }
   | { type: 'screensaver'; on: boolean }
-  | { type: 'journey-map'; map: JourneyMap };
+  | { type: 'journey-map'; map: JourneyMap }
+  | { type: 'new-chat' }
+  | { type: 'agent-start' };
 
 /** What extra (expensive) telemetry the renderer currently needs. */
 export interface TelemetryDetail {

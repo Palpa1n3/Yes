@@ -1,3 +1,4 @@
+import { deskState } from '../desk-state';
 import { app } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { IPC } from '@shared/ipc';
@@ -20,6 +21,7 @@ export function registerUpdatesIpc(ctx: MainContext): void {
   };
   const set = (patch: Partial<UpdateState>): void => {
     state = { ...state, ...patch };
+    deskState.update = state.status === 'downloading' ? (state.percent ?? 0) : null;
     emit(ctx.getWindow(), IPC.updates.onChange, state);
   };
 

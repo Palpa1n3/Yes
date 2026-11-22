@@ -177,6 +177,15 @@ Read this first in a new chat, then README.md for the feature list.
   `toolbox.ts`.
 - Agent Mode: `agent-runner.ts` (safety rules in its system prompt; per-task `AgentOptions`
   for shopping), `ipc/agent.ts` (queue, overlay, Esc to stop).
+- Desktop & taskbar (0.55): `src/main/desk.ts` (DeskService, started in ipc/index.ts via startDesk) builds one
+  `DeskSnapshot` every 2 s from in-memory state and pushes it on change to the widget (#widget) and taskbar strip
+  (#strip) windows; also drives the thumbnail toolbar, jump list (`--desk=…`, handled on launch and in
+  second-instance), overlay badge, taskbar progress and the tray's live tooltip (tray.setLive / tray.deskAct).
+  Pure logic in `src/shared/desk.ts` (tests/desk.test.ts); icons drawn in `desk-icons.ts`; live bits in
+  `desk-state.ts` (renderer reports state via app.reportState; Agent Mode and the updater report too). Widget UI:
+  `DeskView` in `components/hud/DesktopWidget.tsx` (also the Settings preview, `DeskSection.tsx`). Phone status
+  (battery, unread, payday) comes with the phone's sync → `services/phone-status.ts`. Now playing reports
+  position/duration and art (media-watch.ts). Telemetry keeps running while a desk window shows.
 - Renderer: `src/renderer/` (HUD, settings pages, avatars in `components/core/`: React ones plus
   framework-free `engines.ts` shared with the phone; moods/motion in `avatarKit.ts`). Every avatar's drawing loop is framework-free (`rings.ts`,
   `face.ts`, `codeRing.ts`, `sphere.ts`, `engines.ts`); the React components are thin wrappers,

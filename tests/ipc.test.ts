@@ -29,6 +29,7 @@ describe('IPC channel contract', () => {
         'cleanup',
         'clipboard',
         'commands',
+        'desk',
         'discord',
         'email',
         'gaming',

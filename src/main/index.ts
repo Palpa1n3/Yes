@@ -1,3 +1,5 @@
+import { desk, deskArg } from './desk';
+import { deskHooks } from './desk-state';
 import { notifyUser, setupHolo } from './holo';
 import { ShiftStore } from './services/shift-store';
 import {
@@ -9,7 +11,6 @@ import {
   clipboard,
   desktopCapturer,
   powerMonitor,
-  screen,
 } from 'electron';
 import os from 'node:os';
 import { join } from 'node:path';
@@ -190,46 +191,6 @@ function ringTimer(t: TimerInfo): void {
   emit(w, IPC.timers.onRing, t);
 }
 
-/** The desktop widget: a small see-through window in the top-right corner of the main screen
- *  (time, CPU, next shift, weather). Clicks pass through; stays when Alton is in the tray. */
-let widget: BrowserWindow | null = null;
-function applyWidget(on: boolean): void {
-  if (!on) {
-    if (widget && !widget.isDestroyed()) widget.destroy();
-    widget = null;
-    return;
-  }
-  if (widget && !widget.isDestroyed()) return;
-  const wa = screen.getPrimaryDisplay().workArea;
-  widget = new BrowserWindow({
-    width: 300,
-    height: 130,
-    x: wa.x + wa.width - 312,
-    y: wa.y + 12,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    movable: false,
-    focusable: false,
-    skipTaskbar: true,
-    alwaysOnTop: false,
-    hasShadow: false,
-    show: false,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  });
-  widget.setIgnoreMouseEvents(true);
-  const devUrl = process.env['ELECTRON_RENDERER_URL'];
-  if (!app.isPackaged && devUrl) void widget.loadURL(`${devUrl}#widget`);
-  else void widget.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'widget' });
-  widget.once('ready-to-show', () => widget?.showInactive());
-  widget.on('closed', () => (widget = null));
-}
-
 function applyHotkey(accel: string): void {
   const { active, fellBack } = ctx.hotkey.register(accel);
   if (fellBack) {
@@ -298,7 +259,11 @@ function firstNameFromAccount(): string {
 function onSettingsChanged(next: Settings, prev: Settings): void {
   emit(getWindow(), IPC.settings.onChange, next);
   if (next.globalHotkey !== prev.globalHotkey) applyHotkey(next.globalHotkey);
-  if (next.desktopWidget !== prev.desktopWidget) applyWidget(next.desktopWidget);
+  if (
+    next.desktopWidget !== prev.desktopWidget ||
+    JSON.stringify(next.desk) !== JSON.stringify(prev.desk)
+  )
+    desk()?.applySettings();
   if (next.voiceHotkey !== prev.voiceHotkey) applyVoiceHotkey(next.voiceHotkey);
   if (next.openMicHotkey !== prev.openMicHotkey) applyOpenMicHotkey(next.openMicHotkey);
   if (next.clipboardHotkey !== prev.clipboardHotkey) applyClipboardHotkey(next.clipboardHotkey);
@@ -376,11 +341,15 @@ function createWindow(): BrowserWindow {
   );
 
   // Telemetry only runs while the window is actually on screen.
+  // ...or while the desktop widget / taskbar strip is showing.
   const syncTelemetry = (): void => {
-    if (isShown(win)) ctx.telemetry.start();
+    if (isShown(win) || desk()?.needsStats()) ctx.telemetry.start();
     else ctx.telemetry.stop();
     tray.refresh();
   };
+  deskHooks.syncTelemetry = syncTelemetry;
+  // Windows drops the thumbnail toolbar while the window is hidden: put it back.
+  win.on('show', () => desk()?.refreshThumbar());
   win.on('show', syncTelemetry);
   win.on('hide', syncTelemetry);
   win.on('minimize', syncTelemetry);
@@ -435,7 +404,12 @@ if (process.platform === 'win32') app.setAppUserModelId('com.arc.assistant');
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => ctx.showWindow(true));
+  // A second launch (e.g. a jump list task) hands its arguments to this one.
+  app.on('second-instance', (_e, argv) => {
+    const a = deskArg(argv);
+    if (a) desk()?.act(a);
+    else ctx.showWindow(true);
+  });
 
   void app.whenReady().then(() => {
     // One long-lived PowerShell for systeminformation on Windows: far cheaper than one per probe.
@@ -457,7 +431,15 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc(ctx);
     mainWindow = createWindow();
     tray.create();
-    applyWidget(settings.get().desktopWidget);
+    const d = desk();
+    if (d) {
+      d.bindTray((t) => tray.setLive(t));
+      tray.deskAct = (a) => d.act(a);
+      d.applySettings();
+      // Started from the jump list ("--desk=talk")?
+      const a = deskArg(process.argv);
+      if (a) setTimeout(() => d.act(a), 1500);
+    }
     setupHolo({
       enabled: () => settings.get().holoNotifications,
       onClick: () => ctx.showWindow(),

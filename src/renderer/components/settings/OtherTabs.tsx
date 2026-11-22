@@ -2,6 +2,7 @@ import { UI_STYLE_GROUPS, cleanUiStyle, type UiStyle } from '@shared/ui-style';
 import { SPACE_BACKDROPS } from '@shared/backdrops';
 import { SPACE_LOOKS } from '@shared/looks';
 import { SpaceTileArt } from '@renderer/components/hud/Background';
+import { DeskSection } from './DeskSection';
 import type { AvatarStyle } from '@shared/types';
 import { PromptsSection } from './PromptsSection';
 import { useUiStore } from '@renderer/stores/uiStore';
@@ -192,6 +193,7 @@ export function AppearanceTab() {
   const { settings: s, update } = useSettingsStore();
   return (
     <>
+      <DeskSection />
       <InterfaceSection />
       <Section title="One-tap space looks">
         <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Space looks">
@@ -461,16 +463,6 @@ export function AppearanceTab() {
               { value: 'idle', label: 'The PC isn’t being used' },
               { value: 'alton', label: 'Alton isn’t being used' },
             ]}
-          />
-        </Field>
-        <Field
-          label="Desktop widget"
-          hint="A small see-through panel in the top-right of your desktop: time, CPU, next shift and weather. Stays when Alton is closed to the tray; clicks go straight through it."
-        >
-          <Toggle
-            label="Desktop widget"
-            checked={s.desktopWidget}
-            onChange={(v) => void update({ desktopWidget: v })}
           />
         </Field>
         <Field

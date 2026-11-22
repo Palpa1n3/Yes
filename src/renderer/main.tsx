@@ -18,11 +18,16 @@ import '@fontsource/jetbrains-mono/500.css';
 import './styles/index.css';
 
 import { App } from './App';
-import { DesktopWidget } from './components/hud/DesktopWidget';
+import { DesktopWidget, TaskbarStrip } from './components/hud/DesktopWidget';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root missing');
 
 // The same bundle also draws the desktop widget (its own small window, #widget).
-const widget = location.hash === '#widget';
-createRoot(root).render(<StrictMode>{widget ? <DesktopWidget /> : <App />}</StrictMode>);
+// And the taskbar strip (#strip), a thin window above the taskbar.
+const page = location.hash;
+createRoot(root).render(
+  <StrictMode>
+    {page === '#widget' ? <DesktopWidget /> : page === '#strip' ? <TaskbarStrip /> : <App />}
+  </StrictMode>,
+);

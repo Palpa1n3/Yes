@@ -2,6 +2,7 @@
  *  defaults, so a hand-edited or corrupted settings.json can't break the app. */
 import { isSpaceBackdrop } from './backdrops';
 import { cleanUiStyle } from './ui-style';
+import { cleanDesk } from './desk';
 import { sanitizePersonality } from './personalities';
 import { sanitizePrompts } from './prompts';
 import type { WeatherPlace } from './weather';
@@ -112,6 +113,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     openOnWake: bool('openOnWake'),
     persistHistory: bool('persistHistory'),
     uiStyle: cleanUiStyle(r['uiStyle']),
+    desk: cleanDesk(r['desk']),
     weatherPlace: validPlace(r['weatherPlace']),
     tempUnit: r['tempUnit'] === 'f' ? 'f' : r['tempUnit'] === 'c' ? 'c' : d.tempUnit,
     windUnit: r['windUnit'] === 'mph' ? 'mph' : r['windUnit'] === 'kmh' ? 'kmh' : d.windUnit,

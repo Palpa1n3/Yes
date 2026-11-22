@@ -48,6 +48,13 @@ import type { EndTaskResult, TaskList } from './tasks';
 import type { CalEvent, CalendarState, CalendarUrlResult } from './calendar';
 
 export const IPC = {
+  desk: {
+    get: 'desk:get',
+    action: 'desk:action',
+    hover: 'desk:hover',
+    resize: 'desk:resize',
+    onSnapshot: 'desk:snapshot',
+  },
   smarthome: {
     status: 'smarthome:status',
     set: 'smarthome:set',
@@ -246,6 +253,7 @@ export const IPC = {
     onChange: 'chats:changed',
   },
   app: {
+    reportState: 'app:report-state',
     onCommand: 'app:command',
     openUrl: 'app:open-url',
     getInfo: 'app:get-info',
@@ -297,6 +305,7 @@ export interface InvokeMap {
   [IPC.email.state]: { args: []; result: EmailState };
   [IPC.updates.state]: { args: []; result: UpdateState };
   [IPC.agent.status]: { args: []; result: AgentStatus };
+  [IPC.desk.get]: { args: []; result: import('./desk').DeskSnapshot };
   [IPC.smarthome.status]: { args: []; result: boolean };
   [IPC.smarthome.set]: { args: [token: string]; result: { ok: boolean; message: string } };
   [IPC.smarthome.clear]: { args: []; result: boolean };
@@ -370,6 +379,10 @@ export interface InvokeMap {
 
 /** Fire-and-forget channels (ipcRenderer.send -> ipcMain.on). */
 export interface SendMap {
+  [IPC.desk.action]: [action: DeskAction];
+  [IPC.desk.hover]: [on: boolean];
+  [IPC.desk.resize]: [height: number];
+  [IPC.app.reportState]: [state: string];
   [IPC.window.minimize]: [];
   [IPC.window.toggleMaximize]: [];
   [IPC.window.close]: [];
@@ -402,6 +415,7 @@ export interface SendMap {
 
 /** Push channels (webContents.send -> ipcRenderer.on). */
 export interface EventMap {
+  [IPC.desk.onSnapshot]: import('./desk').DeskSnapshot;
   [IPC.window.onState]: WindowStatePayload;
   [IPC.system.onStats]: SystemStats;
   [IPC.assistant.onStream]: StreamChunk;
@@ -493,6 +507,16 @@ export interface ArcAPI {
     /** Find towns by name (Open-Meteo geocoding). */
     search(query: string): Promise<WeatherPlace[]>;
     onChange(cb: (s: WeatherState) => void): Unsubscribe;
+  };
+  desk: {
+    /** What the desktop widget and taskbar strip show (pushed again on every change). */
+    get(): Promise<import('./desk').DeskSnapshot>;
+    action(a: DeskAction): void;
+    /** The mouse is over a tile (buttons need clicks) or left it (clicks pass through). */
+    hover(on: boolean): void;
+    /** The widget's content height, so its window fits. */
+    resize(height: number): void;
+    onSnapshot(cb: (s: import('./desk').DeskSnapshot) => void): Unsubscribe;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */
@@ -698,6 +722,8 @@ export interface ArcAPI {
     onChange(cb: (s: ChatsState) => void): Unsubscribe;
   };
   app: {
+    /** Tell main what Alton is doing (taskbar badge, desktop widget). */
+    reportState(state: string): void;
     onCommand(cb: (c: AppCommand) => void): Unsubscribe;
     getInfo(): Promise<AppInfo>;
     /** Open one of ARC's own folders/files in Explorer (fixed set, never arbitrary paths). */
@@ -749,6 +775,19 @@ export interface RemoteProgress {
   error?: string;
   sources?: import('./chats').Source[];
 }
+
+/** Buttons on the desktop widget, taskbar strip, jump list and tray. */
+export type DeskAction =
+  | 'talk'
+  | 'new-chat'
+  | 'agent'
+  | 'lock'
+  | 'sleep'
+  | 'widget'
+  | 'phone'
+  | 'play_pause'
+  | 'next'
+  | 'previous';
 
 export interface RemoteInfo {
   running: boolean;

@@ -62,6 +62,21 @@ export function useAppCommands(compact: boolean): void {
             );
             break;
           }
+          // From the taskbar (jump list, thumbnail toolbar, tray).
+          case 'new-chat':
+            if (!compact) useUiStore.getState().setTab('chat');
+            void useConversationStore.getState().newChat();
+            break;
+          case 'agent-start':
+            if (!compact) useUiStore.getState().setTab('chat');
+            setTimeout(
+              () =>
+                window.dispatchEvent(
+                  new CustomEvent('arc:prefill', { detail: 'Alton, handle this for me: ' }),
+                ),
+              150,
+            );
+            break;
         }
       }),
     [compact],

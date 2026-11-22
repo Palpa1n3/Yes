@@ -1,3 +1,4 @@
+import { deskState } from '../desk-state';
 import { app, BrowserWindow, desktopCapturer, globalShortcut, safeStorage, screen } from 'electron';
 import { join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
@@ -273,6 +274,7 @@ export function registerAgentIpc(
       return typeof a === 'string' ? a : null;
     },
     onStatus: (s: AgentStatus) => {
+      deskState.agentWaiting = !!s.question;
       const prev = lastState;
       lastState = s.state;
       if (s.question && s.question.id !== lastQuestion) {

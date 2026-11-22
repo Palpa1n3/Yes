@@ -303,6 +303,8 @@ export interface PhoneStatus {
 }
 
 export interface DeskSnapshot {
+  /** The widget's own settings and the theme, so its window follows changes at once. */
+  look: { desk: DeskSettings; theme: string };
   assistant: string;
   name: string;
   music: {
