@@ -103,6 +103,10 @@ Read this first in a new chat, then README.md for the feature list.
   with fixes) → the `phone_diagnostics` tool and Settings › Phone health.
   Remote control: PC setting `phoneControl` (off by default; notice on the PC when used),
   `/api/live` frames + `/api/input` (`src/shared/remote-input.ts`), phone overlay in the PC tab.
+  Remote typing (0.50.2): phone keyboards re-send whole words while composing, so the phone keeps
+  what was typed and sends only `typingDiff(sent, now)` (backspaces + new text), queued in order.
+  Remote view: capture at up to 30 fps via requestVideoFrameCallback; `/api/live` waits up to 0.5 s
+  for a frame newer than the last served (`frameSeq`/`servedSeq`); the phone keeps 3 requests in flight.
   Faster remote view: a hidden capture window (partition `arc-remote-capture`, getDisplayMedia)
   streams the chosen monitor; frames go to main over IPC and `/api/live?screen=` returns the newest
   (falls back to thumbnails if the stream can't start). `/api/screens` lists monitors.

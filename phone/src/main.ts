@@ -19,6 +19,7 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import { typingDiff } from '@shared/remote-input';
 import { nextSleep, shortGaps, sleepLine, type SleepOptions } from '@shared/sleep';
 import { gbp, paymentsFrom, spendSummary, type Payment } from '@shared/spending';
 import {
@@ -5870,7 +5871,8 @@ async function openRemote(): Promise<void> {
   let shown = 0;
   let seq = 0;
   let stop = false;
-  // Two requests in flight at once: while one frame travels, the next is already asked for.
+  // Three requests in flight at once: while one frame travels, the next ones are already asked
+  // for (the PC hands each a newer frame than the last, so they don't bring repeats).
   const worker = async (): Promise<void> => {
     while (remoteOn && !stop) {
       const cc = conn();
@@ -5905,7 +5907,7 @@ async function openRemote(): Promise<void> {
       }
     }
   };
-  await Promise.all([worker(), worker()]);
+  await Promise.all([worker(), worker(), worker()]);
 }
 /** Screen 1 / Screen 2 buttons when the PC has more than one monitor. */
 async function loadScreens(): Promise<void> {
@@ -5939,10 +5941,12 @@ function closeRemote(): void {
   $('remote').hidden = true;
   ($('rmType') as HTMLInputElement).blur();
 }
+/** Inputs go one after another, in order (a backspace must land before the letters after it). */
+let rmQueue: Promise<unknown> = Promise.resolve();
 function rmSend(cmd: Record<string, unknown>): void {
   const c = conn();
   if (!c) return;
-  void pcInput(c, cmd).catch((e: Error) => toast(e.message));
+  rmQueue = rmQueue.then(() => pcInput(c, cmd)).catch((e: Error) => toast(e.message));
 }
 function wireRemote(): void {
   const img = $<HTMLImageElement>('rmImg');
@@ -6022,21 +6026,56 @@ function wireRemote(): void {
   document.querySelectorAll<HTMLButtonElement>('#remote [data-k]').forEach((b) => {
     b.onclick = () => rmSend({ type: 'key', keys: b.dataset.k });
   });
+  // Phone keyboards (Samsung, Gboard) build each word up and re-send the whole word as you type
+  // ("a", "ad", "add"), and autocorrect swaps words. So the box keeps what you've typed, and only
+  // the difference from what the PC already has is sent: backspaces, then the new letters.
   const typer = $<HTMLInputElement>('rmType');
+  let sent = '';
+  const sync = (): void => {
+    const d = typingDiff(sent, typer.value);
+    for (let i = 0; i < d.back; i++) rmSend({ type: 'key', keys: 'backspace' });
+    if (d.text) rmSend({ type: 'type', text: d.text });
+    sent = typer.value;
+  };
+  let composing = false;
+  const reset = (): void => {
+    typer.value = '';
+    sent = '';
+  };
   $('rmKbd').onclick = () => typer.focus();
+  typer.addEventListener('compositionstart', () => (composing = true));
+  typer.addEventListener('compositionend', () => {
+    composing = false;
+    sync();
+  });
+  typer.addEventListener('input', () => {
+    sync();
+    // Keep the box short (between words) so long typing doesn't slow the comparison.
+    if (!composing && typer.value.length > 60 && /\s$/.test(typer.value)) reset();
+  });
   typer.addEventListener('beforeinput', (e) => {
     const ie = e as InputEvent;
-    if (ie.inputType === 'deleteContentBackward') rmSend({ type: 'key', keys: 'backspace' });
-    else if (ie.inputType === 'insertLineBreak') rmSend({ type: 'key', keys: 'enter' });
-    else if (ie.data) rmSend({ type: 'type', text: ie.data });
-    e.preventDefault();
+    if (ie.inputType === 'insertLineBreak') {
+      e.preventDefault();
+      rmSend({ type: 'key', keys: 'enter' });
+      reset();
+    } else if (ie.inputType === 'deleteContentBackward' && !typer.value) {
+      // Nothing left in the box: delete on the PC directly.
+      e.preventDefault();
+      rmSend({ type: 'key', keys: 'backspace' });
+    }
   });
   typer.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-      rmSend({ type: 'key', keys: 'enter' });
       e.preventDefault();
+      rmSend({ type: 'key', keys: 'enter' });
+      reset();
+    } else if (e.key === 'Backspace' && !typer.value) {
+      e.preventDefault();
+      rmSend({ type: 'key', keys: 'backspace' });
     }
   });
+  typer.addEventListener('blur', reset);
   $('rmZoom').onclick = () => {
     rmZoom = !rmZoom;
     $('rmView').classList.toggle('zoom', rmZoom);

@@ -72,6 +72,9 @@ export function registerRemoteIpc(
   let cap: BrowserWindow | null = null;
   let capFor: number | null = null;
   let latest: Buffer | null = null;
+  /** Counts frames from the stream, and the newest one already sent to the phone. */
+  let frameSeq = 0;
+  let servedSeq = 0;
   let lastAsked = 0;
   /** When the stream last failed to start: use plain screenshots for a while instead. */
   let streamFailedAt = 0;
@@ -83,12 +86,14 @@ export function registerRemoteIpc(
   ipcMain.on('arc:remote-frame', (e, data: unknown) => {
     if (!cap || e.sender !== cap.webContents || !(data instanceof Uint8Array)) return;
     latest = Buffer.from(data);
+    frameSeq++;
   });
   const stopCapture = (): void => {
     cap?.destroy();
     cap = null;
     capFor = null;
     latest = null;
+    servedSeq = frameSeq;
   };
   // Stop streaming once the phone has stopped looking for a while.
   setInterval(() => {
@@ -123,7 +128,7 @@ export function registerRemoteIpc(
     const html = `<script>
 const { ipcRenderer } = require('electron');
 (async () => {
-  const s = await navigator.mediaDevices.getDisplayMedia({ video: { width: ${w}, height: ${h}, frameRate: 15 }, audio: false });
+  const s = await navigator.mediaDevices.getDisplayMedia({ video: { width: ${w}, height: ${h}, frameRate: 30 }, audio: false });
   const v = document.createElement('video');
   v.muted = true;
   v.srcObject = s;
@@ -132,14 +137,24 @@ const { ipcRenderer } = require('electron');
   c.width = ${w};
   c.height = ${h};
   const g = c.getContext('2d');
-  const tick = () => {
+  // Encode each new video frame as it arrives (Windows only sends frames when the screen
+  // changes), one at a time, at up to 30 a second.
+  let busy = false;
+  const grab = () => {
+    if (busy) return;
+    busy = true;
     g.drawImage(v, 0, 0, c.width, c.height);
     c.toBlob((b) => {
       if (b) b.arrayBuffer().then((a) => ipcRenderer.send('arc:remote-frame', new Uint8Array(a)));
-      setTimeout(tick, 80);
-    }, 'image/jpeg', 0.6);
+      busy = false;
+    }, 'image/jpeg', 0.55);
   };
-  tick();
+  if (v.requestVideoFrameCallback) {
+    const onFrame = () => { grab(); v.requestVideoFrameCallback(onFrame); };
+    v.requestVideoFrameCallback(onFrame);
+    // A still screen sends no frames: refresh now and then so the picture never goes stale.
+    setInterval(grab, 1000);
+  } else setInterval(grab, 33);
 })().catch(() => window.close());
 </script>`;
     const mine = cap;
@@ -235,7 +250,14 @@ const { ipcRenderer } = require('electron');
       // Wait briefly for the first frame of a new stream.
       for (let i = 0; i < 30 && cap && (!latest || capFor !== d.id); i++)
         await new Promise((r) => setTimeout(r, 100));
-      if (capFor === d.id && latest) return latest;
+      // Hand each phone request a frame it hasn't had yet (up to half a second's wait), so the
+      // phone's requests in flight bring different frames instead of repeats.
+      for (let i = 0; i < 50 && cap && capFor === d.id && frameSeq <= servedSeq; i++)
+        await new Promise((r) => setTimeout(r, 10));
+      if (capFor === d.id && latest) {
+        servedSeq = frameSeq;
+        return latest;
+      }
       // No stream (yet): a plain screenshot instead (slower, but always works).
       const k = Math.min(1, 1100 / Math.max(d.size.width, d.size.height));
       const sources = await desktopCapturer.getSources({

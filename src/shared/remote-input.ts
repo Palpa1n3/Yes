@@ -52,3 +52,11 @@ export function toPhysical(
     y: Math.round((d.bounds.y + fy * (d.bounds.height - 1)) * d.scaleFactor),
   };
 }
+
+/** Typing on the PC from a phone keyboard that re-sends whole words ("a", "ad", "add") or swaps
+ *  them (autocorrect): how many backspaces, then what text, turn `sent` into `now`. */
+export function typingDiff(sent: string, now: string): { back: number; text: string } {
+  let same = 0;
+  while (same < now.length && same < sent.length && now[same] === sent[same]) same++;
+  return { back: sent.length - same, text: now.slice(same) };
+}

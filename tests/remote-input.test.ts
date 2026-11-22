@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sanitizeInput, toPhysical } from '@shared/remote-input';
+import { sanitizeInput, toPhysical, typingDiff } from '@shared/remote-input';
 
 describe('phone remote control input', () => {
   it('accepts taps, scrolls, drags, keys and text, clamped to the screen', () => {
@@ -26,5 +26,22 @@ describe('phone remote control input', () => {
       x: -1920,
       y: 0,
     });
+  });
+});
+
+describe('typing from a phone keyboard', () => {
+  it('sends only the new letters when the keyboard re-sends the whole word', () => {
+    let sent = '';
+    let pc = '';
+    for (const now of ['a', 'ad', 'add', 'add ', 'add t', 'add th', 'add thi', 'add this']) {
+      const d = typingDiff(sent, now);
+      pc = pc.slice(0, pc.length - d.back) + d.text;
+      sent = now;
+    }
+    expect(pc).toBe('add this');
+  });
+  it('backspaces over an autocorrected word', () => {
+    expect(typingDiff('teh ', 'the ')).toEqual({ back: 3, text: 'he ' });
+    expect(typingDiff('hello', 'hell')).toEqual({ back: 1, text: '' });
   });
 });
