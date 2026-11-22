@@ -413,6 +413,8 @@ interface AltonNativePlugin {
   keepScreenOn(o: { on: boolean }): Promise<void>;
   /** Is music (or any media) playing right now? */
   musicActive(): Promise<{ active: boolean }>;
+  /** Wake-on-LAN on the home Wi-Fi (MAC like AA:BB:CC:DD:EE:FF). */
+  wakeOnLan(o: { mac: string }): Promise<void>;
   /** Download the new APK and open the Install screen (rejects "ALLOW: …" if not allowed yet). */
   installUpdate(o: { url: string }): Promise<void>;
   media(o: {

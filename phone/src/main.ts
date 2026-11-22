@@ -5728,6 +5728,22 @@ function renderPc(): void {
   const macs = $('macs');
   macs.textContent = '';
   S.macs.forEach((m) => macs.appendChild(el('code', 'mac', m)));
+  // The app wakes the PC itself (no other app needed).
+  $('wakePc').hidden = !isApp || !S.macs.length;
+  $('wakeHelp').textContent = isApp
+    ? 'Works on your home Wi-Fi. Your PC’s address (from syncing):'
+    : 'A sleeping PC can be woken from your phone with a free Wake-on-LAN app (Android: “Wake On Lan”; iPhone: “Mocha WOL”). Enter this PC address in the app:';
+  $('wakePc').onclick = async () => {
+    $('wakeMsg').textContent = 'Sending the wake-up signal…';
+    try {
+      for (const m of S.macs) await Native.wakeOnLan({ mac: m });
+      $('wakeMsg').textContent =
+        'Sent. Give it 10–30 seconds, then tap Check now. If it doesn’t wake, the PC needs Wake-on-LAN switched on (see below).';
+      setTimeout(() => void checkPc(), 20_000);
+    } catch (e) {
+      $('wakeMsg').textContent = (e as Error).message;
+    }
+  };
   if (!S.macs.length) macs.textContent = 'Connect to the PC once to see it here.';
   renderPcStatus();
 }

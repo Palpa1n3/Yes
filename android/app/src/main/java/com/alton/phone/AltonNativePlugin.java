@@ -272,6 +272,54 @@ public class AltonNativePlugin extends Plugin {
         }).start();
     }
 
+    /**
+     * Wake-on-LAN: sends the "magic packet" (6 × FF, then the MAC 16 times) as a broadcast on the
+     * Wi-Fi network, to the usual ports 9 and 7. The PC must be on the same home network.
+     */
+    @PluginMethod
+    public void wakeOnLan(final PluginCall call) {
+        final String hex = call.getString("mac", "").replaceAll("[^0-9A-Fa-f]", "");
+        if (hex.length() != 12) {
+            call.reject("That isn't a valid PC address (MAC).");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                byte[] mac = new byte[6];
+                for (int i = 0; i < 6; i++) mac[i] = (byte) Integer.parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+                byte[] pkt = new byte[6 + 16 * 6];
+                for (int i = 0; i < 6; i++) pkt[i] = (byte) 0xff;
+                for (int i = 6; i < pkt.length; i += 6) System.arraycopy(mac, 0, pkt, i, 6);
+                java.util.List<java.net.InetAddress> targets = new java.util.ArrayList<>();
+                targets.add(java.net.InetAddress.getByName("255.255.255.255"));
+                // The Wi-Fi network's own broadcast address (e.g. 192.168.1.255) too.
+                try {
+                    android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) getContext()
+                        .getApplicationContext()
+                        .getSystemService(Context.WIFI_SERVICE);
+                    @SuppressWarnings("deprecation")
+                    android.net.DhcpInfo d = wm == null ? null : wm.getDhcpInfo();
+                    if (d != null && d.ipAddress != 0) {
+                        int mask = d.netmask != 0 ? d.netmask : 0x00ffffff;
+                        int b = (d.ipAddress & mask) | ~mask;
+                        byte[] q = new byte[4];
+                        for (int k = 0; k < 4; k++) q[k] = (byte) ((b >> (k * 8)) & 0xff);
+                        targets.add(java.net.InetAddress.getByAddress(q));
+                    }
+                } catch (Exception ignored) {}
+                try (java.net.DatagramSocket s = new java.net.DatagramSocket()) {
+                    s.setBroadcast(true);
+                    for (int round = 0; round < 3; round++)
+                        for (java.net.InetAddress t : targets)
+                            for (int port : new int[] { 9, 7 }) s.send(new java.net.DatagramPacket(pkt, pkt.length, t, port));
+                }
+                main.post(call::resolve);
+            } catch (Exception e) {
+                main.post(() -> call.reject("Couldn't send it: " + e.getMessage()));
+            }
+        }).start();
+    }
+
     @PluginMethod
     public void musicActive(PluginCall call) {
         AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
