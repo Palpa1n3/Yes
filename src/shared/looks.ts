@@ -9,7 +9,7 @@ export const THEME_ACCENT: Record<ThemeId, string> = {
   sentinel: '#FF2E3F',
   violet: '#A97BFF',
   mono: '#FFFFFF',
-  'event-horizon': '#FF9F43',
+  'event-horizon': '#FFB45C',
   'deep-space': '#9EC3FF',
   nebula: '#FF5FD2',
   exoplanet: '#3BE8C0',
@@ -48,3 +48,23 @@ export const THEME_NAMES: Record<ThemeId, string> = {
   nebula: 'Nebula',
   exoplanet: 'Exoplanet',
 };
+
+/** One-tap space looks: colours, background and avatar that go together. */
+export const SPACE_LOOKS: Array<{
+  id: string;
+  name: string;
+  theme: ThemeId;
+  backdrop: import('./backdrops').SpaceBackdrop;
+  avatar: AvatarStyle;
+}> = [
+  {
+    id: 'blackhole',
+    name: 'Black hole',
+    theme: 'event-horizon',
+    backdrop: 'horizon',
+    avatar: 'sphere',
+  },
+  { id: 'wormhole', name: 'Wormhole', theme: 'deep-space', backdrop: 'wormhole', avatar: 'cloud' },
+  { id: 'orbit', name: 'From orbit', theme: 'deep-space', backdrop: 'orbit', avatar: 'orb' },
+  { id: 'deepfield', name: 'Deep field', theme: 'nebula', backdrop: 'deepfield', avatar: 'swarm' },
+];

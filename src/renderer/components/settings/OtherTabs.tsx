@@ -1,4 +1,5 @@
 import { SPACE_BACKDROPS } from '@shared/backdrops';
+import { SPACE_LOOKS } from '@shared/looks';
 import { SpaceTileArt } from '@renderer/components/hud/Background';
 import type { AvatarStyle } from '@shared/types';
 import { PromptsSection } from './PromptsSection';
@@ -190,6 +191,35 @@ export function AppearanceTab() {
   const { settings: s, update } = useSettingsStore();
   return (
     <>
+      <Section title="One-tap space looks">
+        <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Space looks">
+          {SPACE_LOOKS.map((l) => {
+            const active =
+              s.theme === l.theme && s.backdrop === l.backdrop && s.avatar === l.avatar;
+            return (
+              <button
+                key={l.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                title={`${l.name}: colours, background and avatar`}
+                onClick={() =>
+                  void update({ theme: l.theme, backdrop: l.backdrop, avatar: l.avatar })
+                }
+                className={`bg-tile h-20 border bg-void transition-[border-color,box-shadow] ${active ? 'border-accent shadow-glow-sm' : 'border-line hover:border-accent'}`}
+              >
+                <SpaceTileArt id={l.backdrop} />
+                <span
+                  className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1 py-0.5 text-left text-[10px] font-semibold leading-tight"
+                  style={{ color: THEMES[l.theme].colors.accent }}
+                >
+                  {l.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Section>
       <Section title="Theme">
         <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Theme">
           {(Object.keys(THEMES) as ThemeId[]).map((id) => {

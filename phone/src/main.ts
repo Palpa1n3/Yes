@@ -85,6 +85,7 @@ import {
   THEME_NAMES,
   isPhoneAvatar,
   type PhoneAvatar,
+  SPACE_LOOKS,
 } from '@shared/looks';
 import { AVATAR_STEPS, type AssistantState, type ThemeId } from '@shared/types';
 import {
@@ -2696,6 +2697,28 @@ function renderLook(): void {
       sel.appendChild(o);
     }
   sel.value = S.avatar;
+  // One-tap space looks: each tile is painted with its background.
+  const lp = $('lookPresets');
+  lp.textContent = '';
+  for (const p of SPACE_LOOKS) {
+    const t = el('button', 'bg-tile');
+    t.setAttribute('aria-label', p.name);
+    t.classList.toggle('on', S.theme === p.theme && S.bg === p.backdrop && S.avatar === p.avatar);
+    const art = el('span', 'bg-art');
+    art.dataset.bg = p.backdrop;
+    const label = el('span', 'bg-label', p.name);
+    label.style.color = THEME_ACCENT[p.theme];
+    t.append(art, label);
+    requestAnimationFrame(() => paintSpace(art, p.backdrop, 260));
+    t.onclick = () => {
+      S.bg = p.backdrop;
+      setLook({ theme: p.theme, accent: '', avatar: p.avatar });
+      applyUi();
+      renderUiSettings();
+      toast(`${p.name} look on.`);
+    };
+    lp.appendChild(t);
+  }
   const sw = $('themePick');
   sw.textContent = '';
   // A mini Alton panel in each theme's colours, so it can be judged before choosing it.
