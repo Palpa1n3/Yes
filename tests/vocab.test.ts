@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addFix,
+  pickHeard,
   applyFixes,
   cleanAppNames,
   fixAppCommand,
@@ -54,5 +55,20 @@ describe('working around your voice', () => {
     });
     expect(s.voiceWords).toEqual(['Tesco']);
     expect(s.voiceFixes).toEqual([{ heard: 'x', meant: 'y' }]);
+  });
+});
+
+describe("picking the best of the phone recogniser's guesses", () => {
+  it("prefers a guess with the user's names and places", () => {
+    const guesses = ["text will I'm at test go", "text Will I'm at Tesco", 'tex will im at tesco'];
+    expect(pickHeard(guesses, ['Will', 'Tesco', 'Alton'], [])).toBe("text Will I'm at Tesco");
+  });
+  it('keeps the first guess when nothing matches, and avoids known mishearings', () => {
+    expect(pickHeard(['what time is it', 'what time is a'], ['Alton'], [])).toBe('what time is it');
+    const fixes = [{ heard: 'all ton', meant: 'Alton' }];
+    expect(pickHeard(['all ton set an alarm', 'alton set an alarm'], [], fixes)).toBe(
+      'alton set an alarm',
+    );
+    expect(pickHeard(['all ton set an alarm'], [], fixes)).toBe('Alton set an alarm');
   });
 });

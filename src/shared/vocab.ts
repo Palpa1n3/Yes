@@ -96,6 +96,33 @@ export function applyFixes(text: string, fixes: VoiceFix[]): string {
   return out;
 }
 
+/** Of the recogniser's guesses (best first), the one that fits the user's words best: names,
+ *  lists, places and trained words count for a guess, known mishearings count against it, and
+ *  the recogniser's own order breaks ties. Learnt fixes are then applied. */
+export function pickHeard(guesses: string[], vocab: string[], fixes: VoiceFix[]): string {
+  const list = guesses.map((g) => g.trim()).filter(Boolean);
+  if (!list.length) return '';
+  const has = (text: string, w: string): boolean => {
+    const k = norm(w);
+    return !!k && ` ${norm(text)} `.includes(` ${k} `);
+  };
+  const terms = [...new Set([...vocab, ...fixes.map((f) => f.meant)].map((w) => w.trim()))]
+    .filter((w) => w.length > 1)
+    .slice(0, 300);
+  let best = list[0] ?? '';
+  let bestScore = -Infinity;
+  list.forEach((g, i) => {
+    let score = -0.5 * i;
+    for (const w of terms) if (has(g, w)) score += 3;
+    for (const f of fixes) if (has(g, f.heard)) score -= 2;
+    if (score > bestScore) {
+      bestScore = score;
+      best = g;
+    }
+  });
+  return applyFixes(best, fixes);
+}
+
 function lev(a: string, b: string): number {
   const row = Array.from({ length: b.length + 1 }, (_, j) => j);
   for (let i = 1; i <= a.length; i++) {

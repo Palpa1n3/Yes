@@ -39,6 +39,7 @@ import {
   canSpeak,
   setAudioVoice,
   installSpeechShim,
+  setSpeechVocab,
   isApp,
   isSpeaking,
   loadVoices,
@@ -486,7 +487,24 @@ let apiKey = ls.get('alton-key') ?? '';
 const save = (): void => {
   ls.set(KEY, JSON.stringify(S));
   queueWorkSync();
+  updateSpeechVocab();
 };
+/** Words the phone's speech recogniser should favour: names, lists, places and apps. */
+function updateSpeechVocab(): void {
+  setSpeechVocab(
+    [
+      S.name,
+      S.userName,
+      ...S.people.flatMap((p) => [p.name, p.snap ?? '']),
+      ...S.lists.map((l) => l.name),
+      S.workName,
+      S.shiftAppName,
+      S.alexaDevice,
+      ...S.spendNames,
+    ].filter(Boolean),
+    S.voiceFixes,
+  );
+}
 /** Keep the "at work" list on the phone side up to date (a moment after changes settle). */
 let workSyncTimer = 0;
 function queueWorkSync(): void {
@@ -6704,6 +6722,7 @@ function wire(): void {
   };
   if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => renderVoiceSettings();
   installSpeechShim();
+  updateSpeechVocab();
   void loadVoices().then(() => renderVoiceSettings());
   scheduleReminderPings();
   // PC on/off checks while the app is open, and the lock after 5 minutes away.

@@ -6,6 +6,7 @@ import { TextToSpeech } from '@capacitor-community/text-to-speech';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { pickHeard, type VoiceFix } from '@shared/vocab';
 
 /** True inside the Android app. */
 export const isApp = Capacitor.isNativePlatform();
@@ -167,6 +168,12 @@ function speakDevice(text: string, o: { rate?: number; voice?: string; onend?: (
 }
 
 /* ── Listening: the app's speech recogniser, shaped like the browser's ── */
+/** The user's words (names, lists, places…) and trained fixes, set by the app (setSpeechVocab). */
+const speechVocab: { words: string[]; fixes: VoiceFix[] } = { words: [], fixes: [] };
+export function setSpeechVocab(words: string[], fixes: VoiceFix[]): void {
+  speechVocab.words = words;
+  speechVocab.fixes = fixes;
+}
 type ResultEvent = {
   results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }>;
 };
@@ -185,13 +192,15 @@ class AppRecognition {
           this.onerror?.({ error: 'not-allowed' });
           return;
         }
+        // Ask for the top five guesses and keep the one that fits the user's words best (the
+        // first guess often mishears names: "Alton", people, places, the shift app).
         const r = await SpeechRecognition.start({
           language: this.lang,
-          maxResults: 1,
+          maxResults: 5,
           partialResults: false,
           popup: false,
         });
-        const t = r.matches?.[0] ?? '';
+        const t = pickHeard(r.matches ?? [], speechVocab.words, speechVocab.fixes);
         if (t) {
           const alt = Object.assign([{ transcript: t }], { isFinal: true });
           this.onresult?.({ results: [alt] });
