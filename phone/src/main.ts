@@ -19,6 +19,7 @@ import {
   type SyncToPc,
 } from '@shared/phone';
 import { md, plain } from './md';
+import { digestForAi, groupMessages, quickSummary, type PhoneMsg } from '@shared/messages';
 import { metresBetween, mountWorkMap, type WorkMap } from './workmap';
 import '@shared/ui-style.css';
 import '@fontsource/rajdhani/500.css';
@@ -67,6 +68,7 @@ import {
   speak,
   stopSpeaking,
   voiceList,
+  type AppMessage,
 } from './native';
 import {
   PcError,
@@ -264,6 +266,14 @@ interface State {
   alexaDevice: string;
   /** Read new messages out loud (Android app): off, with headphones/car Bluetooth, or always. */
   announce: 'off' | 'headphones' | 'always';
+  /** Favourite people (read straight away, word for word; others are summarised). */
+  msgFavs: string[];
+  /** Send new messages to the PC (it reads them out at your desk). */
+  msgToPc: boolean;
+  /** "While you were away" card on Today after 30+ minutes. */
+  catchupPhone: boolean;
+  /** When the app was last put away (for the catch-up card). */
+  awayAt: number;
   quietFrom: number;
   quietTo: number;
   /** Lock screen live wallpaper (Android app): what to draw, where, and how big. */
@@ -442,6 +452,10 @@ const DEFAULTS: State = {
   alexaVia: 'app',
   alexaDevice: '',
   announce: 'off',
+  msgFavs: [],
+  msgToPc: true,
+  catchupPhone: true,
+  awayAt: 0,
   quietFrom: 23,
   quietTo: 7,
   weatherFx: true,
@@ -697,6 +711,9 @@ function systemText(): string {
       ? `The user's phone says they are at work (${S.workName || 'work'}) right now. Their ${S.workLists.join(' & ') || 'shopping'} list: ${workItems(S.lists, S.workLists).join(', ') || 'empty'}.`
       : '',
     shiftLine(),
+    msgDigest
+      ? `Messages waiting on the phone: ${msgDigest} In a briefing ("brief me", "good morning"), mention them in one line; use summarise_messages for details.`
+      : '',
     S.people.length ? `People the user has saved: ${S.people.map((p) => p.name).join(', ')}.` : '',
     S.memories.length
       ? `Things you know about the user:\n${S.memories.map((m) => `- ${m}`).join('\n')}`
@@ -1520,6 +1537,7 @@ function setLink(l: PcLink): void {
 /* ── Live sync: send what changed here, then take the PC's latest ── */
 let syncing = false;
 async function syncWithPc(manual = false): Promise<void> {
+  sendPcLink(true);
   const c = conn();
   if (!c) {
     if (manual) toast(pcWhy || 'Not connected to the PC.');
@@ -2138,6 +2156,7 @@ async function phoneStatusNow(): Promise<NonNullable<SyncToPc['phone']>> {
     battery: battery === null ? null : Math.round(battery / 5) * 5,
     charging,
     unread,
+    autoSend: S.autoMessages,
     payday: pd ? { date: pd.day, net: Math.round(pd.net) } : null,
     at: Date.now(),
   };
@@ -2244,7 +2263,157 @@ function sendAnnounce(): void {
     quietFrom: S.quietFrom,
     quietTo: S.quietTo,
     rate: S.voiceRate || 1,
+    favs: S.msgFavs,
   }).catch(() => undefined);
+}
+/** Tell the native side where to send new messages (works with Alton closed). */
+function sendPcLink(poll = false): void {
+  if (!isApp) return;
+  const c = conn();
+  void Native.setPcLink({
+    base: c?.base ?? '',
+    token: c?.token ?? '',
+    on: S.msgToPc && !!c,
+    poll,
+  }).catch(() => undefined);
+}
+
+/* ── Messages: status and step log, summaries, "while you were away" ── */
+function toPhoneMsgs(list: AppMessage[]): PhoneMsg[] {
+  return list.map((m) => ({
+    id: m.id,
+    app: m.app,
+    from: m.from,
+    chat: m.chat ?? '',
+    text: m.text,
+    at: m.at,
+    canReply: m.canReply,
+  }));
+}
+async function renderMsgStatus(): Promise<void> {
+  if (!isApp) return;
+  try {
+    const st = await Native.messagesStatus();
+    $('msgState').textContent = !st.enabled
+      ? '❌ Notification access is off: tap “Read & reply to messages” in Phone access (if Android says “Restricted setting”, use the button there first).'
+      : !st.connected
+        ? '⚠️ Access is on but Android has stopped Alton’s listener. Alton asked it to reconnect: check again in a minute, or turn the access off and on.'
+        : `✅ Listening for messages${S.announce === 'off' ? ' · reading aloud is OFF (choose below)' : ''}${st.pc ? ' · sending to your PC' : ''}`;
+    $('msgLog').textContent =
+      st.log || 'Nothing yet: messages and decisions show here as they arrive.';
+  } catch {
+    $('msgState').textContent = 'Update the Android app to see this.';
+  }
+}
+function wireMessages(): void {
+  if (!isApp) return;
+  $<HTMLInputElement>('msgFavs').value = S.msgFavs.join(', ');
+  $<HTMLInputElement>('msgFavs').onchange = (e) => {
+    S.msgFavs = (e.target as HTMLInputElement).value
+      .split(',')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .slice(0, 20);
+    save();
+    sendAnnounce();
+  };
+  for (const [id, key] of [
+    ['msgToPcT', 'msgToPc'],
+    ['catchupT', 'catchupPhone'],
+  ] as const) {
+    const b = $(id);
+    const paint = (): void => {
+      b.classList.toggle('on', S[key]);
+      b.textContent = S[key] ? '✓' : '';
+    };
+    paint();
+    b.onclick = () => {
+      S[key] = !S[key];
+      save();
+      paint();
+      sendPcLink();
+    };
+  }
+  $('msgTest').onclick = async () => {
+    sendAnnounce();
+    const r = await Native.testAnnounce().catch(() => ({
+      result: 'Update the Android app first.',
+    }));
+    toast(r.result);
+    void renderMsgStatus();
+  };
+  $('msgRefresh').onclick = () => void renderMsgStatus();
+  $('msgCopy').onclick = async () => {
+    const text = `Alton ${__APP_VERSION__} messages log\n${$('msgState').textContent ?? ''}\nRead aloud: ${S.announce} · quiet ${S.quietFrom}–${S.quietTo} · favourites ${S.msgFavs.join(', ') || 'none'} · to PC ${S.msgToPc}\n\n${$('msgLog').textContent ?? ''}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('Log copied: paste it into your message.');
+    } catch {
+      void shareText('Alton messages log', text);
+    }
+  };
+}
+/** The newest messages, summarised, for Claude's context ("brief me" includes them). */
+let msgDigest = '';
+async function refreshMsgDigest(): Promise<void> {
+  if (!isApp || !(await powerStatus())?.messages) return;
+  const all = await Native.getMessages()
+    .then((r) => r.messages)
+    .catch(() => [] as AppMessage[]);
+  const g = groupMessages(toPhoneMsgs(all));
+  msgDigest = g.length ? quickSummary(g) : '';
+}
+/** Today: "While you were away" after 30+ minutes, with Reply buttons and read-out. */
+async function showCatchup(since: number): Promise<void> {
+  const card = $('tdAway');
+  if (!isApp || !S.catchupPhone) return;
+  const all = await Native.getMessages()
+    .then((r) => r.messages)
+    .catch(() => [] as AppMessage[]);
+  const groups = groupMessages(toPhoneMsgs(all.filter((m) => m.at >= since)));
+  if (!groups.length) return;
+  const box = $('tdAwayList');
+  box.textContent = '';
+  $('tdAwaySum').textContent = quickSummary(groups);
+  for (const g of groups.slice(0, 6)) {
+    const row = el('div', 'li');
+    const t = el(
+      'span',
+      undefined,
+      `${g.group ? `${g.title}: ` : `${g.title}: `}${g.texts[0] ?? ''}`,
+    );
+    t.style.flex = '1';
+    row.appendChild(t);
+    if (g.canReply) {
+      const b = el('button', 'btn', 'Reply');
+      b.style.padding = '6px 10px';
+      b.onclick = async () => {
+        const text = prompt(`Reply to ${g.title}:`)?.trim();
+        if (!text) return;
+        try {
+          await Native.replyMessage({ id: g.replyId, text });
+          toast(`Sent to ${g.title}.`);
+          row.remove();
+        } catch (e) {
+          toast((e as Error).message);
+        }
+      };
+      row.appendChild(b);
+    }
+    box.appendChild(row);
+  }
+  $('tdAwayRead').onclick = () =>
+    speak(
+      [
+        quickSummary(groups),
+        ...groups
+          .slice(0, 3)
+          .filter((g) => !g.group)
+          .map((g) => `${g.title} says: ${g.texts[0] ?? ''}`),
+      ].join(' '),
+    );
+  $('tdAwayClose').onclick = () => (card.hidden = true);
+  card.hidden = false;
 }
 
 /* ── Lock screen: Alton live wallpaper (your picture + small spinning cloud + clock) ── */
@@ -3556,6 +3725,17 @@ async function appTool(
       };
     }
     if (name === 'smart_home') return { result: await smartTool(input) };
+    if (name === 'summarise_messages') {
+      const st = await powerStatus();
+      if (!st?.messages) return off('Reading messages (Notification access)');
+      const hours = typeof o.hours === 'number' && o.hours > 0 ? Math.min(72, o.hours) : 12;
+      const since = Date.now() - hours * 3_600_000;
+      const all = (await Native.getMessages()).messages.filter((m) => m.at >= since);
+      const g = groupMessages(toPhoneMsgs(all));
+      return {
+        result: `${g.length ? quickSummary(g) : 'No new messages.'}\n\n${digestForAi(g)}\n\n(To reply, use reply_message with the reply id.)`,
+      };
+    }
     if (name === 'spending') return { result: await spendingTool(o) };
     if (name === 'read_shift_trades') return { result: await readTrades() };
     if (name === 'check_shift_fit') return { result: fitReport(o.shifts, S.shifts, fitOpts()) };
@@ -7026,6 +7206,7 @@ function setView(v: string): void {
   if (v === 'pc') renderPc();
   if (v === 'set') {
     renderSettings();
+    void renderMsgStatus();
     renderSmart();
     void renderSpendSettings();
     renderAbout();
@@ -7399,6 +7580,20 @@ function wire(): void {
   wireVoiceSource();
   wireLock();
   wireWatch();
+  wireMessages();
+  sendPcLink(true);
+  // "While you were away": note when the app is put away, show the card on return (30+ min).
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      S.awayAt = Date.now();
+      save();
+      return;
+    }
+    if (S.awayAt && Date.now() - S.awayAt >= 30 * 60_000) void showCatchup(S.awayAt);
+    void refreshMsgDigest();
+    sendPcLink(true);
+  });
+  void refreshMsgDigest();
   wirePowers();
   wireDriving();
   // The background follows the time of day, and the weather where you are.

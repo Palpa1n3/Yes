@@ -199,6 +199,7 @@ describe('Android app tools', () => {
       'phone_diagnostics',
       'media_control',
       'read_shift_app',
+      'summarise_messages',
       'spending',
       'read_shift_trades',
       'check_shift_fit',

@@ -34,9 +34,9 @@ public class LateReceiver extends BroadcastReceiver {
         return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    private static PendingIntent alarmIntent(Context ctx, int id, String title, String body) {
+    private static PendingIntent alarmIntent(Context ctx, int id, String title, String body, boolean late, boolean msgs) {
         Intent i = new Intent(ctx, LateReceiver.class).setAction(SHOW).putExtra("id", id);
-        if (title != null) i.putExtra("title", title).putExtra("body", body);
+        if (title != null) i.putExtra("title", title).putExtra("body", body).putExtra("late", late).putExtra("msgs", msgs);
         return PendingIntent.getBroadcast(ctx, id, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
@@ -47,7 +47,7 @@ public class LateReceiver extends BroadcastReceiver {
         try {
             JSONArray old = new JSONArray(p.getString("ids", "[]"));
             for (int i = 0; i < old.length(); i++)
-                if (am != null) am.cancel(alarmIntent(ctx, old.getInt(i), null, null));
+                if (am != null) am.cancel(alarmIntent(ctx, old.getInt(i), null, null, false, false));
         } catch (Exception ignored) {}
         JSONArray ids = new JSONArray();
         for (int i = 0; i < items.length(); i++) {
@@ -56,7 +56,8 @@ public class LateReceiver extends BroadcastReceiver {
             long at = o.optLong("at");
             if (at <= System.currentTimeMillis()) continue;
             int id = o.optInt("id");
-            PendingIntent pi = alarmIntent(ctx, id, o.optString("title"), o.optString("body"));
+            PendingIntent pi = alarmIntent(ctx, id, o.optString("title"), o.optString("body"),
+                o.optBoolean("late", true), o.optBoolean("msgs", false));
             try {
                 if (Build.VERSION.SDK_INT >= 31 && !am.canScheduleExactAlarms())
                     am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
@@ -79,7 +80,15 @@ public class LateReceiver extends BroadcastReceiver {
     public void onReceive(Context ctx, Intent intent) {
         String action = intent.getAction();
         int id = intent.getIntExtra("id", 7400);
-        if (SHOW.equals(action)) show(ctx, id, intent.getStringExtra("title"), intent.getStringExtra("body"));
+        if (SHOW.equals(action)) {
+            String body = intent.getStringExtra("body");
+            // End of shift: add the messages that came in during it.
+            if (intent.getBooleanExtra("msgs", false)) {
+                String m = MessageListener.summaryLine(System.currentTimeMillis() - 12 * 3_600_000L);
+                if (!m.isEmpty()) body = (body == null || body.isEmpty() || body.startsWith("Nothing else") ? "" : body + "\n") + m;
+            }
+            show(ctx, id, intent.getStringExtra("title"), body, intent.getBooleanExtra("late", true));
+        }
         else if (SEND.equals(action)) send(ctx, id);
     }
 
@@ -93,12 +102,15 @@ public class LateReceiver extends BroadcastReceiver {
         return b.setSmallIcon(ctx.getApplicationInfo().icon).setContentIntent(pi).setAutoCancel(true);
     }
 
-    private static void show(Context ctx, int id, String title, String body) {
+    private static void show(Context ctx, int id, String title, String body, boolean late) {
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
-        Notification.Builder b = builder(ctx).setContentTitle(title == null ? "Time to leave" : title).setContentText(body == null ? "" : body);
+        Notification.Builder b = builder(ctx)
+            .setContentTitle(title == null ? "Time to leave" : title)
+            .setContentText(body == null ? "" : body.split("\n")[0])
+            .setStyle(new Notification.BigTextStyle().bigText(body == null ? "" : body));
         SharedPreferences p = prefs(ctx);
-        if (!p.getString("to", "").isEmpty()) {
+        if (late && !p.getString("to", "").isEmpty()) {
             Intent send = new Intent(ctx, LateReceiver.class).setAction(SEND).putExtra("id", id);
             PendingIntent sp = PendingIntent.getBroadcast(ctx, id + 1, send, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             b.addAction(new Notification.Action.Builder(null, "Running late", sp).build());

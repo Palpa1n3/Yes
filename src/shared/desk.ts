@@ -298,6 +298,8 @@ export interface PhoneStatus {
   battery: number | null;
   charging: boolean;
   unread: number;
+  /** "Send messages by themselves" is on (else the PC asks before sending a reply). */
+  autoSend?: boolean;
   payday: { date: string; net: number } | null;
   at: number;
 }

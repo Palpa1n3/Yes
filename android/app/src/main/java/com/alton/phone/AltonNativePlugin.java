@@ -86,7 +86,8 @@ public class AltonNativePlugin extends Plugin {
         Integer from = call.getInt("quietFrom", 23);
         Integer to = call.getInt("quietTo", 7);
         Double rate = call.getDouble("rate", 1.0);
-        Announcer.save(getContext(), mode, from == null ? 23 : from, to == null ? 7 : to, rate == null ? 1f : rate.floatValue());
+        JSArray favs = call.getArray("favs");
+        Announcer.save(getContext(), mode, from == null ? 23 : from, to == null ? 7 : to, rate == null ? 1f : rate.floatValue(), favs);
         call.resolve();
     }
 
@@ -546,6 +547,34 @@ public class AltonNativePlugin extends Plugin {
         Context ctx = getContext();
         boolean here = Boolean.TRUE.equals(call.getBoolean("here", false));
         if (PlaceAlerts.prefs(ctx).getBoolean("here", false) != here) PlaceAlerts.onChange(ctx, here);
+        call.resolve();
+    }
+
+    /** Messages: is the listener on and connected, and the step log (reconnects it if needed). */
+    @PluginMethod
+    public void messagesStatus(PluginCall call) {
+        Context ctx = getContext();
+        MessageListener.rebind(ctx);
+        call.resolve(new JSObject()
+            .put("enabled", MessageListener.isEnabled(ctx))
+            .put("connected", MessageListener.connected())
+            .put("pc", PcLink.ready(ctx))
+            .put("log", MsgLog.text(ctx)));
+    }
+
+    /** Says a test line out loud (as a message would be), and says why if it can't. */
+    @PluginMethod
+    public void testAnnounce(PluginCall call) {
+        String r = Announcer.test(getContext());
+        MsgLog.add(getContext(), "Test announcement: " + r);
+        call.resolve(new JSObject().put("result", r));
+    }
+
+    /** Where to send new messages (the PC's address and this phone's pairing token). */
+    @PluginMethod
+    public void setPcLink(PluginCall call) {
+        PcLink.save(getContext(), call.getString("base", ""), call.getString("token", ""), Boolean.TRUE.equals(call.getBoolean("on", false)));
+        if (Boolean.TRUE.equals(call.getBoolean("poll", false))) PcLink.pollSoon(getContext());
         call.resolve();
     }
 

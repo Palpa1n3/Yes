@@ -310,6 +310,8 @@ export interface AppMessage {
   id: string;
   app: string;
   from: string;
+  /** The group chat's name ('' for one-to-one). */
+  chat?: string;
   text: string;
   at: number;
   canReply: boolean;
@@ -338,6 +340,12 @@ interface AltonNativePlugin {
   }): Promise<void>;
   requestAccess(o: { which: 'calendar' | 'contacts' | 'bluetooth' }): Promise<{ granted: boolean }>;
   getMessages(): Promise<{ messages: AppMessage[] }>;
+  /** Messages: listener on and connected, sending to the PC, and the step log. */
+  messagesStatus(): Promise<{ enabled: boolean; connected: boolean; pc: boolean; log: string }>;
+  /** Say a test line as a message would be, or say why it can't. */
+  testAnnounce(): Promise<{ result: string }>;
+  /** Where new messages go (the PC's address and this phone's pairing token). */
+  setPcLink(o: { base: string; token: string; on: boolean; poll?: boolean }): Promise<void>;
   /** Spending: keep notifications from these bank apps (on the phone only). */
   setSpendApps(o: { packages: string[] }): Promise<void>;
   getSpendLog(): Promise<{ items: import('@shared/spending').BankNote[] }>;
@@ -359,6 +367,8 @@ interface AltonNativePlugin {
     quietFrom: number;
     quietTo: number;
     rate: number;
+    /** Favourite people: read straight away, word for word. */
+    favs: string[];
   }): Promise<void>;
   replyMessage(o: { id: string; text: string }): Promise<void>;
   setAlarm(o: { hour: number; minute: number; label: string }): Promise<void>;

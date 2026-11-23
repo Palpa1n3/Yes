@@ -15,6 +15,7 @@ export function setPhoneStatus(raw: unknown): void {
     battery:
       num(o.battery) === null ? null : Math.max(0, Math.min(100, Math.round(num(o.battery) ?? 0))),
     charging: o.charging === true,
+    autoSend: o.autoSend === true,
     unread: Math.max(0, Math.min(999, Math.round(num(o.unread) ?? 0))),
     payday:
       pd && typeof pd.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(pd.date)

@@ -2374,6 +2374,15 @@
             <div class="lbl"><span class="dot"></span>Spending</div>
             <div id="tdSpend"></div>
           </div>
+          <div class="card" id="tdAway" hidden>
+            <div class="lbl"><span class="dot"></span>While you were away</div>
+            <p id="tdAwaySum" style="margin-top: 0"></p>
+            <div id="tdAwayList"></div>
+            <div class="row" style="gap: 8px; margin-top: 8px">
+              <button class="btn" id="tdAwayRead" style="flex: 1">🔊 Read it out</button>
+              <button class="btn" id="tdAwayClose">Done</button>
+            </div>
+          </div>
           <div class="card" id="tdRemCard">
             <div class="lbl"><span class="dot"></span>Coming up</div>
             <div id="tdRems"></div>
@@ -3335,10 +3344,49 @@
                 ><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z" /></svg></span
               ><span class="gt"
                 ><b>Messages</b
-                ><small>Sending by themselves, reading out loud, quiet hours</small></span
+                ><small>Reading out loud, favourites, your PC, quiet hours, status</small></span
               >
             </summary>
             <div class="gb">
+              <p class="small" id="msgState" style="margin-top: 0"></p>
+              <div class="row" style="gap: 8px">
+                <button class="btn" id="msgTest" style="flex: 1">Send a test announcement</button>
+                <button class="btn" id="msgRefresh">Check</button>
+              </div>
+              <details class="mini" style="margin-top: 8px">
+                <summary>Messages log (what Alton saw and why)</summary>
+                <pre
+                  id="msgLog"
+                  class="muted small"
+                  style="
+                    white-space: pre-wrap;
+                    max-height: 260px;
+                    overflow-y: auto;
+                    font-size: 11px;
+                  "
+                ></pre>
+                <button class="btn full" id="msgCopy">Copy log</button>
+              </details>
+              <label class="muted" style="display: block; margin-top: 10px"
+                >Favourite people: read straight away, word for word (comma-separated). Everyone
+                else and group chats are summarised, at most every 10 minutes.
+                <input id="msgFavs" class="input" placeholder="Will, Mum" style="margin-top: 4px"
+              /></label>
+              <div class="li">
+                <span style="flex: 1"
+                  >Send messages to my PC<br /><small class="muted"
+                    >At your desk the PC reads them out in Alton’s voice, and you can reply from it.
+                    Only to your paired PC.</small
+                  ></span
+                ><button class="check" id="msgToPcT"></button>
+              </div>
+              <div class="li">
+                <span style="flex: 1"
+                  >“While you were away” card<br /><small class="muted"
+                    >On Today, when you open Alton after 30+ minutes</small
+                  ></span
+                ><button class="check" id="catchupT"></button>
+              </div>
               <div class="li">
                 <span style="flex: 1"
                   >Send messages by themselves<br /><small class="muted"

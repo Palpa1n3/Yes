@@ -374,6 +374,14 @@ export const APP_TOOLS: Anthropic.Tool[] = [
     input_schema: obj({}),
   },
   {
+    name: 'summarise_messages',
+    description:
+      'Summarise the user\'s recent phone messages (from notifications): grouped by person or group chat, newest first, with what needs an answer. Answer in one or two sentences like "6 messages: Will\'s asking about tonight, Mum wants a call, 4 in the group chat about Saturday." Point out anything that needs a reply and offer to reply. Codes and passwords are hidden.',
+    input_schema: obj({
+      hours: { type: 'number', description: 'Only the last N hours (default 12).' },
+    }),
+  },
+  {
     name: 'spending',
     description:
       'What the user has spent, from their bank apps\' notifications on this phone (they pick the apps in Settings › Phone › Spending). Defaults to since the last payday; or give days. Returns totals, top places and recent payments. Use for "how much have I spent?", "what did I spend at Tesco?", "how much is left till payday?". Amounts come from notifications, so mention it may miss payments the bank didn\'t notify about.',
