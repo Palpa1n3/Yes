@@ -443,6 +443,7 @@ if (!app.requestSingleInstanceLock()) {
     setupHolo({
       enabled: () => settings.get().holoNotifications,
       onClick: () => ctx.showWindow(),
+      display: () => settings.get().desk.display,
     });
     applyHotkey(settings.get().globalHotkey);
     applyVoiceHotkey(settings.get().voiceHotkey);

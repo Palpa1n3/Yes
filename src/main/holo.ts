@@ -1,5 +1,5 @@
 /** Notifications in Alton's own holographic style: small glowing cards that slide in at the
- *  bottom-right, stack, and fade after a few seconds. Click one to open Alton. Falls back to
+ *  bottom-right of the desktop widget's screen, stack, and fade after a few seconds. Click one to open Alton. Falls back to
  *  plain Windows notifications when turned off (Settings › Appearance). */
 import { BrowserWindow, Notification, screen } from 'electron';
 
@@ -30,8 +30,14 @@ const esc = (s: string): string =>
 
 const open: BrowserWindow[] = [];
 
+/** The screen the cards go on: the desktop widget's screen, else the main one. */
+function area(): Electron.Rectangle {
+  const id = deps?.display?.() ?? null;
+  return (screen.getAllDisplays().find((d) => d.id === id) ?? screen.getPrimaryDisplay()).workArea;
+}
+
 function place(): void {
-  const wa = screen.getPrimaryDisplay().workArea;
+  const wa = area();
   open.forEach((w, i) => {
     if (!w.isDestroyed())
       w.setPosition(wa.x + wa.width - W - 8, wa.y + wa.height - (H + GAP) * (i + 1));
@@ -42,6 +48,8 @@ export interface HoloDeps {
   enabled(): boolean;
   /** Open Alton when a card is clicked. */
   onClick(): void;
+  /** Which screen to show them on (the desktop widget's; null = the main screen). */
+  display?(): number | null;
 }
 let deps: HoloDeps | null = null;
 export const setupHolo = (d: HoloDeps): void => {
