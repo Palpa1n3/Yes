@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { diagnoseLaunch, readRun, type LaunchLog } from '@shared/cplaunch';
+import { diagnoseLaunch, readRun, redmodReport, type LaunchLog } from '@shared/cplaunch';
 
 const P = 'C:\\Games\\Cyberpunk 2077\\red4ext\\plugins';
 const line = (t: string, msg: string): string => `[${t}.000] [info    ] [ 1] [RED4ext] ${msg}`;
@@ -78,5 +78,39 @@ describe('why Cyberpunk won’t start', () => {
     expect(r.verdict).toMatch(/got past loading the mod plugins/);
     expect(r.scriptErrors).toHaveLength(1);
     expect(diagnoseLaunch([], []).verdict).toMatch(/no RED4ext launch logs/);
+  });
+});
+
+describe('REDmod deploys', () => {
+  const run = (mods: string[], tail: string): string =>
+    [
+      'Copyright (c) 2022-26 CD Projekt Red. All Rights Reserved.',
+      '[DEPLOY] Stage 1/10 - Initialization',
+      ...mods,
+      'Needs deployment: true',
+      tail,
+    ].join('\n');
+  it('names the script mods when the script compile fails', () => {
+    const ok = run(
+      ['Found mod "A" (v1) in folder "A" (enabled; deployed (v1); )'],
+      'Commandlet deploy has succeeded.',
+    );
+    const bad = run(
+      [
+        'Found mod "Cyberarms Patch" (v1.7) in folder "Cyberarms Patch" (enabled; not deployed; )',
+        'Found mod "NCPD Prevention Police Enhancement" (v2.7 ARCADE) in folder "NCPD Prevention Police Enhancement" (enabled; not deployed; TWEAKS; SCRIPTS; )',
+      ],
+      '[DEPLOY] Stage 2/10 - Script Compilation\nERROR: Script compilation has failed!\n\nCommandlet deploy has failed.',
+    );
+    const r = redmodReport(`${ok}\n${bad}`);
+    expect(r).toMatchObject({
+      failed: true,
+      stage: 'Script Compilation',
+      error: 'Script compilation has failed!',
+      scriptMods: ['NCPD Prevention Police Enhancement'],
+    });
+    expect(r?.verdict).toMatch(/change game scripts: NCPD Prevention Police Enhancement/);
+    expect(redmodReport(ok)?.failed).toBe(false);
+    expect(redmodReport('')).toBeNull();
   });
 });

@@ -95,6 +95,15 @@ export function registerToolbox(
   );
   handle(IPC.mods.updateAll, () => mods.updateAll());
   handle(IPC.mods.diagnose, () => mods.diagnose());
+  handle(IPC.mods.loadOrder, () => mods.loadOrder());
+  handle(IPC.mods.setOrder, (c) => {
+    const o = (c ?? {}) as Record<string, unknown>;
+    if (o.kind === 'suggested') return mods.setOrder({ kind: 'suggested' });
+    if (o.kind === 'prefer' && typeof o.archive === 'string' && typeof o.over === 'string')
+      return mods.setOrder({ kind: 'prefer', archive: o.archive, over: o.over });
+    return { ok: false, message: 'Which order?' };
+  });
+  handle(IPC.mods.resetOrder, () => mods.resetOrder());
   handle(IPC.mods.cancel, () => {
     mods.cancelUpdates();
     return true;
@@ -305,6 +314,33 @@ export function registerToolbox(
         const found = name ? mods.find(name) : [];
         return found[0] ?? null;
       };
+      if (action === 'load_order') {
+        const r = await mods.loadOrder();
+        return {
+          archives: r.archives,
+          orderFile: r.modlist,
+          clashes: r.conflicts.length,
+          topClashes: r.conflicts
+            .slice(0, 20)
+            .map(
+              (c) =>
+                `${c.winner}${c.winnerMod ? ` (${c.winnerMod})` : ''} wins over ${c.loser}${c.loserMod ? ` (${c.loserMod})` : ''}: ${c.files} files${c.variants ? ' — these look like alternative versions of one mod; usually only one should be installed' : ''}`,
+            ),
+          suggestedMoves: r.moves.map((m) => `${m.archive} before ${m.before}: ${m.reason}`),
+          redmod: r.redmod?.failed ? r.redmod.verdict : 'last REDmod deploy OK',
+          note: 'Archives load in name order unless archive\\pc\\mod\\modlist.txt lists them; the first loaded wins a clash. Use action apply_load_order (the user approves) to save the suggested order.',
+        };
+      }
+      if (action === 'apply_load_order') {
+        const r = await mods.loadOrder();
+        if (!r.moves.length) return { result: 'Nothing to change: the order is already right.' };
+        const ok = await ctx.askApproval?.(
+          `Change the Cyberpunk load order (${r.moves.length} move${r.moves.length === 1 ? '' : 's'})?`,
+          r.moves.map((m) => `${m.archive} before ${m.before}`).join('\n'),
+        );
+        if (!ok) return { result: 'Not changed: you said no.' };
+        return { result: (await mods.setOrder({ kind: 'suggested' })).message };
+      }
       if (action === 'diagnose') {
         const d = await mods.diagnose();
         return {

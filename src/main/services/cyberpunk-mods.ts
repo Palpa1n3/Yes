@@ -4,7 +4,18 @@
  *  where "Mod manager download" sends it to Vortex). Alton never runs or unpacks mod files
  *  itself. Pure parts in src/shared/cpmods.ts. */
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { app, safeStorage, shell } from 'electron';
 import {
@@ -20,8 +31,19 @@ import {
   type ModUpdate,
   type NexusInfo,
 } from '@shared/cpmods';
-import type { LaunchCheck, ModsStatus } from '@shared/ipc';
-import { diagnoseLaunch, type PluginFile } from '@shared/cplaunch';
+import type { LaunchCheck, LoadOrderReport, ModsStatus } from '@shared/ipc';
+import { diagnoseLaunch, redmodReport, type PluginFile } from '@shared/cplaunch';
+import {
+  archiveHashes,
+  archiveHeader,
+  effectiveOrder,
+  findConflicts,
+  isOurModlist,
+  modlistText,
+  preferOrder,
+  suggestOrder,
+  variants,
+} from '@shared/loadorder';
 import { SecretStore } from './secret-store';
 
 const API = 'https://api.nexusmods.com/v1';
@@ -471,6 +493,7 @@ export class CyberpunkMods {
         ...diagnoseLaunch([], []),
         verdict: 'I couldn’t find Cyberpunk 2077.',
         vortexMod: null,
+        redmod: null,
       };
     const logsDir = join(game, 'red4ext', 'logs');
     const read = (p: string): string => {
@@ -522,7 +545,164 @@ export class CyberpunkMods {
       );
       if (folder) vortexMod = { name: folder.name, modId: folder.modId, version: folder.version };
     }
-    return { ...report, vortexMod };
+    const redmod = redmodReport(read(join(game, 'tools', 'redmod', 'bin', 'REDmodLog.txt')));
+    const verdict = [report.verdict, redmod?.failed ? redmod.verdict : '']
+      .filter(Boolean)
+      .join(' ');
+    return { ...report, verdict, vortexMod, redmod };
+  }
+
+  /* ── Archive load order (archive\pc\mod; first loaded wins) ── */
+  private async archiveDir(): Promise<string | null> {
+    const g = await this.findGame();
+    return g ? join(g, 'archive', 'pc', 'mod') : null;
+  }
+
+  /** Which Vortex mod installed each archive file. */
+  private archiveOwners(): Map<string, string> {
+    const map = new Map<string, string>();
+    const v = this.vortexDir();
+    if (!v) return map;
+    for (const m of this.list()) {
+      try {
+        for (const f of readdirSync(join(v, m.folder, 'archive', 'pc', 'mod')))
+          if (f.toLowerCase().endsWith('.archive')) map.set(f, m.name);
+      } catch {
+        /* no archives in this mod */
+      }
+    }
+    return map;
+  }
+
+  private readOrder(dir: string): { names: string[]; order: string[]; modlist: string | null } {
+    const names = readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.archive'));
+    let modlist: string | null = null;
+    try {
+      modlist = readFileSync(join(dir, 'modlist.txt'), 'utf8');
+    } catch {
+      /* none: name order */
+    }
+    return { names, order: effectiveOrder(names, modlist), modlist };
+  }
+
+  async loadOrder(): Promise<LoadOrderReport> {
+    const dir = await this.archiveDir();
+    const game = await this.findGame();
+    const redmod = game
+      ? redmodReport(
+          (() => {
+            try {
+              return readFileSync(join(game, 'tools', 'redmod', 'bin', 'REDmodLog.txt'), 'utf8');
+            } catch {
+              return '';
+            }
+          })(),
+        )
+      : null;
+    if (!dir || !existsSync(dir))
+      return {
+        archives: 0,
+        modlist: 'none',
+        conflicts: [],
+        moves: [],
+        redmod,
+        error: 'I couldn’t find the game’s archive\\pc\\mod folder.',
+      };
+    const { names, order, modlist } = this.readOrder(dir);
+    const hashes = new Map<string, string[]>();
+    for (const n of names) {
+      let fd = -1;
+      try {
+        fd = openSync(join(dir, n), 'r');
+        const head = Buffer.alloc(40);
+        readSync(fd, head, 0, 40, 0);
+        const h = archiveHeader(head);
+        if (!h) continue;
+        const idx = Buffer.alloc(h.indexSize);
+        readSync(fd, idx, 0, h.indexSize, h.indexPos);
+        hashes.set(n, archiveHashes(idx));
+      } catch {
+        /* unreadable: skip */
+      } finally {
+        if (fd >= 0) closeSync(fd);
+      }
+    }
+    const conflicts = findConflicts(order, hashes);
+    const { moves } = suggestOrder(order, conflicts);
+    const owners = this.archiveOwners();
+    return {
+      archives: names.length,
+      modlist: modlist === null ? 'none' : isOurModlist(modlist) ? 'alton' : 'other',
+      conflicts: conflicts.slice(0, 150).map((c) => ({
+        ...c,
+        variants: variants(c.winner, c.loser),
+        winnerMod: owners.get(c.winner) ?? '',
+        loserMod: owners.get(c.loser) ?? '',
+      })),
+      moves,
+      redmod,
+      error: '',
+    };
+  }
+
+  /** Write archive\pc\mod\modlist.txt: the suggested order, or with one archive made to win. */
+  async setOrder(
+    change: { kind: 'suggested' } | { kind: 'prefer'; archive: string; over: string },
+  ): Promise<{ ok: boolean; message: string }> {
+    const dir = await this.archiveDir();
+    if (!dir || !existsSync(dir))
+      return { ok: false, message: 'I couldn’t find the game’s mod folder.' };
+    const { order, modlist } = this.readOrder(dir);
+    let next: string[];
+    if (change.kind === 'prefer') {
+      if (!order.includes(change.archive) || !order.includes(change.over))
+        return { ok: false, message: 'Those archives aren’t installed any more.' };
+      next = preferOrder(order, change.archive, change.over);
+    } else {
+      const r = await this.loadOrder();
+      next = suggestOrder(order, r.conflicts).order;
+      if (!r.moves.length)
+        return { ok: true, message: 'Nothing to change: the order is already right.' };
+    }
+    try {
+      // Keep someone else's modlist.txt (another tool's) as a backup the first time.
+      const file = join(dir, 'modlist.txt');
+      if (modlist !== null && !isOurModlist(modlist) && !existsSync(`${file}.before-alton`))
+        renameSync(file, `${file}.before-alton`);
+      writeFileSync(file, modlistText(next));
+    } catch (e) {
+      return {
+        ok: false,
+        message: `Windows wouldn’t let me write the load order (${e instanceof Error ? e.message : 'no access'}).`,
+      };
+    }
+    return {
+      ok: true,
+      message:
+        change.kind === 'prefer'
+          ? `Done: “${change.archive}” now loads before “${change.over}”, so its version wins. It takes effect next time the game starts.`
+          : 'Done: the suggested order is saved. It takes effect next time the game starts.',
+    };
+  }
+
+  /** Back to the game's name order (removes Alton's modlist.txt; restores one it replaced). */
+  async resetOrder(): Promise<{ ok: boolean; message: string }> {
+    const dir = await this.archiveDir();
+    if (!dir) return { ok: false, message: 'I couldn’t find the game’s mod folder.' };
+    const file = join(dir, 'modlist.txt');
+    try {
+      const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+      if (text && !isOurModlist(text))
+        return {
+          ok: false,
+          message: 'That load order wasn’t written by Alton, so I left it alone.',
+        };
+      rmSync(file, { force: true });
+      if (existsSync(`${file}.before-alton`)) renameSync(`${file}.before-alton`, file);
+      return { ok: true, message: 'Back to the previous load order.' };
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Couldn’t undo it.' };
+    }
   }
 
   find(q: string): CpMod[] {

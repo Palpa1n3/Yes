@@ -167,6 +167,9 @@ export function installArcMock(): ArcAPI {
       open: vi.fn(async () => ''),
       diagnose: vi.fn(),
       cancel: vi.fn(async () => true),
+      loadOrder: vi.fn(),
+      setOrder: vi.fn(async () => ({ ok: true, message: '' })),
+      resetOrder: vi.fn(async () => ({ ok: true, message: '' })),
     },
     smarthome: {
       status: vi.fn(async () => false),

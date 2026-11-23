@@ -70,6 +70,9 @@ export const IPC = {
     open: 'mods:open',
     diagnose: 'mods:diagnose',
     cancel: 'mods:cancel',
+    loadOrder: 'mods:load-order',
+    setOrder: 'mods:set-order',
+    resetOrder: 'mods:reset-order',
   },
   smarthome: {
     status: 'smarthome:status',
@@ -331,6 +334,12 @@ export interface InvokeMap {
   [IPC.mods.status]: { args: []; result: ModsStatus };
   [IPC.mods.diagnose]: { args: []; result: LaunchCheck };
   [IPC.mods.cancel]: { args: []; result: boolean };
+  [IPC.mods.loadOrder]: { args: []; result: LoadOrderReport };
+  [IPC.mods.setOrder]: {
+    args: [change: { kind: 'suggested' } | { kind: 'prefer'; archive: string; over: string }];
+    result: { ok: boolean; message: string };
+  };
+  [IPC.mods.resetOrder]: { args: []; result: { ok: boolean; message: string } };
   [IPC.mods.list]: { args: []; result: import('./cpmods').CpMod[] };
   [IPC.mods.setKey]: { args: [key: string]; result: { ok: boolean; message: string } };
   [IPC.mods.clearKey]: { args: []; result: boolean };
@@ -577,6 +586,13 @@ export interface ArcAPI {
     diagnose(): Promise<LaunchCheck>;
     /** Stop "Update all" (ones already sent carry on in Vortex). */
     cancel(): Promise<boolean>;
+    /** Archive clashes (first loaded wins), suggested moves and the last REDmod deploy. */
+    loadOrder(): Promise<LoadOrderReport>;
+    /** Writes archive\\pc\\mod\\modlist.txt: the suggested order, or one archive made to win. */
+    setOrder(
+      change: { kind: 'suggested' } | { kind: 'prefer'; archive: string; over: string },
+    ): Promise<{ ok: boolean; message: string }>;
+    resetOrder(): Promise<{ ok: boolean; message: string }>;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */
@@ -908,4 +924,18 @@ export interface ModsStatus {
 /** Mods tab › Won't start?: the launch check plus the Vortex mod behind the culprit plugin. */
 export type LaunchCheck = import('./cplaunch').LaunchReport & {
   vortexMod: { name: string; modId: number | null; version: string } | null;
+  redmod: import('./cplaunch').RedmodReport | null;
 };
+
+/** Mods tab › Load order. */
+export interface LoadOrderReport {
+  archives: number;
+  /** archive\\pc\\mod\\modlist.txt: none (name order), Alton's, or another tool's. */
+  modlist: 'none' | 'alton' | 'other';
+  conflicts: Array<
+    import('./loadorder').Conflict & { variants: boolean; winnerMod: string; loserMod: string }
+  >;
+  moves: import('./loadorder').Move[];
+  redmod: import('./cplaunch').RedmodReport | null;
+  error: string;
+}

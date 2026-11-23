@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ArcAPI, ModsStatus } from '@shared/ipc';
 import { ModsTab } from '@renderer/components/tabs/ModsTab';
@@ -76,5 +76,49 @@ describe('Mods tab update progress', () => {
     expect(screen.getByText(/Failed: rate limit/)).toBeTruthy();
     expect(screen.getByText('✓ Black Lace Fix')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Retry/ })).toBeTruthy();
+  });
+});
+
+describe('Mods tab load order', () => {
+  it('shows clashes, the REDmod problem, and lets you pick a winner', async () => {
+    vi.mocked(arc.mods.status).mockResolvedValue(status({}));
+    vi.mocked(arc.mods.loadOrder).mockResolvedValue({
+      archives: 320,
+      modlist: 'none',
+      conflicts: [
+        {
+          winner: '#ReallyWantToStayAtYourHouse_Judy.archive',
+          loser: '#ReallyWantToStayAtYourHouse_Panam.archive',
+          files: 20,
+          variants: true,
+          winnerMod: 'Really Want To Stay',
+          loserMod: 'Really Want To Stay',
+        },
+      ],
+      moves: [],
+      redmod: {
+        failed: true,
+        stage: 'Script Compilation',
+        error: 'Script compilation has failed!',
+        scriptMods: ['NCPD Prevention Police Enhancement'],
+        mods: [],
+        verdict: 'REDmod’s last deploy failed at “Script Compilation”.',
+      },
+      error: '',
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<ModsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /Check load order/ }));
+    expect(
+      await screen.findByText(/320 archives · name order · 1 clash · 1 between alternative/),
+    ).toBeTruthy();
+    expect(screen.getByText(/REDmod’s last deploy failed/)).toBeTruthy();
+    expect(screen.getByText(/alternative versions: usually install just one/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Make it win' }));
+    expect(arc.mods.setOrder).toHaveBeenCalledWith({
+      kind: 'prefer',
+      archive: '#ReallyWantToStayAtYourHouse_Panam.archive',
+      over: '#ReallyWantToStayAtYourHouse_Judy.archive',
+    });
   });
 });

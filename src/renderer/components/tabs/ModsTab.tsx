@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, FolderOpen, RefreshCw, Search, Download } from 'lucide-react';
 import type { CpMod, UpdateState } from '@shared/cpmods';
-import type { LaunchCheck, ModsStatus } from '@shared/ipc';
+import type { LaunchCheck, LoadOrderReport, ModsStatus } from '@shared/ipc';
 import { Chip } from '@renderer/components/panels/Chip';
 import { Panel } from '@renderer/components/panels/Panel';
 import { Columns } from './Columns';
@@ -91,6 +91,150 @@ function UpdateProgress({ st, premium }: { st: ModsStatus; premium: boolean }) {
         </ul>
       )}
     </div>
+  );
+}
+
+/** Load order: archive clashes (first loaded wins), suggested moves, choose a winner, undo. */
+function LoadOrderPanel() {
+  const [r, setR] = useState<LoadOrderReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const run = (): void => {
+    setBusy(true);
+    void window.arc.mods
+      .loadOrder()
+      .then(setR)
+      .finally(() => setBusy(false));
+  };
+  const change = (p: Promise<{ ok: boolean; message: string }>): void => {
+    void p.then((x) => {
+      setMsg(x.message);
+      if (x.ok) run();
+    });
+  };
+  const variantCount = r?.conflicts.filter((c) => c.variants).length ?? 0;
+  return (
+    <Panel
+      code="MOD.06"
+      title="Load order"
+      chip={r ? <Chip>{r.conflicts.length} clashes</Chip> : undefined}
+      className="flex-1"
+      bodyClassName="flex flex-col gap-2 overflow-y-auto"
+    >
+      <p className="text-[12px] text-text-muted">
+        Archive mods load in name order, and when two change the same game file the first one loaded
+        wins. This finds the real clashes.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="hud-button" disabled={busy} onClick={run}>
+          <RefreshCw size={13} className={busy ? 'animate-spin' : ''} />
+          {busy ? 'Reading your archives…' : r ? 'Check again' : 'Check load order'}
+        </button>
+        {!!r?.moves.length && (
+          <button
+            type="button"
+            className="hud-button"
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Save the suggested order (${r.moves.length} move${r.moves.length === 1 ? '' : 's'})? You can undo it.`,
+                )
+              )
+                change(window.arc.mods.setOrder({ kind: 'suggested' }));
+            }}
+          >
+            Apply suggested order
+          </button>
+        )}
+        {r?.modlist === 'alton' && (
+          <button
+            type="button"
+            className="hud-button"
+            onClick={() => change(window.arc.mods.resetOrder())}
+          >
+            Undo (back to name order)
+          </button>
+        )}
+      </div>
+      {msg && <p className="text-[12.5px] text-accent">{msg}</p>}
+      {r?.error && <p className="text-[12.5px] text-alert">{r.error}</p>}
+      {r?.redmod?.failed && (
+        <p className="border border-alert/50 p-2 text-[12.5px] text-alert">{r.redmod.verdict}</p>
+      )}
+      {r && !r.error && (
+        <>
+          <p className="text-[12.5px]">
+            {r.archives} archives ·{' '}
+            {r.modlist === 'none'
+              ? 'name order'
+              : r.modlist === 'alton'
+                ? 'Alton’s saved order'
+                : 'an order saved by another tool'}{' '}
+            · {r.conflicts.length} clash{r.conflicts.length === 1 ? '' : 'es'}
+            {variantCount ? ` · ${variantCount} between alternative versions of one mod` : ''}
+          </p>
+          {r.moves.length ? (
+            <div className="space-y-1">
+              <div className="micro-label">Suggested</div>
+              {r.moves.map((m) => (
+                <p key={m.archive} className="text-[12px]">
+                  Move <b>{m.archive}</b> before <b>{m.before}</b>.{' '}
+                  <span className="text-text-muted">{m.reason}</span>
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12.5px] text-ok">
+              Patches and fixes already load ahead of the mods they patch.
+            </p>
+          )}
+          {!!r.conflicts.length && (
+            <ul className="space-y-1">
+              {r.conflicts.map((c) => (
+                <li
+                  key={`${c.winner}|${c.loser}`}
+                  className="flex items-center gap-2 border-b border-line/30 py-1 text-[12px]"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">
+                      <span className="text-ok">{c.winner}</span>
+                      <span className="text-text-muted"> wins over </span>
+                      {c.loser}
+                    </span>
+                    <span className="micro-label block normal-case">
+                      {c.files} shared file{c.files === 1 ? '' : 's'}
+                      {c.winnerMod || c.loserMod
+                        ? ` · ${c.winnerMod || '?'} vs ${c.loserMod || '?'}`
+                        : ''}
+                      {c.variants ? ' · alternative versions: usually install just one' : ''}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    className="hud-button !px-1.5 text-[11px]"
+                    title={`Load ${c.loser} first so its version is used`}
+                    onClick={() => {
+                      if (
+                        window.confirm(`Make “${c.loser}” win over “${c.winner}”? You can undo it.`)
+                      )
+                        change(
+                          window.arc.mods.setOrder({
+                            kind: 'prefer',
+                            archive: c.loser,
+                            over: c.winner,
+                          }),
+                        );
+                    }}
+                  >
+                    Make it win
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </Panel>
   );
 }
 
@@ -325,123 +469,126 @@ export function ModsTab() {
         </>
       }
       center={
-        <Panel
-          code="MOD.03"
-          title="Updates"
-          chip={st ? <Chip>{st.updates.length} available</Chip> : undefined}
-          className="flex-1"
-          bodyClassName="flex flex-col gap-2 overflow-y-auto"
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="hud-button"
-              disabled={!st?.keySet || !!st?.checking}
-              onClick={check}
-            >
-              <RefreshCw size={13} className={st?.checking ? 'animate-spin' : ''} />
-              {st?.checking
-                ? st.checking.total
-                  ? `Checking ${st.checking.done} of ${st.checking.total}…`
-                  : 'Checking…'
-                : 'Check for updates'}
-            </button>
-            {!!st?.updates.length && (
+        <>
+          <Panel
+            code="MOD.03"
+            title="Updates"
+            chip={st ? <Chip>{st.updates.length} available</Chip> : undefined}
+            className="min-h-0 flex-1"
+            bodyClassName="flex flex-col gap-2 overflow-y-auto"
+          >
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 className="hud-button"
-                onClick={() => {
-                  const n = st.updates.filter((u) => !u.state || u.state === 'failed').length;
-                  if (
-                    window.confirm(
-                      premium
-                        ? `Send all ${n} update${n === 1 ? '' : 's'} to Vortex to download and install? You can watch each one here.`
-                        : `Open the next ${Math.min(10, n)} updates on Nexus?`,
-                    )
-                  )
-                    act(
-                      window.arc.mods.updateAll().then((r) => {
-                        void window.arc.mods.status().then(setSt);
-                        return r;
-                      }),
-                    );
-                }}
-                disabled={!!st.updating}
+                disabled={!st?.keySet || !!st?.checking}
+                onClick={check}
               >
-                <Download size={13} /> {premium ? 'Update all' : 'Open next 10'}
+                <RefreshCw size={13} className={st?.checking ? 'animate-spin' : ''} />
+                {st?.checking
+                  ? st.checking.total
+                    ? `Checking ${st.checking.done} of ${st.checking.total}…`
+                    : 'Checking…'
+                  : 'Check for updates'}
               </button>
-            )}
-            <span className="text-[11.5px] text-text-muted">
-              Last checked {ago(st?.lastCheck ?? 0)}
-              {st && st.dailyLeft >= 0 ? ` · ${st.dailyLeft} Nexus requests left today` : ''}
-            </span>
-          </div>
-          {msg && <p className="text-[12.5px] text-accent">{msg}</p>}
-          {st?.error && <p className="text-[12.5px] text-alert">{st.error}</p>}
-          {st && (st.updating || st.jobs.length > 0) && (
-            <UpdateProgress st={st} premium={premium} />
-          )}
-          {!st?.keySet ? (
-            <p className="text-[12.5px] text-text-muted">
-              Add your Nexus Mods key to check for updates.
-            </p>
-          ) : !st.lastCheck ? (
-            <p className="text-[12.5px] text-text-muted">
-              Press Check for updates. The first check asks about every mod and takes about a
-              minute; after that only mods that changed are checked.
-            </p>
-          ) : !st.updates.length ? (
-            <p className="text-[12.5px] text-text-muted">Everything is up to date.</p>
-          ) : (
-            <ul className="space-y-1">
-              {st.updates.map((u) => (
-                <li
-                  key={u.modId}
-                  className="flex items-center gap-2 border-b border-line/30 py-1.5 text-[12.5px]"
+              {!!st?.updates.length && (
+                <button
+                  type="button"
+                  className="hud-button"
+                  onClick={() => {
+                    const n = st.updates.filter((u) => !u.state || u.state === 'failed').length;
+                    if (
+                      window.confirm(
+                        premium
+                          ? `Send all ${n} update${n === 1 ? '' : 's'} to Vortex to download and install? You can watch each one here.`
+                          : `Open the next ${Math.min(10, n)} updates on Nexus?`,
+                      )
+                    )
+                      act(
+                        window.arc.mods.updateAll().then((r) => {
+                          void window.arc.mods.status().then(setSt);
+                          return r;
+                        }),
+                      );
+                  }}
+                  disabled={!!st.updating}
                 >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-text-primary">{u.name}</span>
-                    <span className="micro-label block normal-case">
-                      {u.installed || '?'} → {u.latest || 'newer'} · updated {ago(u.updatedAt)}
-                    </span>
-                    {u.state && (
-                      <span
-                        className={`block text-[11.5px] ${u.state === 'failed' ? 'text-alert' : u.state === 'installed' ? 'text-ok' : 'text-accent'}`}
-                      >
-                        {STATE_LABEL[u.state]}
-                        {u.state === 'failed' && u.error ? `: ${u.error}` : ''}
+                  <Download size={13} /> {premium ? 'Update all' : 'Open next 10'}
+                </button>
+              )}
+              <span className="text-[11.5px] text-text-muted">
+                Last checked {ago(st?.lastCheck ?? 0)}
+                {st && st.dailyLeft >= 0 ? ` · ${st.dailyLeft} Nexus requests left today` : ''}
+              </span>
+            </div>
+            {msg && <p className="text-[12.5px] text-accent">{msg}</p>}
+            {st?.error && <p className="text-[12.5px] text-alert">{st.error}</p>}
+            {st && (st.updating || st.jobs.length > 0) && (
+              <UpdateProgress st={st} premium={premium} />
+            )}
+            {!st?.keySet ? (
+              <p className="text-[12.5px] text-text-muted">
+                Add your Nexus Mods key to check for updates.
+              </p>
+            ) : !st.lastCheck ? (
+              <p className="text-[12.5px] text-text-muted">
+                Press Check for updates. The first check asks about every mod and takes about a
+                minute; after that only mods that changed are checked.
+              </p>
+            ) : !st.updates.length ? (
+              <p className="text-[12.5px] text-text-muted">Everything is up to date.</p>
+            ) : (
+              <ul className="space-y-1">
+                {st.updates.map((u) => (
+                  <li
+                    key={u.modId}
+                    className="flex items-center gap-2 border-b border-line/30 py-1.5 text-[12.5px]"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-text-primary">{u.name}</span>
+                      <span className="micro-label block normal-case">
+                        {u.installed || '?'} → {u.latest || 'newer'} · updated {ago(u.updatedAt)}
                       </span>
+                      {u.state && (
+                        <span
+                          className={`block text-[11.5px] ${u.state === 'failed' ? 'text-alert' : u.state === 'installed' ? 'text-ok' : 'text-accent'}`}
+                        >
+                          {STATE_LABEL[u.state]}
+                          {u.state === 'failed' && u.error ? `: ${u.error}` : ''}
+                        </span>
+                      )}
+                    </span>
+                    {(!u.state || u.state === 'failed' || u.state === 'opened') && (
+                      <button
+                        type="button"
+                        className="hud-button"
+                        onClick={() =>
+                          act(
+                            window.arc.mods.update(u.modId).then((r) => {
+                              void window.arc.mods.status().then(setSt);
+                              return r;
+                            }),
+                          )
+                        }
+                      >
+                        <Download size={13} /> {u.state === 'failed' ? 'Retry' : 'Update'}
+                      </button>
                     )}
-                  </span>
-                  {(!u.state || u.state === 'failed' || u.state === 'opened') && (
                     <button
                       type="button"
                       className="hud-button"
-                      onClick={() =>
-                        act(
-                          window.arc.mods.update(u.modId).then((r) => {
-                            void window.arc.mods.status().then(setSt);
-                            return r;
-                          }),
-                        )
-                      }
+                      aria-label={`Open ${u.name} on Nexus`}
+                      onClick={() => act(window.arc.mods.open('page', u.modId))}
                     >
-                      <Download size={13} /> {u.state === 'failed' ? 'Retry' : 'Update'}
+                      <ExternalLink size={13} />
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="hud-button"
-                    aria-label={`Open ${u.name} on Nexus`}
-                    onClick={() => act(window.arc.mods.open('page', u.modId))}
-                  >
-                    <ExternalLink size={13} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+          <LoadOrderPanel />
+        </>
       }
       right={
         <Panel

@@ -147,3 +147,43 @@ export function diagnoseLaunch(
     verdict: parts.join(' '),
   };
 }
+
+/* ── REDmod (tools\redmod\bin\REDmodLog.txt, appended on every deploy) ── */
+export interface RedmodReport {
+  /** The last deploy failed (and at which step, e.g. "Script Compilation"). */
+  failed: boolean;
+  stage: string;
+  error: string;
+  /** REDmods in the last deploy that change game scripts or tweaks (the usual suspects). */
+  scriptMods: string[];
+  mods: string[];
+  verdict: string;
+}
+
+export function redmodReport(log: string): RedmodReport | null {
+  const runs = log
+    .split(/(?=^Copyright \(c\) 20\d\d)/m)
+    .filter((r) => /\[DEPLOY\]|Found mod/.test(r));
+  const last = runs[runs.length - 1];
+  if (!last) return null;
+  const mods: string[] = [];
+  const scriptMods: string[] = [];
+  for (const m of last.matchAll(/^Found mod "([^"]+)".*\(([^)]*)\)\s*$/gm)) {
+    const name = m[1] ?? '';
+    mods.push(name);
+    if (/SCRIPTS/.test(m[0])) scriptMods.push(name);
+  }
+  const failed = /Commandlet deploy has failed/.test(last);
+  const stages = [...last.matchAll(/\[DEPLOY\] Stage \d+\/\d+ - (.+)$/gm)];
+  const stage = failed ? (stages[stages.length - 1]?.[1]?.trim() ?? '') : '';
+  const error = /^ERROR: (.+)$/m.exec(last)?.[1]?.trim() ?? '';
+  let verdict = '';
+  if (failed) {
+    verdict = `REDmod’s last deploy failed${stage ? ` at “${stage}”` : ''}${error ? `: ${error}` : ''}.`;
+    if (/script/i.test(stage + error) && scriptMods.length)
+      verdict += ` The REDmod${scriptMods.length === 1 ? '' : 's'} that change game scripts: ${scriptMods.join(', ')}. Scripts written for an older game version stop the compile after an update: update ${scriptMods.length === 1 ? 'it' : 'them'}, or disable ${scriptMods.length === 1 ? 'it' : 'them'} in Vortex and deploy again.`;
+    else if (/sound/i.test(stage + error))
+      verdict += ' A REDmod with custom sounds has a problem: check the ones marked CUSTOMSOUNDS.';
+  }
+  return { failed, stage, error, scriptMods, mods, verdict };
+}

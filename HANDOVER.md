@@ -168,6 +168,14 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   free: next 10 Files pages) with UpdateJob per mod (queued → sending → in-vortex/opened → installed, or failed),
   `updating` progress and Stop (mods.cancel). "installed" = a new Vortex folder for that mod id appeared
   (settleJobs/installedSince); finished jobs drop after an hour. The tab polls while anything is waiting.
+  Load order (0.63, Mods tab › Load order; tool actions load_order / apply_load_order): `src/shared/loadorder.ts`
+  reads each .archive's index (RDAR header: u64 index pos @8, u32 size @16; index: entries u32 @16, 56-byte
+  entries from @28, first 8 bytes = FNV-1a64 file hash). Order = archive\pc\mod\modlist.txt then name order
+  (ordinal); first loaded wins. findConflicts → pairs; suggestOrder only moves a patch/fix ahead of a mod whose
+  name shares a real word (`related`); `variants` flags "X_Judy"/"X_Panam" style alternatives. Apply/"Make it
+  win" write modlist.txt (header "# Archive load order written by Alton", another tool's file kept as
+  modlist.txt.before-alton); Undo removes ours. REDmod: `redmodReport` parses tools\redmod\bin\REDmodLog.txt
+  (last deploy, failed stage, REDmods flagged SCRIPTS) — also in the launch check.
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

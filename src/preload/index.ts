@@ -123,6 +123,9 @@ const api: ArcAPI = {
     open: (what, id) => invoke(IPC.mods.open, what, id),
     diagnose: () => invoke(IPC.mods.diagnose),
     cancel: () => invoke(IPC.mods.cancel),
+    loadOrder: () => invoke(IPC.mods.loadOrder),
+    setOrder: (c) => invoke(IPC.mods.setOrder, c),
+    resetOrder: () => invoke(IPC.mods.resetOrder),
   },
   smarthome: {
     status: () => invoke(IPC.smarthome.status),
