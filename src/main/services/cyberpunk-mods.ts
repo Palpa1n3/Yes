@@ -18,7 +18,8 @@ import {
   type ModUpdate,
   type NexusInfo,
 } from '@shared/cpmods';
-import type { ModsStatus } from '@shared/ipc';
+import type { LaunchCheck, ModsStatus } from '@shared/ipc';
+import { diagnoseLaunch, type PluginFile } from '@shared/cplaunch';
 import { SecretStore } from './secret-store';
 
 const API = 'https://api.nexusmods.com/v1';
@@ -366,6 +367,69 @@ export class CyberpunkMods {
       what === 'folder' && modId ? this.list().find((m) => m.modId === modId)?.folder : undefined;
     await shell.openPath(folder ? join(v, folder) : v);
     return folder ? 'Opened the mod’s folder.' : 'Opened Vortex’s mods folder.';
+  }
+
+  /** Why won't the game start? Reads RED4ext's launch logs, the plugins' dates and the
+   *  redscript log (read only), and names the Vortex mod behind the plugin it stops on. */
+  async diagnose(): Promise<LaunchCheck> {
+    const game = await this.findGame();
+    if (!game)
+      return {
+        ...diagnoseLaunch([], []),
+        verdict: 'I couldn’t find Cyberpunk 2077.',
+        vortexMod: null,
+      };
+    const logsDir = join(game, 'red4ext', 'logs');
+    const read = (p: string): string => {
+      try {
+        return readFileSync(p, 'utf8').slice(-200_000);
+      } catch {
+        return '';
+      }
+    };
+    let names: string[] = [];
+    try {
+      names = readdirSync(logsDir)
+        .filter((n) => /^red4ext-\d{4}-.*\.log$/.test(n))
+        .sort()
+        .slice(-60);
+    } catch {
+      /* no logs */
+    }
+    const logs = names.map((name) => ({ name, text: read(join(logsDir, name)) }));
+    const pluginsDir = join(game, 'red4ext', 'plugins');
+    const plugins: PluginFile[] = [];
+    try {
+      for (const p of readdirSync(pluginsDir)) {
+        const dir = join(pluginsDir, p);
+        try {
+          if (!statSync(dir).isDirectory()) continue;
+          const dlls = readdirSync(dir)
+            .filter((f) => f.toLowerCase().endsWith('.dll'))
+            .map((f) => statSync(join(dir, f)).mtimeMs);
+          if (dlls.length) plugins.push({ plugin: p, modified: Math.max(...dlls) });
+        } catch {
+          /* skip */
+        }
+      }
+    } catch {
+      /* no plugins */
+    }
+    const report = diagnoseLaunch(
+      logs,
+      plugins,
+      read(join(game, 'r6', 'logs', 'redscript_rCURRENT.log')),
+    );
+    // Which Vortex mod installed that plugin?
+    let vortexMod: LaunchCheck['vortexMod'] = null;
+    const v = this.vortexDir();
+    if (v && report.culprit) {
+      const folder = this.list().find((m) =>
+        existsSync(join(v, m.folder, 'red4ext', 'plugins', report.culprit?.plugin ?? '')),
+      );
+      if (folder) vortexMod = { name: folder.name, modId: folder.modId, version: folder.version };
+    }
+    return { ...report, vortexMod };
   }
 
   find(q: string): CpMod[] {

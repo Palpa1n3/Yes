@@ -71,11 +71,14 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
   {
     name: 'cyberpunk_mods',
     description:
-      "The user's Cyberpunk 2077 mods (installed with Vortex) and their updates from Nexus Mods. Actions: summary (what's installed, what has updates since the last check), check (ask Nexus now; the first check takes about a minute), find (installed mods matching `name`, with installed and latest versions), open (`what`: folder = the mod's files, page = its Nexus page, game = the game folder, vortex = Vortex's mods folder), update (`name` = a mod or \"all\"; the user approves, then Vortex downloads and installs it on Premium, or its Nexus Files page opens). Alton never unpacks or runs mod files itself.",
+      "The user's Cyberpunk 2077 mods (installed with Vortex) and their updates from Nexus Mods. Actions: diagnose (why the game won't start or crashes on launch: reads its RED4ext and redscript logs, names the plugin it stops on and the Vortex mod behind it, and plugins older than the game's patch; explain the fix in plain words), summary (what's installed, what has updates since the last check), check (ask Nexus now; the first check takes about a minute), find (installed mods matching `name`, with installed and latest versions), open (`what`: folder = the mod's files, page = its Nexus page, game = the game folder, vortex = Vortex's mods folder), update (`name` = a mod or \"all\"; the user approves, then Vortex downloads and installs it on Premium, or its Nexus Files page opens). Alton never unpacks or runs mod files itself.",
     input_schema: {
       type: 'object',
       properties: {
-        action: { type: 'string', enum: ['summary', 'check', 'find', 'open', 'update'] },
+        action: {
+          type: 'string',
+          enum: ['diagnose', 'summary', 'check', 'find', 'open', 'update'],
+        },
         name: { type: 'string' },
         what: { type: 'string', enum: ['folder', 'page', 'game', 'vortex'] },
       },

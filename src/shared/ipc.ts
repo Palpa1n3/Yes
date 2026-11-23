@@ -68,6 +68,7 @@ export const IPC = {
     update: 'mods:update',
     updateAll: 'mods:update-all',
     open: 'mods:open',
+    diagnose: 'mods:diagnose',
   },
   smarthome: {
     status: 'smarthome:status',
@@ -327,6 +328,7 @@ export interface InvokeMap {
   [IPC.desk.wallpapers]: { args: []; result: import('./wallpapers').Wallpaper[] };
   [IPC.desk.setWallpaper]: { args: [path: string]; result: { ok: boolean; error?: string } };
   [IPC.mods.status]: { args: []; result: ModsStatus };
+  [IPC.mods.diagnose]: { args: []; result: LaunchCheck };
   [IPC.mods.list]: { args: []; result: import('./cpmods').CpMod[] };
   [IPC.mods.setKey]: { args: [key: string]; result: { ok: boolean; message: string } };
   [IPC.mods.clearKey]: { args: []; result: boolean };
@@ -569,6 +571,8 @@ export interface ArcAPI {
     update(modId: number): Promise<{ ok: boolean; message: string }>;
     updateAll(): Promise<{ ok: boolean; message: string }>;
     open(what: 'folder' | 'page' | 'game' | 'vortex', modId?: number): Promise<string>;
+    /** Why won't the game start? (reads its launch logs) */
+    diagnose(): Promise<LaunchCheck>;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */
@@ -883,3 +887,8 @@ export interface ModsStatus {
   dailyLeft: number;
   error: string;
 }
+
+/** Mods tab › Won't start?: the launch check plus the Vortex mod behind the culprit plugin. */
+export type LaunchCheck = import('./cplaunch').LaunchReport & {
+  vortexMod: { name: string; modId: number | null; version: string } | null;
+};

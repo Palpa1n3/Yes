@@ -94,6 +94,7 @@ export function registerToolbox(
     typeof id === 'number' ? mods.update(id) : { ok: false, message: 'Which mod?' },
   );
   handle(IPC.mods.updateAll, () => mods.updateAll());
+  handle(IPC.mods.diagnose, () => mods.diagnose());
   handle(IPC.mods.open, (what, id) =>
     ['folder', 'page', 'game', 'vortex'].includes(String(what))
       ? mods.open(what, typeof id === 'number' ? id : undefined)
@@ -300,6 +301,23 @@ export function registerToolbox(
         const found = name ? mods.find(name) : [];
         return found[0] ?? null;
       };
+      if (action === 'diagnose') {
+        const d = await mods.diagnose();
+        return {
+          verdict: d.verdict,
+          gameVersion: d.gameVersion,
+          stoppedOn: d.culprit,
+          vortexMod: d.vortexMod,
+          olderThanPatch: d.outdated,
+          scriptErrors: d.scriptErrors,
+          recentLaunches: d.runs.slice(-6).map((r) => ({
+            at: new Date(r.at).toISOString(),
+            version: r.gameVersion,
+            outcome: r.outcome,
+            stoppedOn: r.stoppedOn,
+          })),
+        };
+      }
       if (action === 'check') {
         const s = await mods.check();
         if (s.error) return { error: s.error };

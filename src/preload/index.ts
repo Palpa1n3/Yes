@@ -121,6 +121,7 @@ const api: ArcAPI = {
     update: (id) => invoke(IPC.mods.update, id),
     updateAll: () => invoke(IPC.mods.updateAll),
     open: (what, id) => invoke(IPC.mods.open, what, id),
+    diagnose: () => invoke(IPC.mods.diagnose),
   },
   smarthome: {
     status: () => invoke(IPC.smarthome.status),

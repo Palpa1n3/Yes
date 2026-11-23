@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, FolderOpen, RefreshCw, Search, Download } from 'lucide-react';
 import type { CpMod } from '@shared/cpmods';
-import type { ModsStatus } from '@shared/ipc';
+import type { LaunchCheck, ModsStatus } from '@shared/ipc';
 import { Chip } from '@renderer/components/panels/Chip';
 import { Panel } from '@renderer/components/panels/Panel';
 import { Columns } from './Columns';
@@ -22,6 +22,8 @@ export function ModsTab() {
   const [q, setQ] = useState('');
   const [key, setKey] = useState('');
   const [msg, setMsg] = useState('');
+  const [diag, setDiag] = useState<LaunchCheck | null>(null);
+  const [diagBusy, setDiagBusy] = useState(false);
   const load = (): void => {
     void window.arc.mods.status().then(setSt);
     void window.arc.mods.list().then(setMods);
@@ -151,6 +153,88 @@ export function ModsTab() {
                 </div>
               </div>
             )}
+          </Panel>
+          <Panel code="MOD.05" title="Won’t start?" className="shrink-0">
+            <div className="space-y-2 text-[12.5px]">
+              <p className="text-text-muted">
+                Reads the game’s mod logs from your last launches and says what’s stopping it.
+              </p>
+              <button
+                type="button"
+                className="hud-button"
+                disabled={diagBusy}
+                onClick={() => {
+                  setDiagBusy(true);
+                  void window.arc.mods
+                    .diagnose()
+                    .then(setDiag)
+                    .finally(() => setDiagBusy(false));
+                }}
+              >
+                {diagBusy ? 'Reading the logs…' : 'Check why it won’t start'}
+              </button>
+              {diag && (
+                <div className="space-y-1.5">
+                  <p className="text-text-primary">{diag.verdict}</p>
+                  {diag.vortexMod && (
+                    <p className="text-text-muted">
+                      In Vortex it’s “{diag.vortexMod.name}”
+                      {diag.vortexMod.version ? ` (version ${diag.vortexMod.version})` : ''}.
+                    </p>
+                  )}
+                  {diag.vortexMod?.modId != null && (
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        className="hud-button"
+                        onClick={() =>
+                          act(window.arc.mods.open('page', diag.vortexMod?.modId ?? undefined))
+                        }
+                      >
+                        <ExternalLink size={13} /> Its Nexus page
+                      </button>
+                      <button
+                        type="button"
+                        className="hud-button"
+                        onClick={() =>
+                          act(window.arc.mods.open('folder', diag.vortexMod?.modId ?? undefined))
+                        }
+                      >
+                        <FolderOpen size={13} /> Its files
+                      </button>
+                    </div>
+                  )}
+                  {!!diag.scriptErrors.length && (
+                    <pre className="max-h-28 overflow-auto whitespace-pre-wrap border border-line/50 p-1.5 font-mono text-[10.5px] text-text-muted">
+                      {diag.scriptErrors.join('\n')}
+                    </pre>
+                  )}
+                  {!!diag.runs.length && (
+                    <ul className="micro-label normal-case">
+                      {diag.runs
+                        .slice(-5)
+                        .reverse()
+                        .map((r) => (
+                          <li key={r.at}>
+                            {new Date(r.at).toLocaleString([], {
+                              dateStyle: 'short',
+                              timeStyle: 'short',
+                            })}{' '}
+                            · {r.gameVersion} ·{' '}
+                            {r.outcome === 'stopped-loading'
+                              ? `stopped loading ${r.stoppedOn ?? 'a plugin'}`
+                              : r.outcome === 'closed'
+                                ? 'ran and closed'
+                                : r.outcome === 'scripts-failed'
+                                  ? 'scripts failed'
+                                  : 'got past the plugins'}
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
           </Panel>
         </>
       }

@@ -158,6 +158,11 @@ result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' �
   → shell.openExternal(nxm://cyberpunk2077/mods/{id}/files/{fileId}) so Vortex downloads and installs; free →
   opens the Files page. Alton never unpacks or runs mod files. The tool asks approval before updating.
   Helpers `src/shared/cpmods.ts` (tests/cpmods.test.ts).
+  Launch check (0.61, Mods tab › Won't start? and cyberpunk_mods action 'diagnose'): `src/shared/cplaunch.ts`
+  reads red4ext\logsed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …" = crashed
+  loading that plugin; "plugin(s) loaded"/"scc invoked"/"shut down" = got further. Reports the plugin recent
+  launches keep stopping on, the date the game version changed, plugins whose DLLs predate it, redscript
+  [ERROR] lines, and the Vortex mod that ships the plugin. Read only.
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
