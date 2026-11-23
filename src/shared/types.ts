@@ -150,6 +150,8 @@ export interface Settings {
   userName: string;
   closeToTray: boolean;
   launchAtLogin: boolean;
+  /** Phone messages on the PC: read out in Alton's voice, quiet hours, "while you were away". */
+  phoneMsgs: { speak: boolean; quietFrom: number; quietTo: number; catchup: boolean };
   /** Desktop widget and taskbar: style, size, tiles, position, opacity, taskbar features. */
   desk: import('./desk').DeskSettings;
   /** Font, glass panels, chat look, tab bar, spacing and motion (shared with the phone). */
@@ -355,6 +357,7 @@ export const DEFAULT_SETTINGS: Settings = {
   persistHistory: true,
   uiStyle: DEFAULT_UI_STYLE,
   desk: DEFAULT_DESK,
+  phoneMsgs: { speak: true, quietFrom: 23, quietTo: 7, catchup: true },
   weatherPlace: null,
   tempUnit: 'c',
   windUnit: 'kmh',
@@ -477,6 +480,8 @@ export type AppCommand =
   | { type: 'screensaver'; on: boolean }
   | { type: 'journey-map'; map: JourneyMap }
   | { type: 'new-chat' }
+  | { type: 'speak'; text: string }
+  | { type: 'prefill'; text: string }
   | { type: 'agent-start' };
 
 /** What extra (expensive) telemetry the renderer currently needs. */

@@ -69,6 +69,27 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
   },
   SMART_HOME_TOOL,
   {
+    name: 'summarise_messages',
+    description:
+      'Summarise the user\'s phone messages that reached the PC (grouped by person or group chat, newest first, with what needs an answer). Say it in one or two sentences, e.g. "6 messages: Will\'s asking about tonight, Mum wants a call, 4 in the group chat about Saturday." Offer to reply.',
+    input_schema: {
+      type: 'object',
+      properties: { hours: { type: 'number', description: 'Only the last N hours (default 12)' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'reply_phone_message',
+    description:
+      'Reply to a phone message from the PC: the phone sends it through that message\'s own notification. "reply: on my way" answers the last message read out; give "to" (a person or group) for another. The user may be asked to approve first. Say it\'s on its way; Alton confirms out loud when the phone has sent it.',
+    input_schema: {
+      type: 'object',
+      properties: { text: { type: 'string' }, to: { type: 'string' } },
+      required: ['text'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'post_to_discord',
     description:
       "Post a message to the user's Discord channel (through the webhook they saved in settings). They approve the exact text first.",

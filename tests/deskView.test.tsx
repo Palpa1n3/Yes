@@ -34,6 +34,7 @@ const snap: DeskSnapshot = {
   reminders: [],
   list: { name: 'Shopping', items: ['milk', 'bread'] },
   phone: { battery: 64, charging: false, unread: 2, payday: null, at: now },
+  msg: null,
   agentWaiting: false,
   warning: null,
 };

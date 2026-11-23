@@ -406,32 +406,55 @@ function TodayTile({ s, hud, now }: { s: DeskSnapshot; hud: boolean; now: number
   );
 }
 
-function PhoneTile({ s, hud }: { s: DeskSnapshot; hud: boolean }) {
+function PhoneTile({ s, hud, preview }: { s: DeskSnapshot; hud: boolean; preview?: boolean }) {
   const p = s.phone;
-  if (!p) return null;
+  if (!p && !s.msg) return null;
   return (
-    <Tile hud={hud}>
-      <div className="flex items-center gap-4 text-[13px] text-white/85">
-        <span className="flex items-center gap-1.5">
-          {p.charging ? (
-            <BatteryCharging size={16} className="text-[rgb(var(--ok))]" />
-          ) : (
-            <Battery
-              size={16}
-              className={
-                p.battery !== null && p.battery <= 20
-                  ? 'text-[rgb(var(--alert))]'
-                  : 'text-[rgb(var(--accent))]'
-              }
-            />
+    <Tile hud={hud} interactive={!!s.msg} preview={preview}>
+      {s.msg && (
+        <div className="mb-2 flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[13px] font-medium text-white">
+              {s.msg.from}
+              {s.msg.chat ? ` · ${s.msg.chat}` : ''}
+              <span className="font-normal text-white/50"> · {s.msg.app}</span>
+            </div>
+            <div className="line-clamp-2 text-[12.5px] text-white/75">{s.msg.text}</div>
+          </div>
+          {s.msg.canReply && (
+            <button
+              type="button"
+              className="rounded-full bg-white/10 px-3 py-1 text-[12px] text-white hover:bg-[rgb(var(--accent)/0.35)]"
+              onClick={() => !preview && window.arc.desk.action('reply')}
+            >
+              Reply
+            </button>
           )}
-          Phone {p.battery !== null ? `${p.battery}%` : ''}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <MessageSquare size={15} className="text-[rgb(var(--accent))]" />
-          {p.unread ? `${p.unread} unread` : 'No new messages'}
-        </span>
-      </div>
+        </div>
+      )}
+      {p && (
+        <div className="flex items-center gap-4 text-[13px] text-white/85">
+          <span className="flex items-center gap-1.5">
+            {p.charging ? (
+              <BatteryCharging size={16} className="text-[rgb(var(--ok))]" />
+            ) : (
+              <Battery
+                size={16}
+                className={
+                  p.battery !== null && p.battery <= 20
+                    ? 'text-[rgb(var(--alert))]'
+                    : 'text-[rgb(var(--accent))]'
+                }
+              />
+            )}
+            Phone {p.battery !== null ? `${p.battery}%` : ''}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <MessageSquare size={15} className="text-[rgb(var(--accent))]" />
+            {p.unread ? `${p.unread} unread` : 'No new messages'}
+          </span>
+        </div>
+      )}
     </Tile>
   );
 }
@@ -460,7 +483,7 @@ export function DeskView({
     health: () => <HealthTile stats={stats} hud={hud} />,
     weather: () => <WeatherTile s={snap} hud={hud} />,
     today: () => <TodayTile s={snap} hud={hud} now={t} />,
-    phone: () => <PhoneTile s={snap} hud={hud} />,
+    phone: () => <PhoneTile s={snap} hud={hud} preview={preview} />,
   };
   return (
     <div className="flex w-[300px] select-none flex-col gap-2">

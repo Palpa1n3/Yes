@@ -251,6 +251,18 @@ Schwarzschild spacetime (d²x/dλ² = −1.5·h²·x/r⁵), a thin disc from the
 (3 Rs) with the thin-disc temperature law, Doppler beaming and gravitational redshift, and
 lensed stars. Painted once when chosen (cached), so it costs nothing while you use the app.
 
+### Phone messages (0.56)
+
+Phone: Settings › Phone › Messages shows whether Alton is listening, a **test announcement**, and
+a log of every message and why it was or wasn't read out (**Copy log** to send it). Favourite
+people are read straight away, word for word; everyone else and group chats are summarised at
+most every 10 minutes; one-time codes and passwords are never read out. With **Send messages to my
+PC** on, the PC reads them aloud at your desk in Alton's voice (just shown while gaming or
+full-screen), and you can say **"reply: …"**, which the phone sends through that message's own
+reply. Ask either for a summary ("any messages?"); it's in the morning brief and the end-of-shift
+note too. **While you were away**: a spoken catch-up on the PC when it starts, wakes or unlocks,
+and a card on the phone's Today after 30+ minutes away.
+
 ### Desktop & taskbar (0.55)
 
 Settings › Appearance › Desktop widget / Taskbar. The **desktop widget** is a stack of floating

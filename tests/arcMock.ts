@@ -129,6 +129,7 @@ export function installArcMock(): ArcAPI {
         reminders: [],
         list: null,
         phone: null,
+        msg: null,
         agentWaiting: false,
         warning: null,
       })),

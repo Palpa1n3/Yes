@@ -3,6 +3,7 @@ import { SPACE_BACKDROPS } from '@shared/backdrops';
 import { SPACE_LOOKS } from '@shared/looks';
 import { SpaceTileArt } from '@renderer/components/hud/Background';
 import { DeskSection } from './DeskSection';
+import { PhoneMsgsSection } from './PhoneMsgsSection';
 import type { AvatarStyle } from '@shared/types';
 import { PromptsSection } from './PromptsSection';
 import { useUiStore } from '@renderer/stores/uiStore';
@@ -1027,6 +1028,7 @@ export function ConnectionsTab() {
     <>
       <PhoneSection />
       <PhoneAppSection />
+      <PhoneMsgsSection />
       <CalendarSection />
       <EmailSection />
       <SmartHomeSection />

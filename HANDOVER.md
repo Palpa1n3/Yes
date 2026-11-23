@@ -101,6 +101,21 @@ Read this first in a new chat, then README.md for the feature list.
   lock and runs `AppReader` (shared with `readApp`), saves the text and returns to Alton; JS
   `takeAutoRota` on resume sends it to Claude (phone-only) to add the shifts. Once per 20 h, or
   sooner after the shift app posts a notification (`MessageListener` → `AutoRota.notePosted`).
+  Phone messages (0.56): why announcing failed before: off by default, silent on vibrate (now only full silent
+  stops it), chat apps' newest message/sender not read (now MessagingStyle EXTRA_MESSAGES / conversation title /
+  group flag), some apps not counted (known messaging packages now count), the listener dropped with no rebind
+  (`MessageListener.rebind` → requestRebind), and no record. Every decision goes to `MsgLog` (Settings › Phone ›
+  Messages: status, test announcement, Copy log). `Announcer`: favourites (one-to-one) word for word now, the rest
+  batched into one summary at most every 10 min; codes hidden (`MsgLog.hideCodes` = shared `hideCodes`). `PcLink`
+  posts each message to the PC (`/api/phone-messages`, pairing token stored natively, works with Alton closed) and
+  for 5 min polls `/api/phone-replies` to send PC replies through the notification (result → `/api/phone-replies/
+result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' → renderer speakNow; busy = gaming or
+  full-screen → holo notification + widget Phone tile; replies ask first unless the phone's autoMessages; confirms
+  aloud), tools `summarise_messages` / `reply_phone_message`, context line, briefing line, settings `phoneMsgs`
+  (Connections › Phone messages). Catch-up: `shared/catchup.ts` buildCatchup; PC on start (last-active.json) /
+  resume / unlock after 15+ min; phone "While you were away" card on Today after 30+ min with Reply and Read it out.
+  End-of-shift notes go through LateReceiver (msgs flag) so the messages line is added when they fire.
+  Shared helpers `src/shared/messages.ts` (tests/messages.test.ts).
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

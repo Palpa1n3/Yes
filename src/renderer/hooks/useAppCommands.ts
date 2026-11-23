@@ -5,6 +5,7 @@ import { saveNow, useConversationStore } from '@renderer/stores/conversationStor
 import { useUiStore } from '@renderer/stores/uiStore';
 import { toggleListening } from '@renderer/voice/useSpeechInput';
 import { toggleOpenMic } from '@renderer/voice/useWakeWord';
+import { speakNow } from '@renderer/voice/useSpeechOutput';
 
 export const FOCUS_INPUT_EVENT = 'arc:focus-input';
 
@@ -62,6 +63,17 @@ export function useAppCommands(compact: boolean): void {
             );
             break;
           }
+          // Phone messages and catch-ups, said in Alton's voice.
+          case 'speak':
+            speakNow(c.text);
+            break;
+          case 'prefill':
+            if (!compact) useUiStore.getState().setTab('chat');
+            setTimeout(
+              () => window.dispatchEvent(new CustomEvent('arc:prefill', { detail: c.text })),
+              150,
+            );
+            break;
           // From the taskbar (jump list, thumbnail toolbar, tray).
           case 'new-chat':
             if (!compact) useUiStore.getState().setTab('chat');

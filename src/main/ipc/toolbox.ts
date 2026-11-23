@@ -1,3 +1,5 @@
+import { phoneMessages } from '../services/phone-messages';
+import { digestForAi, groupMessages, quickSummary } from '@shared/messages';
 import { app, safeStorage, shell } from 'electron';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -245,6 +247,25 @@ export function registerToolbox(
         await shell.openExternal(`https://open.spotify.com/search/${encodeURIComponent(q)}`);
         return { opened: `Spotify web search for “${q}”.` };
       }
+    },
+    summarise_messages: (raw) => {
+      const pm = phoneMessages();
+      const h = Number(input(raw).hours);
+      const hours = Number.isFinite(h) && h > 0 ? Math.min(72, h) : 12;
+      const msgs = pm?.since(Date.now() - hours * 3_600_000) ?? [];
+      const g = groupMessages(msgs);
+      return {
+        summary: g.length ? quickSummary(g) : 'No phone messages have reached the PC.',
+        details: digestForAi(g),
+      };
+    },
+    reply_phone_message: async (raw) => {
+      const o = input(raw);
+      const pm = phoneMessages();
+      if (!pm) return { error: 'Phone messages are not set up.' };
+      return {
+        result: await pm.reply(String(o.text ?? ''), typeof o.to === 'string' ? o.to : undefined),
+      };
     },
     smart_home: async (raw) => {
       const i = cleanSmartInput(raw);

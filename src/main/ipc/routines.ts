@@ -1,3 +1,5 @@
+import { phoneMessages } from '../services/phone-messages';
+import { groupMessages, quickSummary } from '@shared/messages';
 import { app } from 'electron';
 import { join } from 'node:path';
 import type { CanonicalCommand, CommandResult } from '@shared/commands';
@@ -24,7 +26,9 @@ export function registerRoutinesIpc(
     execute,
     briefing: () => {
       const s = ctx.settings.get();
-      return buildBriefing({
+      const msgs = phoneMessages()?.since(Date.now() - 12 * 3_600_000) ?? [];
+      const msgLine = msgs.length ? ` Phone messages: ${quickSummary(groupMessages(msgs))}` : '';
+      return `${buildBriefing({
         now: Date.now(),
         personality: s.personality,
         userName: s.userName,
@@ -35,7 +39,7 @@ export function registerRoutinesIpc(
         calendar: calendar.state().configured ? calendar.state().events : null,
         todo: todoSentence(notes.state()),
         email: emailLine(),
-      });
+      })}${msgLine}`;
     },
     onChange: (list) => emit(ctx.getWindow(), IPC.routines.onChange, list),
     onProgress: (p) => emit(ctx.getWindow(), IPC.routines.onProgress, p),

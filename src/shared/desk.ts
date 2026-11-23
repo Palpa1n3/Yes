@@ -334,6 +334,8 @@ export interface DeskSnapshot {
   reminders: Array<{ what: string; at: number }>;
   list: { name: string; items: string[] } | null;
   phone: PhoneStatus | null;
+  /** The newest phone message that reached the PC in the last 30 minutes. */
+  msg: { from: string; chat: string; text: string; app: string; canReply: boolean } | null;
   agentWaiting: boolean;
   warning: string | null;
 }

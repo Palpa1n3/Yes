@@ -114,6 +114,20 @@ export function sanitizeSettings(raw: unknown): Settings {
     persistHistory: bool('persistHistory'),
     uiStyle: cleanUiStyle(r['uiStyle']),
     desk: cleanDesk(r['desk']),
+    phoneMsgs: (() => {
+      const o =
+        r['phoneMsgs'] && typeof r['phoneMsgs'] === 'object'
+          ? (r['phoneMsgs'] as Record<string, unknown>)
+          : {};
+      const hour = (v: unknown, dflt: number): number =>
+        typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 23 ? v : dflt;
+      return {
+        speak: typeof o.speak === 'boolean' ? o.speak : true,
+        quietFrom: hour(o.quietFrom, 23),
+        quietTo: hour(o.quietTo, 7),
+        catchup: typeof o.catchup === 'boolean' ? o.catchup : true,
+      };
+    })(),
     weatherPlace: validPlace(r['weatherPlace']),
     tempUnit: r['tempUnit'] === 'f' ? 'f' : r['tempUnit'] === 'c' ? 'c' : d.tempUnit,
     windUnit: r['windUnit'] === 'mph' ? 'mph' : r['windUnit'] === 'kmh' ? 'kmh' : d.windUnit,

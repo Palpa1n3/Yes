@@ -785,6 +785,7 @@ export type DeskAction =
   | 'sleep'
   | 'widget'
   | 'phone'
+  | 'reply'
   | 'play_pause'
   | 'next'
   | 'previous';

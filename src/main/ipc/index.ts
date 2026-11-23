@@ -1,8 +1,15 @@
+import { phoneMessages, startPhoneMessages } from '../services/phone-messages';
+import { lastPayday, phoneStatus } from '../services/phone-status';
+import { buildCatchup } from '@shared/catchup';
+import { inQuietHours } from '@shared/messages';
+import { groupMessages, quickSummary } from '@shared/messages';
 import { startDesk } from '../desk';
 import { deskHooks } from '../desk-state';
 import { notifyUser } from '../holo';
 import { JourneyService, LeaveReminders } from '../services/journey';
-import { shell, powerMonitor, screen } from 'electron';
+import { app, shell, powerMonitor, screen } from 'electron';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { MainContext } from '../context';
 import { SkillRegistry, systemReportSkill } from '../services/skills';
 import { toWebUrl } from '../services/command-executor';
@@ -182,6 +189,7 @@ export function registerIpc(ctx: MainContext): void {
       return [
         contextLine(awareness.foreground()),
         g.active ? `The user is gaming${g.game ? ` (${g.game})` : ''}.` : '',
+        phoneMessageContext(),
       ]
         .filter(Boolean)
         .join(' ');
@@ -296,6 +304,68 @@ export function registerIpc(ctx: MainContext): void {
         .slice(-20),
   });
   registerInfoIpc();
+  // Phone messages read out / shown on the PC.
+  startPhoneMessages({
+    settings: () => ctx.settings.get().phoneMsgs,
+    busy: () => gaming.get().active || awareness.foreground()?.fullscreen === true,
+    speak: (text) => ctx.command({ type: 'speak', text }),
+    show: (title, body) => notifyUser(title, body, 'info'),
+    ask: (title, detail) => ctx.askApproval?.(title, detail) ?? Promise.resolve(false),
+    autoSend: () => phoneStatus()?.autoSend === true,
+  });
+  // "While you were away" when the PC starts, wakes from sleep or is unlocked.
+  {
+    const file = join(app.getPath('userData'), 'last-active.json');
+    let awayAt = 0;
+    let shiftsKey = '';
+    try {
+      awayAt = Number((JSON.parse(readFileSync(file, 'utf8')) as { at?: number }).at) || 0;
+    } catch {
+      /* first run */
+    }
+    const shiftsNow = (): string => JSON.stringify(ctx.shifts.upcoming());
+    const leave = (): void => {
+      awayAt = Date.now();
+      shiftsKey = shiftsNow();
+    };
+    const back = (): void => {
+      setTimeout(() => {
+        const st = ctx.settings.get().phoneMsgs;
+        const since = awayAt;
+        awayAt = 0;
+        if (!st.catchup || !since) return;
+        const line = buildCatchup({
+          awayMs: Date.now() - since,
+          messages: phoneMessages()?.since(since) ?? [],
+          missed: ctx.timers
+            .list()
+            .filter((t) => t.status === 'ringing')
+            .map((t) => t.label),
+          rotaChanged: !!shiftsKey && shiftsKey !== shiftsNow(),
+          payday: phoneStatus()?.payday ?? lastPayday(),
+        });
+        if (!line) return;
+        ctx.command({ type: 'notice', text: line });
+        const busy = gaming.get().active || awareness.foreground()?.fullscreen === true;
+        if (st.speak && !busy && !inQuietHours(new Date().getHours(), st.quietFrom, st.quietTo))
+          ctx.command({ type: 'speak', text: line });
+      }, 6000);
+    };
+    powerMonitor.on('suspend', leave);
+    powerMonitor.on('lock-screen', leave);
+    powerMonitor.on('resume', back);
+    powerMonitor.on('unlock-screen', back);
+    if (awayAt) back(); // started up: since Alton was last running
+    const stamp = (): void => {
+      try {
+        writeFileSync(file, JSON.stringify({ at: Date.now() }));
+      } catch {
+        /* read-only */
+      }
+    };
+    setInterval(stamp, 5 * 60_000).unref?.();
+    app.on('before-quit', stamp);
+  }
   // Desktop widget, taskbar strip and taskbar features.
   startDesk({
     ctx,
@@ -313,4 +383,14 @@ export function registerIpc(ctx: MainContext): void {
       }),
     syncTelemetry: () => deskHooks.syncTelemetry(),
   });
+}
+
+/** For Claude: the last phone message read out (so "reply: …" knows who), and what's waiting. */
+function phoneMessageContext(): string {
+  const pm = phoneMessages();
+  if (!pm) return '';
+  const recent = pm.since(Date.now() - 6 * 3_600_000);
+  if (!recent.length) return '';
+  const last = pm.last ?? pm.latest();
+  return `Phone messages in the last 6 hours: ${quickSummary(groupMessages(recent))}${last ? ` The last one read out: ${last.from}${last.chat ? ` in ${last.chat}` : ''} on ${last.app}. If the user says "reply: …", use reply_phone_message.` : ''}`;
 }

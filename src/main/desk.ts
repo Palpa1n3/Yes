@@ -1,6 +1,8 @@
 /** The desktop widget, the taskbar strip and the taskbar features (thumbnail toolbar, jump
  *  list, overlay badge, progress bar, live tray tooltip), all from one snapshot of what's going
  *  on. Built every 2 s from in-memory state (cheap); pushed to the windows only on a change. */
+import { phoneMessages } from './services/phone-messages';
+import { hideCodes } from '@shared/messages';
 import { execFile } from 'node:child_process';
 import { join } from 'node:path';
 import { BrowserWindow, app, ipcMain, screen, type Rectangle } from 'electron';
@@ -179,6 +181,18 @@ export class DeskService {
           }
         : null,
       phone: phoneStatus(),
+      msg: (() => {
+        const m = phoneMessages()?.latest();
+        return m && now - m.at < 30 * 60_000
+          ? {
+              from: m.from,
+              chat: m.chat,
+              text: hideCodes(m.text).slice(0, 140),
+              app: m.app,
+              canReply: m.canReply,
+            }
+          : null;
+      })(),
       agentWaiting: deskState.agentWaiting || (ctx.pendingApprovals?.().length ?? 0) > 0,
       warning: stats.timestamp
         ? pcWarning({
@@ -234,6 +248,10 @@ export class DeskService {
       case 'phone':
         ctx.showWindow();
         ctx.command({ type: 'open-settings' });
+        return;
+      case 'reply':
+        ctx.showWindow(true);
+        ctx.command({ type: 'prefill', text: 'reply: ' });
         return;
       case 'play_pause':
       case 'next':

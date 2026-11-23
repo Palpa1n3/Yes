@@ -1,3 +1,4 @@
+import { phoneMessages } from '../services/phone-messages';
 import { setPhoneStatus } from '../services/phone-status';
 import { sanitizeInput, type RemoteInput } from '@shared/remote-input';
 import { phoneAvatarFor, THEME_ACCENT } from '@shared/looks';
@@ -305,6 +306,21 @@ export function makePhoneRoutes(
         at: Date.now(),
       };
       return ok({ payload, appUrl: st.phoneAppUrl });
+    }
+    // ── Phone messages (sent by the phone's listener, even with the app closed) ──
+    if (a === 'phone-messages' && method === 'POST') {
+      const m = phoneMessages()?.add(body);
+      return ok({ ok: !!m });
+    }
+    if (a === 'phone-replies' && method === 'GET' && !b)
+      return ok({ replies: phoneMessages()?.pending() ?? [] });
+    if (a === 'phone-replies' && b === 'result' && method === 'POST') {
+      phoneMessages()?.result(
+        typeof body.id === 'string' ? body.id : '',
+        body.ok === true,
+        typeof body.error === 'string' ? body.error.slice(0, 200) : undefined,
+      );
+      return ok({ ok: true });
     }
     if (a === 'import' && method === 'POST') {
       const data = body.data as SyncToPc | undefined;

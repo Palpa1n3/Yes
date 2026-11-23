@@ -2092,12 +2092,23 @@ async function scheduleWatch(): Promise<void> {
   // Leave-by with a "Running late" button goes through the app's own alarm (so the button can
   // send the text without opening Alton); everything else is a normal notification.
   const late = lateNumber();
-  const lateUps = late ? ups.filter((u) => u.key.startsWith('leave:')) : [];
+  // Through the app's own alarm: leave-by with "Running late", and the end-of-shift summary
+  // (so the messages that came in during the shift are added when it fires).
+  const nativeUps = isApp
+    ? ups.filter((u) => (late && u.key.startsWith('leave:')) || u.key.startsWith('end:'))
+    : [];
   for (const u of ups)
-    if (!lateUps.includes(u))
+    if (!nativeUps.includes(u))
       notes.push({ id: noteId(u.key), title: u.title, body: u.body, at: u.at });
   void Native.scheduleLate({
-    items: lateUps.map((u) => ({ id: noteId(u.key), at: u.at, title: u.title, body: u.body })),
+    items: nativeUps.map((u) => ({
+      id: noteId(u.key),
+      at: u.at,
+      title: u.title,
+      body: u.body,
+      late: u.key.startsWith('leave:'),
+      msgs: u.key.startsWith('end:'),
+    })),
     to: late,
     text: S.lateText,
     name: S.lateTo,

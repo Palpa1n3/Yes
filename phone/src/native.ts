@@ -415,7 +415,14 @@ interface AltonNativePlugin {
   addPlaceNote(o: { text: string }): Promise<void>;
   /** Leave-by heads-ups with a "Running late" button that texts `to` (replaces earlier ones). */
   scheduleLate(o: {
-    items: Array<{ id: number; at: number; title: string; body: string }>;
+    items: Array<{
+      id: number;
+      at: number;
+      title: string;
+      body: string;
+      late?: boolean;
+      msgs?: boolean;
+    }>;
     to: string;
     text: string;
     name: string;
