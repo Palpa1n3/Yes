@@ -128,6 +128,13 @@ result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' �
   `notifyNow` "💷 Price drop: …" (`priceDrop`: 2 % and 50p minimum). Morrisons offers: a button asking Claude to
   check the Shopping list against offers with web search. Helpers `src/shared/money.ts` (tests/money.test.ts).
   No bank logins; data goes only to Claude.
+  Moving backgrounds (0.58): `src/renderer/components/core/bgMotion.ts` draws a light canvas over the painted
+  background (phone `#bgMotion` fixed at z-index -1 in body; PC `.space-bd-motion` next to `.space-bd`):
+  twinkling stars, shooting stars, and a per-scene effect from `motionPlan` (disc / infall / rings / flare /
+  satellites / glow), positions matching spaceArt.ts. ≤30 fps, pauses when hidden, off for reduce motion or
+  Animations: Off. UiStyle gained bgMotion (default calm), shooting, parallax, weight, shadow, border 'pulse',
+  lift, enter, aiStyle (PC answers have class `chat-ai`), chatSize, scrollbar, focusGlow; CSS in ui-style.css.
+  Phone CSP now allows `font-src 'self' data:` (the bundled fonts were blocked). tests/bgMotion.test.ts.
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

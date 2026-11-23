@@ -1,6 +1,7 @@
 import '@shared/space-backdrops.css';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { paintSpace } from '@renderer/components/core/spaceArt';
+import { startBgMotion } from '@renderer/components/core/bgMotion';
 import { useEffect, useRef } from 'react';
 import { useReducedMotion } from '@renderer/hooks/useReducedMotion';
 
@@ -114,7 +115,26 @@ export function Background({
 /** The chosen space background (Settings › Appearance › Space background). */
 export function SpaceBackdropLayer() {
   const backdrop = useSettingsStore((s) => s.settings.backdrop);
+  const ui = useSettingsStore((s) => s.settings.uiStyle);
+  const reduced = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
+  const motionRef = useRef<HTMLCanvasElement>(null);
+  const level = reduced || ui.motion === 'off' ? 'off' : ui.bgMotion;
+  useEffect(() => {
+    const c = motionRef.current;
+    if (!c || backdrop === 'none') return;
+    return startBgMotion(c, backdrop, {
+      level,
+      shooting: ui.shooting,
+      parallax: ui.parallax,
+      accent: () =>
+        getComputedStyle(document.documentElement)
+          .getPropertyValue('--accent')
+          .trim()
+          .split(/\s+/)
+          .join(',') || '63,208,255',
+    });
+  }, [backdrop, level, ui.shooting, ui.parallax]);
   useEffect(() => {
     const el = ref.current;
     if (!el || backdrop === 'none') return;
@@ -131,7 +151,12 @@ export function SpaceBackdropLayer() {
     };
   }, [backdrop]);
   if (backdrop === 'none') return null;
-  return <div ref={ref} className="space-bd" data-bg={backdrop} aria-hidden="true" />;
+  return (
+    <>
+      <div ref={ref} className="space-bd" data-bg={backdrop} aria-hidden="true" />
+      {level !== 'off' && <canvas ref={motionRef} className="space-bd-motion" aria-hidden="true" />}
+    </>
+  );
 }
 
 /** A small preview of a space background (Settings › Appearance). */

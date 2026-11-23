@@ -210,7 +210,7 @@ function Row({
       );
     case 'assistant':
       return (
-        <li className="group/msg mr-6 flex gap-2 text-text-primary">
+        <li className="chat-ai group/msg mr-6 flex gap-2 text-text-primary">
           <span className="shrink-0 font-mono text-accent">
             {assistantName} ›
             <span className="chat-time text-text-muted">{msgTime(m.timestamp)}</span>

@@ -1,7 +1,8 @@
 /** Interface customisation shared by the PC and the phone app: font, glass panels, chat look,
  *  tab bar, spacing and motion. Stored as one object (`uiStyle`), applied as attributes and
  *  CSS variables on <html> (see ui-style.css), so it costs nothing while the app runs.
- *  Every default leaves the app looking exactly as it did before. */
+ *  Every default leaves the app looking as designed, except that backgrounds move gently
+ *  (Background › Moving background: Calm), which can be switched off. */
 
 export interface UiStyle {
   font: 'standard' | 'futuristic' | 'scifi' | 'terminal' | 'system' | 'classic';
@@ -13,7 +14,7 @@ export interface UiStyle {
   glow: number;
   /** A colour cast in the glass. */
   tint: 'none' | 'theme' | 'warm' | 'cool' | 'dark';
-  border: 'standard' | 'none' | 'bold' | 'neon';
+  border: 'standard' | 'none' | 'bold' | 'neon' | 'pulse';
   /** Colour boost behind frosted glass, % (100 = none). */
   vivid: number;
   /** Darken the background behind everything, % (0 = none). */
@@ -26,6 +27,25 @@ export interface UiStyle {
   tabs: 'labels' | 'icons';
   spacing: 'compact' | 'normal' | 'roomy';
   motion: 'normal' | 'fast' | 'off';
+  /** Moving background layer (stars twinkling, the scene's own effect). */
+  bgMotion: 'off' | 'calm' | 'lively';
+  shooting: boolean;
+  /** The background shifts a little with the mouse or the phone's tilt. */
+  parallax: boolean;
+  /** Bolder text everywhere. */
+  weight: 'normal' | 'bold';
+  shadow: 'standard' | 'soft' | 'deep';
+  /** Panels rise a little under the mouse / finger. */
+  lift: boolean;
+  /** How new messages come in. */
+  enter: 'standard' | 'slide' | 'pop' | 'fade' | 'none';
+  /** Alton's answers: as designed, or in their own panel. */
+  aiStyle: 'standard' | 'card';
+  /** Chat text size, %. */
+  chatSize: number;
+  scrollbar: 'standard' | 'thin' | 'hidden';
+  /** A glow round the message box while typing. */
+  focusGlow: boolean;
 }
 
 export const DEFAULT_UI_STYLE: UiStyle = {
@@ -45,6 +65,17 @@ export const DEFAULT_UI_STYLE: UiStyle = {
   tabs: 'labels',
   spacing: 'normal',
   motion: 'normal',
+  bgMotion: 'calm',
+  shooting: true,
+  parallax: false,
+  weight: 'normal',
+  shadow: 'standard',
+  lift: false,
+  enter: 'standard',
+  aiStyle: 'standard',
+  chatSize: 100,
+  scrollbar: 'standard',
+  focusGlow: false,
 };
 
 /** Font stacks: the bundled fonts first (Rajdhani, Orbitron, Inter, JetBrains Mono), then what
@@ -81,6 +112,29 @@ type Field =
 /** The controls, in order and grouped, for both apps' Settings pages. */
 export const UI_STYLE_GROUPS: Array<{ title: string; fields: Field[] }> = [
   {
+    title: 'Moving background',
+    fields: [
+      {
+        key: 'bgMotion',
+        label: 'Moving background',
+        kind: 'select',
+        options: [
+          ['calm', 'Calm'],
+          ['lively', 'Lively'],
+          ['off', 'Still'],
+        ],
+        hint: 'Twinkling stars and each scene’s own motion: the black hole’s disc turning, gas falling into the wormhole, the sun’s glare. Uses very little battery.',
+      },
+      { key: 'shooting', label: 'Shooting stars', kind: 'toggle' },
+      {
+        key: 'parallax',
+        label: 'Move with the mouse or phone tilt',
+        kind: 'toggle',
+        hint: 'The background shifts a few pixels, for a sense of depth.',
+      },
+    ],
+  },
+  {
     title: 'Font',
     fields: [
       {
@@ -94,6 +148,15 @@ export const UI_STYLE_GROUPS: Array<{ title: string; fields: Field[] }> = [
           ['terminal', 'Terminal'],
           ['system', 'System'],
           ['classic', 'Classic'],
+        ],
+      },
+      {
+        key: 'weight',
+        label: 'Text weight',
+        kind: 'select',
+        options: [
+          ['normal', 'Normal'],
+          ['bold', 'Bolder'],
         ],
       },
     ],
@@ -134,8 +197,20 @@ export const UI_STYLE_GROUPS: Array<{ title: string; fields: Field[] }> = [
           ['none', 'None'],
           ['bold', 'Bold'],
           ['neon', 'Neon'],
+          ['pulse', 'Neon, breathing'],
         ],
       },
+      {
+        key: 'shadow',
+        label: 'Panel shadow',
+        kind: 'select',
+        options: [
+          ['standard', 'Standard'],
+          ['soft', 'Soft'],
+          ['deep', 'Deep (floating)'],
+        ],
+      },
+      { key: 'lift', label: 'Panels lift when touched', kind: 'toggle' },
       {
         key: 'vivid',
         label: 'Colour boost',
@@ -203,6 +278,36 @@ export const UI_STYLE_GROUPS: Array<{ title: string; fields: Field[] }> = [
         ],
       },
       { key: 'times', label: 'Show times on messages', kind: 'toggle' },
+      {
+        key: 'aiStyle',
+        label: 'Alton’s answers',
+        kind: 'select',
+        options: [
+          ['standard', 'Standard'],
+          ['card', 'In a panel'],
+        ],
+      },
+      {
+        key: 'enter',
+        label: 'New messages',
+        kind: 'select',
+        options: [
+          ['standard', 'Standard'],
+          ['slide', 'Slide in'],
+          ['pop', 'Pop'],
+          ['fade', 'Fade'],
+          ['none', 'Just appear'],
+        ],
+      },
+      {
+        key: 'chatSize',
+        label: 'Chat text size',
+        kind: 'range',
+        min: 85,
+        max: 130,
+        step: 5,
+        unit: '%',
+      },
     ],
   },
   {
@@ -237,6 +342,17 @@ export const UI_STYLE_GROUPS: Array<{ title: string; fields: Field[] }> = [
           ['off', 'Off'],
         ],
       },
+      {
+        key: 'scrollbar',
+        label: 'Scroll bars',
+        kind: 'select',
+        options: [
+          ['standard', 'Standard'],
+          ['thin', 'Thin, in the theme colour'],
+          ['hidden', 'Hidden'],
+        ],
+      },
+      { key: 'focusGlow', label: 'Glow round the message box while typing', kind: 'toggle' },
     ],
   },
 ];
@@ -260,7 +376,7 @@ export function cleanUiStyle(raw: unknown): UiStyle {
     blur: num(o.blur, 0, 20, d.blur),
     glow: num(o.glow, 0, 3, d.glow),
     tint: pick(o.tint, ['none', 'theme', 'warm', 'cool', 'dark'], d.tint),
-    border: pick(o.border, ['standard', 'none', 'bold', 'neon'], d.border),
+    border: pick(o.border, ['standard', 'none', 'bold', 'neon', 'pulse'], d.border),
     vivid: num(o.vivid, 100, 200, d.vivid),
     dim: num(o.dim, 0, 80, d.dim),
     bubble: pick(o.bubble, ['standard', 'round', 'square', 'plain'], d.bubble),
@@ -271,6 +387,17 @@ export function cleanUiStyle(raw: unknown): UiStyle {
     tabs: pick(o.tabs, ['labels', 'icons'], d.tabs),
     spacing: pick(o.spacing, ['compact', 'normal', 'roomy'], d.spacing),
     motion: pick(o.motion, ['normal', 'fast', 'off'], d.motion),
+    bgMotion: pick(o.bgMotion, ['off', 'calm', 'lively'], d.bgMotion),
+    shooting: typeof o.shooting === 'boolean' ? o.shooting : d.shooting,
+    parallax: typeof o.parallax === 'boolean' ? o.parallax : d.parallax,
+    weight: pick(o.weight, ['normal', 'bold'], d.weight),
+    shadow: pick(o.shadow, ['standard', 'soft', 'deep'], d.shadow),
+    lift: typeof o.lift === 'boolean' ? o.lift : d.lift,
+    enter: pick(o.enter, ['standard', 'slide', 'pop', 'fade', 'none'], d.enter),
+    aiStyle: pick(o.aiStyle, ['standard', 'card'], d.aiStyle),
+    chatSize: num(o.chatSize, 85, 130, d.chatSize),
+    scrollbar: pick(o.scrollbar, ['standard', 'thin', 'hidden'], d.scrollbar),
+    focusGlow: typeof o.focusGlow === 'boolean' ? o.focusGlow : d.focusGlow,
   };
 }
 
@@ -317,6 +444,15 @@ export function applyUiStyle(root: StyleTarget, s: UiStyle): void {
   set('tabs', s.tabs !== d.tabs, s.tabs);
   set('spacing', s.spacing !== d.spacing, s.spacing);
   set('motion', s.motion !== d.motion, s.motion);
+  set('weight', s.weight !== d.weight, s.weight);
+  set('shadow', s.shadow !== d.shadow, s.shadow);
+  set('lift', s.lift, '1');
+  set('enter', s.enter !== d.enter, s.enter);
+  set('ai', s.aiStyle !== d.aiStyle, s.aiStyle);
+  set('chat-size', s.chatSize !== d.chatSize, '1');
+  root.style.setProperty('--ui-chat-size', String(s.chatSize / 100));
+  set('scrollbar', s.scrollbar !== d.scrollbar, s.scrollbar);
+  set('focus', s.focusGlow, '1');
 }
 
 /** "14:05" for message times. */

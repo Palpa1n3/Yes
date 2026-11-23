@@ -34,6 +34,7 @@ import {
 } from '@shared/ui-style';
 import { THEMES } from '../../src/renderer/themes/themes';
 import { isSpaceArt, paintSpace } from '../../src/renderer/components/core/spaceArt';
+import { startBgMotion } from '../../src/renderer/components/core/bgMotion';
 import '@shared/space-backdrops.css';
 import { typingDiff } from '@shared/remote-input';
 import { nextSleep, shortGaps, sleepLine, type SleepOptions } from '@shared/sleep';
@@ -2577,6 +2578,37 @@ function applyUi(): void {
   h.classList.toggle('compact', S.uiStyle.spacing === 'compact');
   applyUiStyle(h, S.uiStyle);
   h.classList.toggle('scan', S.uiScan);
+  applyBgMotion();
+}
+/* ── Moving background (Settings › Look › Background), over the painted background ── */
+let motionStop: (() => void) | null = null;
+let motionKey = '';
+function applyBgMotion(): void {
+  const u = S.uiStyle;
+  const level = u.motion === 'off' ? 'off' : u.bgMotion;
+  const key = `${S.bg}|${level}|${u.shooting}|${u.parallax}`;
+  if (key === motionKey) return;
+  motionKey = key;
+  motionStop?.();
+  motionStop = null;
+  let c = document.getElementById('bgMotion') as HTMLCanvasElement | null;
+  if (!c) {
+    c = document.createElement('canvas');
+    c.id = 'bgMotion';
+    c.className = 'bg-motion';
+    c.setAttribute('aria-hidden', 'true');
+    document.body.prepend(c);
+  }
+  motionStop = startBgMotion(c, S.bg, {
+    level,
+    shooting: u.shooting,
+    parallax: u.parallax,
+    accent: () => {
+      const hex = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(hex);
+      return m ? [m[1], m[2], m[3]].map((x) => parseInt(x ?? '0', 16)).join(',') : '63,208,255';
+    },
+  });
 }
 /** Background previews: one small tile per background, drawn with the real thing. */
 function renderBgTiles(): void {

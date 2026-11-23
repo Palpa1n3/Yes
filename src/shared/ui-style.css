@@ -274,3 +274,164 @@ html[data-ui-motion='off'] *::after {
   transition: none !important;
   scroll-behavior: auto !important;
 }
+
+/* ── Text weight ── */
+html[data-ui-weight='bold'] body {
+  font-weight: 500;
+}
+html[data-ui-weight='bold'] :is(b, strong, h1, h2, h3, .lbl) {
+  font-weight: 800;
+}
+
+/* ── Breathing neon border ── */
+@keyframes uiPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 4px color-mix(in srgb, var(--ui-pulse) 35%, transparent),
+      inset 0 0 3px color-mix(in srgb, var(--ui-pulse) 15%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 14px color-mix(in srgb, var(--ui-pulse) 70%, transparent),
+      inset 0 0 8px color-mix(in srgb, var(--ui-pulse) 30%, transparent);
+  }
+}
+html[data-ui-border='pulse'] {
+  --ui-pulse: var(--accent);
+}
+html.pc[data-ui-border='pulse'] {
+  --ui-pulse: rgb(var(--accent));
+}
+html[data-ui-border='pulse'] :is(.card, details.grp, .hud-panel) {
+  border-color: var(--ui-pulse);
+  animation: uiPulse 4s ease-in-out infinite;
+}
+
+/* ── Panel shadows ── */
+html[data-ui-shadow='soft'] :is(.card, details.grp, .hud-panel) {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+html[data-ui-shadow='deep'] :is(.card, details.grp, .hud-panel) {
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.55),
+    0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* ── Panels lift under the mouse / finger ── */
+html[data-ui-lift] :is(.card, .hud-panel) {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+html[data-ui-lift] :is(.card, .hud-panel):is(:hover, :active) {
+  transform: translateY(-2px);
+}
+
+/* ── Alton's answers in a panel (phone .it, PC .chat-ai) ── */
+html[data-ui-ai='card'] .it {
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 9px 13px;
+}
+html[data-ui-ai='card'] .chat-ai {
+  background: rgb(var(--bg-panel-raised) / 0.75);
+  border: 1px solid rgb(var(--line) / 0.8);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+/* ── New messages coming in ── */
+@keyframes uiSlideMe {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes uiSlideIt {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+@keyframes uiPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  70% {
+    transform: scale(1.03);
+  }
+}
+@keyframes uiFade {
+  from {
+    opacity: 0;
+  }
+}
+html[data-ui-enter='slide'] :is(.me, .chat-user) {
+  animation: uiSlideMe 0.28s ease-out both;
+}
+html[data-ui-enter='slide'] :is(.it, .chat-ai) {
+  animation: uiSlideIt 0.32s ease-out both;
+}
+html[data-ui-enter='pop'] :is(.me, .it, .chat-user, .chat-ai) {
+  animation: uiPop 0.3s ease-out both;
+  transform-origin: bottom center;
+}
+html[data-ui-enter='fade'] :is(.me, .it, .chat-user, .chat-ai) {
+  animation: uiFade 0.5s ease-out both;
+}
+html[data-ui-enter='none'] :is(.me, .it, .chat-user, .chat-ai) {
+  animation: none;
+}
+
+/* ── Chat text size ── */
+html[data-ui-chat-size] :is(.me, .it, .chat-user, .chat-ai) {
+  font-size: calc(var(--ui-chat-size) * 1em);
+}
+
+/* ── Scroll bars ── */
+html[data-ui-scrollbar='thin'] * {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ui-pulse, var(--accent)) 60%, transparent) transparent;
+}
+html.pc[data-ui-scrollbar='thin'] * {
+  scrollbar-color: rgb(var(--accent) / 0.6) transparent;
+}
+html[data-ui-scrollbar='hidden'] * {
+  scrollbar-width: none;
+}
+html[data-ui-scrollbar='hidden'] *::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Glow round the message box while typing ── */
+html[data-ui-focus] .composer .box:focus-within {
+  box-shadow:
+    0 0 0 1px var(--accent),
+    0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+html.pc[data-ui-focus] .sweep-border:focus-within {
+  box-shadow:
+    0 0 0 1px rgb(var(--accent) / 0.8),
+    0 0 18px rgb(var(--accent) / 0.45);
+}
+
+/* ── Moving background layer (bgMotion.ts) ── */
+.bg-motion {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+}
+.space-bd-motion {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
