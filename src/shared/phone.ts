@@ -37,6 +37,8 @@ export interface PhoneAction {
   snap?: { name: string; text: string };
   /** Android app: delete this calendar event (on tap / "yes"). */
   delEvent?: { id: number; title: string };
+  /** Copy this text to the clipboard (listing title, description, price…). */
+  copy?: string;
   /** Already done by itself (e.g. "Sent ✓"): shown as done, not offered again. */
   done?: string;
 }

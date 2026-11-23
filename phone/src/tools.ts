@@ -275,6 +275,65 @@ const READY =
 
 const s = (v: unknown, max = 2000): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
+/** Money tools (payslips, selling, spending check, price watching): phone and web. */
+export const MONEY_TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'save_payslip',
+    description:
+      'After reading a payslip (photo, screenshot or PDF), pass what it says. Alton compares it with the shifts saved for that pay period and the pay rate, saves it to the payslip history (which makes the payday estimate use the real tax and NI), and returns any differences. Tell the user the differences in plain words, e.g. "Payslip has 46h, your rota shows 48h: 2h ≈ £24 missing", and if something is short, offer the suggested message for their manager. Dates "2026-11-01". Use null for anything not on it. holidayHours = holiday built up or left, in hours, if listed.',
+    input_schema: obj(
+      {
+        periodStart: { type: 'string' },
+        periodEnd: { type: 'string' },
+        payDate: { type: 'string' },
+        hours: { type: ['number', 'null'] },
+        rate: { type: ['number', 'null'] },
+        gross: { type: ['number', 'null'] },
+        tax: { type: ['number', 'null'] },
+        ni: { type: ['number', 'null'] },
+        pension: { type: ['number', 'null'] },
+        net: { type: ['number', 'null'] },
+        holidayHours: { type: ['number', 'null'] },
+      },
+      ['periodStart', 'periodEnd'],
+    ),
+  },
+  {
+    name: 'make_listing',
+    description:
+      'Show a Vinted or eBay listing the user can copy part by part, with a button to open the app/site to post it. First look at their photos, then search what similar items SOLD for (web_search, e.g. "<brand> <item> sold eBay UK") and suggest a fair price. Title max 80 characters; a short honest description (condition, flaws, size, brand, colour, material); no made-up details.',
+    input_schema: obj(
+      {
+        site: { type: 'string', enum: ['vinted', 'ebay'] },
+        title: { type: 'string' },
+        description: { type: 'string' },
+        condition: { type: 'string' },
+        brand: { type: 'string' },
+        size: { type: 'string' },
+        price: { type: 'number', description: 'Suggested price in pounds' },
+        priceNote: { type: 'string', description: 'e.g. "similar sold for £15–£22"' },
+      },
+      ['site', 'title', 'description', 'price'],
+    ),
+  },
+  {
+    name: 'spending_check',
+    description:
+      'Check the user\'s spending from their bank apps\' notifications on this phone: subscriptions and repeat payments, price rises, the biggest categories this month, with plain suggestions ("You pay for 2 music apps"). For a bank statement screenshot or PDF instead, read it yourself and give the same kind of check. Never ask for bank logins.',
+    input_schema: obj({}),
+  },
+  {
+    name: 'watch_price',
+    description:
+      'Watch a product\'s price: Alton checks the page about once a day and sends a notification when it drops. Needs the product page link (if the user only gives a name, find the page with web_search first, ideally a big UK shop). Also: action "list" to show what is watched, "remove" with the name.',
+    input_schema: obj({
+      action: { type: 'string', enum: ['add', 'list', 'remove'] },
+      name: { type: 'string' },
+      url: { type: 'string' },
+    }),
+  },
+];
+
 /** Extra tools inside the Android app (the native side does the work). */
 export const APP_TOOLS: Anthropic.Tool[] = [
   {

@@ -2329,7 +2329,7 @@
                 <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
               </button>
             </div>
-            <input type="file" id="photo" accept="image/*" multiple hidden />
+            <input type="file" id="photo" accept="image/*,application/pdf" multiple hidden />
           </div>
         </section>
         <section id="todayView" class="view">
@@ -2408,6 +2408,21 @@
         <section id="workView" class="view">
           <div class="card shift-hero" id="shiftNext"></div>
           <div class="card shift-hero pay-card" id="payCard"></div>
+          <div class="card" id="moneyCard">
+            <div class="lbl"><span class="dot"></span>Money</div>
+            <div class="row" style="flex-wrap: wrap; gap: 6px">
+              <button class="btn" id="mnSlip">🧾 Check my payslip</button>
+              <button class="btn" id="mnSell">🏷️ Sell something</button>
+              <button class="btn" id="mnSpend">📊 Spending check</button>
+              <button class="btn" id="mnWatch">🔔 Watch a price</button>
+              <button class="btn" id="mnOffers">🛒 Morrisons offers on my list</button>
+            </div>
+            <div id="mnSlips"></div>
+            <div id="mnWatches"></div>
+            <p class="muted" style="margin: 6px 0 0; font-size: 12px">
+              Payslips, photos and statements only go to Claude to be read. No bank logins, ever.
+            </p>
+          </div>
           <div class="card" id="sleepCard">
             <div class="lbl"><span class="dot"></span>Sleep</div>
             <p id="slLine" style="margin: 0"></p>

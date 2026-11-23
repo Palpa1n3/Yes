@@ -116,6 +116,18 @@ result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' �
   resume / unlock after 15+ min; phone "While you were away" card on Today after 30+ min with Reply and Read it out.
   End-of-shift notes go through LateReceiver (msgs flag) so the messages line is added when they fire.
   Shared helpers `src/shared/messages.ts` (tests/messages.test.ts).
+  Money (0.57, Work › Money card; phone tools `MONEY_TOOLS` in phone/src/tools.ts, run by `moneyTool` in main.ts,
+  always answered on the phone via `moneyNext`): chat attachments now take PDFs too (`pending` data prefixed
+  `pdf:` → a `document` block; PDFs never go to the PC). `save_payslip` → `comparePayslip` (rota hours for the
+  period via periodPay + break setting, rate, gross and deductions maths, a manager message with a Copy button),
+  history `S.payslips` (last 12) and `takeHomeRate` makes `payInfo().net` use the real take-home share
+  (`netPay`). `make_listing` → Copy buttons (new PhoneAction `copy`) + Open Vinted/eBay. `spending_check` →
+  `spendingCheck` (repeat payments, price rises, categories, "You pay for 2 music apps") from the bank
+  notification log; statements are read by Claude directly. `watch_price` → `S.priceWatches`, checked on app
+  open/resume when 20 h+ old (CapacitorHttp + `extractPrice` from JSON-LD/meta/itemprop; app only), drop →
+  `notifyNow` "💷 Price drop: …" (`priceDrop`: 2 % and 50p minimum). Morrisons offers: a button asking Claude to
+  check the Shopping list against offers with web search. Helpers `src/shared/money.ts` (tests/money.test.ts).
+  No bank logins; data goes only to Claude.
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

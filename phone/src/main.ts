@@ -39,6 +39,16 @@ import { typingDiff } from '@shared/remote-input';
 import { nextSleep, shortGaps, sleepLine, type SleepOptions } from '@shared/sleep';
 import { gbp, paymentsFrom, spendSummary, type Payment } from '@shared/spending';
 import {
+  cleanPayslip,
+  comparePayslip,
+  extractPrice,
+  priceDrop,
+  spendingCheck,
+  takeHomeRate,
+  type Payslip,
+  type PriceWatch,
+} from '@shared/money';
+import {
   SMART_HOME_TOOL,
   ST_API,
   cleanSmartInput,
@@ -161,7 +171,15 @@ import {
   summarise,
   type DayUsage,
 } from '@shared/usage';
-import { APP_TOOLS, PHONE_TOOLS, WMO, nearbyLink, runPhoneTool, weatherSummary } from './tools';
+import {
+  APP_TOOLS,
+  MONEY_TOOLS,
+  PHONE_TOOLS,
+  WMO,
+  nearbyLink,
+  runPhoneTool,
+  weatherSummary,
+} from './tools';
 import { noteId, planHeadsUps, rotaChangeNotes, type HourWeather } from '@shared/headsups';
 import { healthReport } from '@shared/diagnostics';
 import {
@@ -385,6 +403,10 @@ interface State {
   spendNames: string[];
   /** The shift app's tab with open shifts / swaps. */
   tradeTab: string;
+  /** Payslips read by Alton (newest last) — for checking pay and a truer take-home. */
+  payslips: Payslip[];
+  /** Prices being watched ("Watch this"), checked about once a day. */
+  priceWatches: PriceWatch[];
 }
 const KEY = 'alton-phone-v1';
 const DEFAULTS: State = {
@@ -520,6 +542,8 @@ const DEFAULTS: State = {
   spendApps: [],
   spendNames: [],
   tradeTab: 'Shift Trade',
+  payslips: [],
+  priceWatches: [],
 };
 const ls = {
   get: (k: string): string | null => {
@@ -592,6 +616,25 @@ let chatId: string | null = S.chats[0]?.id ?? null;
 let research = false;
 let busy: AbortController | null = null;
 let pending: Array<{ data: string; thumb: string }> = [];
+/** A PDF in `pending` (payslips, statements): its data starts with this. */
+const PDF = 'pdf:';
+const PDF_THUMB =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" rx="10" fill="#b3261e"/><text x="40" y="49" font-family="sans-serif" font-size="22" font-weight="700" fill="#fff" text-anchor="middle">PDF</text></svg>',
+  );
+function readPdf(f: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (f.size > 8_000_000) return reject(new Error('That PDF is too big (8 MB max).'));
+    const r = new FileReader();
+    r.onload = () => {
+      const s = String(r.result);
+      resolve(PDF + s.slice(s.indexOf(',') + 1));
+    };
+    r.onerror = () => reject(new Error('Couldn’t read that PDF.'));
+    r.readAsDataURL(f);
+  });
+}
 let view = 'chat';
 
 /* ── DOM helpers ── */
@@ -755,10 +798,21 @@ function buildHistory(chat: PhoneChat, images: string[]): Anthropic.MessageParam
     return {
       role: 'user',
       content: [
-        ...images.map((data) => ({
-          type: 'image' as const,
-          source: { type: 'base64' as const, media_type: 'image/jpeg' as const, data },
-        })),
+        ...images.map((data) =>
+          data.startsWith(PDF)
+            ? {
+                type: 'document' as const,
+                source: {
+                  type: 'base64' as const,
+                  media_type: 'application/pdf' as const,
+                  data: data.slice(PDF.length),
+                },
+              }
+            : {
+                type: 'image' as const,
+                source: { type: 'base64' as const, media_type: 'image/jpeg' as const, data },
+              },
+        ),
         { type: 'text' as const, text: m.text },
       ],
     };
@@ -793,6 +847,7 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
           system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
           tools: [
             ...PHONE_TOOLS,
+            ...MONEY_TOOLS,
             ...(isApp ? APP_TOOLS : []),
             ...(isApp && stToken ? [SMART_HOME_TOOL as Anthropic.Tool] : []),
             ...webTools(),
@@ -841,6 +896,13 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
       if (!uses.length) break;
       const results: Anthropic.ToolResultBlockParam[] = [];
       for (const u of uses) {
+        // Payslips, listings, spending check and price watching.
+        const mon = await moneyTool(u.name, u.input);
+        if (mon) {
+          if (mon.actions) reply.actions?.push(...mon.actions);
+          results.push({ type: 'tool_result', tool_use_id: u.id, content: mon.result });
+          continue;
+        }
         // The Android app's own powers (messages, calendar, contacts, shift app).
         const nat = isApp ? await appTool(u.name, u.input) : null;
         if (nat) {
@@ -1193,7 +1255,11 @@ function send(text?: string, expanded = false, typed?: string): void {
   // While driving, the phone answers itself so texts can be confirmed by voice.
   // Some jobs need this phone itself (reading its apps): the phone answers those.
   // Once a chat has done a phone-only job, its follow-ups ("do it again") stay on the phone too.
-  const here = isApp && (phoneOnlyNext || phoneChats.has(c.id) || needsPhone(t));
+  const here =
+    (isApp && (phoneOnlyNext || phoneChats.has(c.id) || needsPhone(t))) ||
+    moneyNext ||
+    imgs.some((i) => i.data.startsWith(PDF));
+  moneyNext = false;
   phoneOnlyNext = false;
   if (here) phoneChats.add(c.id);
   if (usePcNow() && !driving && !here) void askPc(c, imgs);
@@ -4752,6 +4818,17 @@ function actionNode(a: PhoneAction): HTMLElement {
         if (!ok) void navigator.clipboard?.writeText(text).then(() => toast('Copied'));
       });
     };
+  } else if (a.copy != null) {
+    const text = a.copy;
+    b.onclick = () => {
+      void navigator.clipboard?.writeText(text).then(
+        () => {
+          b.classList.add('done');
+          toast('Copied');
+        },
+        () => toast('Couldn’t copy that.'),
+      );
+    };
   } else if (a.pickFor) {
     b.onclick = () => void pickContact(a.pickFor);
   } else if (a.delEvent) {
@@ -5301,6 +5378,7 @@ async function pickContact(forName?: string): Promise<void> {
 function renderShifts(): void {
   renderShiftNext();
   renderPayCard();
+  renderMoney();
   renderCalendar();
   $('shGetApp').hidden = !isApp;
   $('shGetCal').hidden = !isApp;
@@ -5407,10 +5485,15 @@ function payInfo(): {
     when: days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`,
     hours: p.hours,
     gross: p.gross,
-    net: ukTakeHome(p.gross, S.payCycle),
+    net: netPay(p.gross),
     period,
     shifts: p.shifts,
   };
+}
+/** Take-home from gross: the share real payslips show, else a rough UK tax and NI guess. */
+function netPay(gross: number): number {
+  const r = takeHomeRate(S.payslips ?? []);
+  return r ? Math.round(gross * r * 100) / 100 : ukTakeHome(gross, S.payCycle);
 }
 
 function renderPayCard(): void {
@@ -5436,7 +5519,11 @@ function renderPayCard(): void {
   if (S.payRate > 0) {
     box.append(
       el('div', 'big', `≈ ${money(pd.net)}`),
-      el('div', 'muted', `after tax & NI (rough) · ${money(pd.gross)} before tax`),
+      el(
+        'div',
+        'muted',
+        `after tax & NI (${takeHomeRate(S.payslips ?? []) ? 'from your payslips' : 'rough'}) · ${money(pd.gross)} before tax`,
+      ),
     );
   } else box.append(el('div', 'muted', 'Add your pay per hour below to see how much.'));
   const meta = el('div', 'meta');
@@ -7558,7 +7645,17 @@ function wire(): void {
     const input = e.target as HTMLInputElement;
     const files = [...(input.files ?? [])].slice(0, 4 - pending.length);
     input.value = '';
-    for (const f of files)
+    for (const f of files) {
+      if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+        void readPdf(f).then(
+          (data) => {
+            pending.push({ data, thumb: PDF_THUMB });
+            renderThumbs();
+          },
+          (err: Error) => toast(err.message),
+        );
+        continue;
+      }
       void Promise.all([shrink(f, 1568, 0.82), shrink(f, 160, 0.7)]).then(
         ([big, small]) => {
           pending.push({ data: big.slice(big.indexOf(',') + 1), thumb: small });
@@ -7566,6 +7663,7 @@ function wire(): void {
         },
         (err: Error) => toast(err.message),
       );
+    }
   };
   $('pickContact').onclick = () => void pickContact();
   $('pAdd').onclick = () => {
@@ -7605,6 +7703,7 @@ function wire(): void {
     sendPcLink(true);
   });
   void refreshMsgDigest();
+  wireMoney();
   wirePowers();
   wireDriving();
   // The background follows the time of day, and the weather where you are.
@@ -7763,3 +7862,314 @@ wire();
 start();
 if ('serviceWorker' in navigator && !isApp)
   void navigator.serviceWorker.register('./sw.js').catch(() => undefined);
+
+/* ── Money: payslip check, selling, spending check, price watching (Work › Money) ── */
+let moneyNext = false;
+/** Start a money job in the chat: fill the prompt, and pick a photo/PDF when it needs one. */
+function moneyAsk(text: string, pick: boolean): void {
+  setView('chat');
+  moneyNext = true;
+  const ta = $<HTMLTextAreaElement>('msg');
+  ta.value = text;
+  if (pick) {
+    toast('Pick a photo, screenshot or PDF.');
+    $('photo').click();
+  } else send();
+}
+function wireMoney(): void {
+  $('mnSlip').onclick = () =>
+    moneyAsk(
+      'Check my payslip: read it (pay period, hours, rate, gross, tax, NI, pension, net, holiday) and use save_payslip, then tell me any differences in plain words.',
+      true,
+    );
+  $('mnSell').onclick = () =>
+    moneyAsk(
+      'Help me sell this: write a Vinted listing (or eBay if it suits better) with make_listing, and suggest a price from what similar items sold for.',
+      true,
+    );
+  $('mnSpend').onclick = () => {
+    if (isApp && S.spendApps.length)
+      return moneyAsk('Do a spending check (spending_check) and give me plain suggestions.', false);
+    moneyAsk(
+      'Do a spending check on this bank statement: subscriptions and repeat payments, price rises, the biggest categories this month, and plain suggestions.',
+      true,
+    );
+  };
+  $('mnWatch').onclick = () => {
+    setView('chat');
+    moneyNext = true;
+    const ta = $<HTMLTextAreaElement>('msg');
+    ta.value = 'Watch the price of ';
+    ta.focus();
+    toast('Paste a link or type what it is, then send.');
+  };
+  $('mnOffers').onclick = () =>
+    moneyAsk(
+      'Check my Shopping list (get_lists) against Morrisons offers this week (search the web) and tell me which items are on offer and the deal. Keep it short.',
+      false,
+    );
+  // Prices: check about once a day, when the app is opened or comes back.
+  void checkPrices();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void checkPrices();
+  });
+}
+
+function renderMoney(): void {
+  const slips = $('mnSlips');
+  slips.textContent = '';
+  const hist = (S.payslips ?? []).slice(-4).reverse();
+  if (hist.length) {
+    slips.appendChild(el('div', 'muted', 'Payslips'));
+    for (const p of hist) {
+      const d = el('div', 'li');
+      d.appendChild(
+        el(
+          'span',
+          undefined,
+          `${p.payDate || p.periodEnd}: ${p.hours ?? '?'}h · ${p.gross != null ? money(p.gross) : '?'} gross · tax ${p.tax != null ? money(p.tax) : '?'} · NI ${p.ni != null ? money(p.ni) : '?'} · ${p.net != null ? money(p.net) : '?'} net`,
+        ),
+      );
+      slips.appendChild(d);
+    }
+    const hol = hist.find((p) => p.holidayHours != null)?.holidayHours;
+    if (hol != null) slips.appendChild(el('div', 'muted', `Holiday on your last payslip: ${hol}h`));
+  }
+  const box = $('mnWatches');
+  box.textContent = '';
+  const ws = S.priceWatches ?? [];
+  if (!ws.length) return;
+  box.appendChild(el('div', 'muted', 'Watching prices'));
+  for (const w of ws) {
+    const d = el('div', 'li');
+    const a = el('a', undefined, w.name) as HTMLAnchorElement;
+    a.href = w.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    const t = el('span');
+    t.style.flex = '1';
+    t.append(
+      a,
+      el('small', 'muted', ` ${w.price != null ? money(w.price) : 'price not found yet'}`),
+    );
+    const x = el('button', 'btn', '×');
+    x.setAttribute('aria-label', `Stop watching ${w.name}`);
+    x.onclick = () => {
+      S.priceWatches = (S.priceWatches ?? []).filter((v) => v.id !== w.id);
+      save();
+      renderMoney();
+    };
+    d.append(t, x);
+    box.appendChild(d);
+  }
+}
+
+/** The price on a product page (fetched by the app, so shops' cross-site rules don't apply). */
+async function fetchPrice(url: string): Promise<number | null> {
+  if (!/^https:\/\//i.test(url)) return null;
+  try {
+    const r = isApp
+      ? await CapacitorHttp.request({
+          url,
+          method: 'GET',
+          headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14) Mobile', Accept: 'text/html' },
+          connectTimeout: 15_000,
+          readTimeout: 15_000,
+        })
+      : { status: 0, data: '' };
+    if (r.status < 200 || r.status >= 400 || typeof r.data !== 'string') return null;
+    return extractPrice(r.data);
+  } catch {
+    return null;
+  }
+}
+let pricesBusy = false;
+async function checkPrices(force = false): Promise<void> {
+  const ws = S.priceWatches ?? [];
+  if (pricesBusy || !ws.length || !isApp) return;
+  pricesBusy = true;
+  try {
+    for (const w of ws) {
+      if (!force && Date.now() - w.checked < 20 * 3_600_000) continue;
+      const now = await fetchPrice(w.url);
+      w.checked = Date.now();
+      if (now === null) continue;
+      const drop = priceDrop(w, now);
+      if (drop) void notifyNow(7000 + (hashCode(w.id) % 900), drop.title, drop.body);
+      w.price = now;
+      w.lowest = w.lowest === null ? now : Math.min(w.lowest, now);
+    }
+    save();
+    renderMoney();
+  } finally {
+    pricesBusy = false;
+  }
+}
+function hashCode(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+async function moneyTool(
+  name: string,
+  input: unknown,
+): Promise<{ result: string; actions?: PhoneAction[] } | null> {
+  const o = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+  if (name === 'save_payslip') {
+    const slip = cleanPayslip(o);
+    if (!slip)
+      return { result: 'Couldn’t read the pay figures: ask the user for a clearer photo.' };
+    const c = comparePayslip(slip, S.shifts, {
+      rate: S.payRate,
+      unpaidBreak: S.unpaidBreak,
+      breakOver: S.breakAll ? 0 : 6,
+    });
+    S.payslips = [
+      ...(S.payslips ?? []).filter(
+        (p) => !(p.periodStart === slip.periodStart && p.periodEnd === slip.periodEnd),
+      ),
+      slip,
+    ]
+      .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
+      .slice(-12);
+    save();
+    renderMoney();
+    renderPayCard();
+    const rate = takeHomeRate(S.payslips);
+    return {
+      result: [
+        `Saved the payslip for ${slip.periodStart} to ${slip.periodEnd}.`,
+        c.rotaHours === null
+          ? 'No shifts are saved for that period, so hours could not be checked against the rota.'
+          : `Rota hours for that period: ${c.rotaHours}h.`,
+        c.issues.length
+          ? `Differences:\n- ${c.issues.join('\n- ')}`
+          : 'It matches the rota and pay rate.',
+        c.ask ? `Suggested message for the manager: "${c.ask}"` : '',
+        slip.holidayHours != null ? `Holiday listed: ${slip.holidayHours}h.` : '',
+        rate
+          ? `Payday estimates now use ${Math.round(rate * 100)}% take-home from real payslips.`
+          : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      actions: c.ask
+        ? [{ label: 'Copy message for my manager', sub: c.ask.slice(0, 60), copy: c.ask }]
+        : [],
+    };
+  }
+  if (name === 'make_listing') {
+    const site = o.site === 'ebay' ? 'ebay' : 'vinted';
+    const str = (v: unknown, n: number): string =>
+      typeof v === 'string' ? v.trim().slice(0, n) : '';
+    const title = str(o.title, site === 'ebay' ? 80 : 100);
+    const desc = str(o.description, 3000);
+    const price = typeof o.price === 'number' && o.price > 0 ? Math.round(o.price * 100) / 100 : 0;
+    const extra = [
+      str(o.condition, 60) && `Condition: ${str(o.condition, 60)}`,
+      str(o.brand, 60) && `Brand: ${str(o.brand, 60)}`,
+      str(o.size, 40) && `Size: ${str(o.size, 40)}`,
+    ].filter(Boolean) as string[];
+    const actions: PhoneAction[] = [
+      { label: 'Copy title', sub: title.slice(0, 60), copy: title },
+      { label: 'Copy description', sub: desc.slice(0, 60), copy: desc },
+      ...(price
+        ? [
+            {
+              label: `Copy price £${price.toFixed(2)}`,
+              sub: str(o.priceNote, 80),
+              copy: price.toFixed(2),
+            },
+          ]
+        : []),
+      ...extra.map((x) => ({
+        label: `Copy ${x.split(':')[0]?.toLowerCase() ?? ''}`,
+        sub: x,
+        copy: x.split(': ')[1] ?? x,
+      })),
+      site === 'ebay'
+        ? { label: 'Open eBay to post it', href: 'https://www.ebay.co.uk/sl/sell' }
+        : { label: 'Open Vinted to post it', href: 'https://www.vinted.co.uk/items/new' },
+    ];
+    return {
+      result: `Listing card shown with Copy buttons and an Open ${site === 'ebay' ? 'eBay' : 'Vinted'} button. Tell them to add the photos in the app, paste each part, and check the details are right before posting.`,
+      actions,
+    };
+  }
+  if (name === 'spending_check') {
+    if (!isApp || !S.spendApps.length)
+      return {
+        result:
+          'Bank notifications aren’t set up on this phone (Settings › Phone › Spending). Ask the user for a statement screenshot or PDF instead, and check that.',
+      };
+    const list = await payments();
+    const now = new Date();
+    const c = spendingCheck(list, new Date(now.getFullYear(), now.getMonth(), 1).getTime());
+    return {
+      result: [
+        c.recurring.length
+          ? `Repeat payments: ${c.recurring.map((r) => `${r.merchant} ${gbp(r.amount)} a ${r.every}`).join(', ')}`
+          : 'No repeat payments spotted yet (it needs a couple of months of notifications).',
+        c.categories.length
+          ? `This month by category: ${c.categories
+              .slice(0, 6)
+              .map((x) => `${x.name} ${gbp(x.total)}`)
+              .join(', ')}`
+          : 'No spending seen this month.',
+        c.suggestions.length ? `Suggestions:\n- ${c.suggestions.join('\n- ')}` : '',
+        '(From bank notifications on this phone; anything without a notification is missing.)',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    };
+  }
+  if (name === 'watch_price') {
+    const act = o.action === 'list' || o.action === 'remove' ? o.action : 'add';
+    const ws = S.priceWatches ?? [];
+    if (act === 'list')
+      return {
+        result: ws.length
+          ? ws
+              .map(
+                (w) =>
+                  `${w.name}: ${w.price != null ? gbp(w.price) : 'price not found'}${w.lowest != null ? ` (lowest ${gbp(w.lowest)})` : ''}`,
+              )
+              .join('\n')
+          : 'Nothing is being watched.',
+      };
+    const nm = typeof o.name === 'string' ? o.name.trim().slice(0, 80) : '';
+    if (act === 'remove') {
+      const lc = nm.toLowerCase();
+      const left = ws.filter((w) => !w.name.toLowerCase().includes(lc));
+      S.priceWatches = left;
+      save();
+      renderMoney();
+      return { result: `Stopped watching ${ws.length - left.length} item(s).` };
+    }
+    const url = typeof o.url === 'string' ? o.url.trim() : '';
+    if (!/^https:\/\/\S+$/i.test(url))
+      return { result: 'Need the product page link (https). Find it with web_search first.' };
+    if (ws.length >= 20) return { result: 'Already watching 20 prices: remove one first.' };
+    const price = await fetchPrice(url);
+    const w: PriceWatch = {
+      id: `w${Date.now().toString(36)}`,
+      name: nm || new URL(url).hostname,
+      url,
+      price,
+      lowest: price,
+      checked: Date.now(),
+      added: Date.now(),
+    };
+    S.priceWatches = [...ws.filter((x) => x.url !== url), w];
+    save();
+    renderMoney();
+    return {
+      result:
+        price !== null
+          ? `Watching ${w.name}: ${gbp(price)} now. Alton checks it about once a day and sends a notification if it drops.`
+          : `Watching ${w.name}, but the page didn't show a price Alton can read${isApp ? '' : ' (price checks work in the Android app)'}. It will keep trying daily; a different shop's page may work better.`,
+    };
+  }
+  return null;
+}
