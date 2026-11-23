@@ -155,3 +155,46 @@ export function searchMods(mods: CpMod[], q: string): CpMod[] {
 
 export const nexusPage = (modId: number, files = false): string =>
   `https://www.nexusmods.com/cyberpunk2077/mods/${modId}${files ? '?tab=files' : ''}`;
+
+/* ── Update progress ── */
+export type UpdateState = 'queued' | 'sending' | 'in-vortex' | 'opened' | 'installed' | 'failed';
+
+export interface UpdateJob {
+  modId: number;
+  name: string;
+  state: UpdateState;
+  /** When it last changed (ms). */
+  at: number;
+  error?: string;
+  /** Vortex's folders for this mod before the update, to spot the new one. */
+  before: string[];
+}
+
+/** Has Vortex installed a new copy of the mod since the job started (a folder it didn't have)? */
+export function installedSince(job: Pick<UpdateJob, 'modId' | 'before'>, mods: CpMod[]): boolean {
+  const before = new Set(job.before);
+  return mods.some((m) => m.modId === job.modId && !before.has(m.folder));
+}
+
+/** Jobs waiting on Vortex become "installed" once their new folder shows up. */
+export function settleJobs(jobs: UpdateJob[], mods: CpMod[], now: number): UpdateJob[] {
+  return jobs.map((j) =>
+    (j.state === 'in-vortex' || j.state === 'opened') && installedSince(j, mods)
+      ? { ...j, state: 'installed', at: now }
+      : j,
+  );
+}
+
+/** "Sending 12 of 140" style counts. */
+export function jobCounts(jobs: UpdateJob[]): Record<UpdateState, number> {
+  const c: Record<UpdateState, number> = {
+    queued: 0,
+    sending: 0,
+    'in-vortex': 0,
+    opened: 0,
+    installed: 0,
+    failed: 0,
+  };
+  for (const j of jobs) c[j.state]++;
+  return c;
+}

@@ -152,6 +152,8 @@ export function installArcMock(): ArcAPI {
         checking: null,
         lastCheck: 0,
         updates: [],
+        updating: null,
+        jobs: [],
         dailyLeft: -1,
         error: '',
       })),
@@ -164,6 +166,7 @@ export function installArcMock(): ArcAPI {
       updateAll: vi.fn(async () => ({ ok: true, message: '' })),
       open: vi.fn(async () => ''),
       diagnose: vi.fn(),
+      cancel: vi.fn(async () => true),
     },
     smarthome: {
       status: vi.fn(async () => false),

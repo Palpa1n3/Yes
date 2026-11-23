@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, FolderOpen, RefreshCw, Search, Download } from 'lucide-react';
-import type { CpMod } from '@shared/cpmods';
+import type { CpMod, UpdateState } from '@shared/cpmods';
 import type { LaunchCheck, ModsStatus } from '@shared/ipc';
 import { Chip } from '@renderer/components/panels/Chip';
 import { Panel } from '@renderer/components/panels/Panel';
@@ -14,6 +14,85 @@ const ago = (t: number): string => {
   const h = Math.round(m / 60);
   return h < 48 ? `${h} h ago` : `${Math.round(h / 24)} days ago`;
 };
+
+const STATE_LABEL: Record<UpdateState, string> = {
+  queued: 'Waiting its turn',
+  sending: 'Sending to Vortex…',
+  'in-vortex': 'In Vortex: downloading and installing…',
+  opened: 'Opened on Nexus: press “Mod manager download”',
+  installed: 'Installed ✓',
+  failed: 'Failed',
+};
+
+/** "Sending 12 of 140" with a bar, what's happening now, and how many Vortex has finished. */
+function UpdateProgress({ st, premium }: { st: ModsStatus; premium: boolean }) {
+  const c: Record<UpdateState, number> = {
+    queued: 0,
+    sending: 0,
+    'in-vortex': 0,
+    opened: 0,
+    installed: 0,
+    failed: 0,
+  };
+  for (const j of st.jobs) c[j.state]++;
+  const run = st.updating;
+  const pct = run && run.total ? Math.round((run.done / run.total) * 100) : 100;
+  const recent = st.jobs.filter((j) => j.state === 'installed').slice(0, 8);
+  return (
+    <div className="space-y-1.5 border border-accent/40 bg-[rgb(var(--accent)/0.06)] p-2 text-[12.5px]">
+      {run ? (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="flex-1">
+              {premium ? 'Sending' : 'Opening'} {run.done} of {run.total}
+              {run.current ? `: ${run.current}` : ''}
+            </span>
+            <button
+              type="button"
+              className="hud-button"
+              onClick={() => void window.arc.mods.cancel()}
+            >
+              Stop
+            </button>
+          </div>
+          <div
+            className="h-1.5 w-full overflow-hidden bg-line/50"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Update progress"
+          >
+            <div
+              className="h-full bg-accent transition-[width] duration-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </>
+      ) : (
+        <p>Updates this session</p>
+      )}
+      <p className="text-text-muted">
+        {[
+          c.queued && `${c.queued} waiting`,
+          c['in-vortex'] && `${c['in-vortex']} in Vortex`,
+          c.opened && `${c.opened} opened on Nexus`,
+          c.installed && `${c.installed} installed ✓`,
+          c.failed && `${c.failed} failed`,
+        ]
+          .filter(Boolean)
+          .join(' · ') || 'Starting…'}
+      </p>
+      {!!recent.length && (
+        <ul className="micro-label normal-case text-ok">
+          {recent.map((j) => (
+            <li key={j.modId}>✓ {j.name}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 /** Mods tab: Cyberpunk 2077 mods from Vortex, updates from Nexus Mods. */
 export function ModsTab() {
@@ -29,12 +108,19 @@ export function ModsTab() {
     void window.arc.mods.list().then(setMods);
   };
   useEffect(load, []);
-  // While a check runs, show its progress.
+  // While a check or updates run (or Vortex is still installing), keep the progress fresh.
+  const waiting = !!st?.jobs.some((j) => j.state !== 'installed' && j.state !== 'failed');
+  const busy = !!st?.checking || !!st?.updating;
+  const installedCount = st?.jobs.filter((j) => j.state === 'installed').length ?? 0;
   useEffect(() => {
-    if (!st?.checking) return;
-    const t = setInterval(() => void window.arc.mods.status().then(setSt), 1000);
+    if (!busy && !waiting) return;
+    const t = setInterval(() => void window.arc.mods.status().then(setSt), busy ? 1000 : 3000);
     return () => clearInterval(t);
-  }, [st?.checking]);
+  }, [busy, waiting]);
+  // A newly installed update shows up in the Installed list too.
+  useEffect(() => {
+    if (installedCount) void window.arc.mods.list().then(setMods);
+  }, [installedCount]);
 
   const shown = useMemo(() => {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -265,18 +351,24 @@ export function ModsTab() {
                 type="button"
                 className="hud-button"
                 onClick={() => {
-                  const n = st.updates.length;
+                  const n = st.updates.filter((u) => !u.state || u.state === 'failed').length;
                   if (
                     window.confirm(
                       premium
-                        ? `Send ${Math.min(25, n)} update${n === 1 ? '' : 's'} to Vortex to download and install?`
-                        : 'Open the first 5 updates on Nexus?',
+                        ? `Send all ${n} update${n === 1 ? '' : 's'} to Vortex to download and install? You can watch each one here.`
+                        : `Open the next ${Math.min(10, n)} updates on Nexus?`,
                     )
                   )
-                    act(window.arc.mods.updateAll());
+                    act(
+                      window.arc.mods.updateAll().then((r) => {
+                        void window.arc.mods.status().then(setSt);
+                        return r;
+                      }),
+                    );
                 }}
+                disabled={!!st.updating}
               >
-                <Download size={13} /> Update all
+                <Download size={13} /> {premium ? 'Update all' : 'Open next 10'}
               </button>
             )}
             <span className="text-[11.5px] text-text-muted">
@@ -286,6 +378,9 @@ export function ModsTab() {
           </div>
           {msg && <p className="text-[12.5px] text-accent">{msg}</p>}
           {st?.error && <p className="text-[12.5px] text-alert">{st.error}</p>}
+          {st && (st.updating || st.jobs.length > 0) && (
+            <UpdateProgress st={st} premium={premium} />
+          )}
           {!st?.keySet ? (
             <p className="text-[12.5px] text-text-muted">
               Add your Nexus Mods key to check for updates.
@@ -309,14 +404,31 @@ export function ModsTab() {
                     <span className="micro-label block normal-case">
                       {u.installed || '?'} → {u.latest || 'newer'} · updated {ago(u.updatedAt)}
                     </span>
+                    {u.state && (
+                      <span
+                        className={`block text-[11.5px] ${u.state === 'failed' ? 'text-alert' : u.state === 'installed' ? 'text-ok' : 'text-accent'}`}
+                      >
+                        {STATE_LABEL[u.state]}
+                        {u.state === 'failed' && u.error ? `: ${u.error}` : ''}
+                      </span>
+                    )}
                   </span>
-                  <button
-                    type="button"
-                    className="hud-button"
-                    onClick={() => act(window.arc.mods.update(u.modId))}
-                  >
-                    <Download size={13} /> Update
-                  </button>
+                  {(!u.state || u.state === 'failed' || u.state === 'opened') && (
+                    <button
+                      type="button"
+                      className="hud-button"
+                      onClick={() =>
+                        act(
+                          window.arc.mods.update(u.modId).then((r) => {
+                            void window.arc.mods.status().then(setSt);
+                            return r;
+                          }),
+                        )
+                      }
+                    >
+                      <Download size={13} /> {u.state === 'failed' ? 'Retry' : 'Update'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="hud-button"

@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   findUpdates,
   hasUpdate,
+  installedSince,
+  jobCounts,
+  settleJobs,
   isVortexInternal,
   needsCheck,
   parseModFolder,
@@ -101,5 +104,28 @@ describe('Cyberpunk mods from Vortex', () => {
       'ACU-3850-3-2-1-1777741508',
     ].map(parseModFolder);
     expect(searchMods(mods, 'cats dog').map((m) => m.modId)).toEqual([10325]);
+  });
+});
+
+describe('update progress', () => {
+  const job = {
+    modId: 6329,
+    name: 'Cats',
+    state: 'in-vortex' as const,
+    at: 0,
+    before: ['Cats-6329-2-2-0-1700000000'],
+  };
+  it('spots when Vortex has installed the new version', () => {
+    const old = [parseModFolder('Cats-6329-2-2-0-1700000000')];
+    expect(installedSince(job, old)).toBe(false);
+    const now = [...old, parseModFolder('Cats 6329 2.3 2026-11-24T10-00Z abc')];
+    expect(installedSince(job, now)).toBe(true);
+    const [settled] = settleJobs([job], now, 5);
+    expect(settled).toMatchObject({ state: 'installed', at: 5 });
+    expect(settleJobs([{ ...job, state: 'failed' }], now, 5)[0]?.state).toBe('failed');
+  });
+  it('counts jobs by state', () => {
+    const c = jobCounts([job, { ...job, state: 'installed' }, { ...job, state: 'installed' }]);
+    expect(c).toMatchObject({ 'in-vortex': 1, installed: 2, queued: 0 });
   });
 });

@@ -69,6 +69,7 @@ export const IPC = {
     updateAll: 'mods:update-all',
     open: 'mods:open',
     diagnose: 'mods:diagnose',
+    cancel: 'mods:cancel',
   },
   smarthome: {
     status: 'smarthome:status',
@@ -329,6 +330,7 @@ export interface InvokeMap {
   [IPC.desk.setWallpaper]: { args: [path: string]; result: { ok: boolean; error?: string } };
   [IPC.mods.status]: { args: []; result: ModsStatus };
   [IPC.mods.diagnose]: { args: []; result: LaunchCheck };
+  [IPC.mods.cancel]: { args: []; result: boolean };
   [IPC.mods.list]: { args: []; result: import('./cpmods').CpMod[] };
   [IPC.mods.setKey]: { args: [key: string]; result: { ok: boolean; message: string } };
   [IPC.mods.clearKey]: { args: []; result: boolean };
@@ -573,6 +575,8 @@ export interface ArcAPI {
     open(what: 'folder' | 'page' | 'game' | 'vortex', modId?: number): Promise<string>;
     /** Why won't the game start? (reads its launch logs) */
     diagnose(): Promise<LaunchCheck>;
+    /** Stop "Update all" (ones already sent carry on in Vortex). */
+    cancel(): Promise<boolean>;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */
@@ -883,6 +887,19 @@ export interface ModsStatus {
     installed: string;
     latest: string;
     updatedAt: number;
+    /** Where its update is up to (null = not started). */
+    state: import('./cpmods').UpdateState | null;
+    error: string;
+  }>;
+  /** "Update all" running in the background. */
+  updating: { total: number; done: number; current: string } | null;
+  /** Updates sent this session, newest first (installed ones stay for an hour). */
+  jobs: Array<{
+    modId: number;
+    name: string;
+    state: import('./cpmods').UpdateState;
+    at: number;
+    error: string;
   }>;
   dailyLeft: number;
   error: string;

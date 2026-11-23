@@ -14,6 +14,8 @@ import {
   nexusPage,
   parseModFolder,
   searchMods,
+  settleJobs,
+  type UpdateJob,
   type CpMod,
   type ModUpdate,
   type NexusInfo,
@@ -50,6 +52,9 @@ export class CyberpunkMods {
   private error = '';
   private gameDir: string | null | undefined;
   private updatesNow: ModUpdate[] = [];
+  /** Updates sent or opened, newest last (kept for an hour after they finish). */
+  private jobs: UpdateJob[] = [];
+  private run: { total: number; done: number; current: string; cancel: boolean } | null = null;
 
   constructor() {
     try {
@@ -144,6 +149,8 @@ export class CyberpunkMods {
 
   async status(): Promise<ModsStatus> {
     const game = await this.findGame();
+    this.settle();
+    const state = new Map(this.jobs.map((j) => [j.modId, j]));
     const at = (p: string): number => (game ? count(join(game, p)) : 0);
     return {
       game,
@@ -166,7 +173,22 @@ export class CyberpunkMods {
         installed: u.mod.version,
         latest: u.latest.version,
         updatedAt: u.latest.updatedAt,
+        state: state.get(u.latest.modId)?.state ?? null,
+        error: state.get(u.latest.modId)?.error ?? '',
       })),
+      updating: this.run
+        ? { total: this.run.total, done: this.run.done, current: this.run.current }
+        : null,
+      jobs: [...this.jobs]
+        .reverse()
+        .slice(0, 300)
+        .map((j) => ({
+          modId: j.modId,
+          name: j.name,
+          state: j.state,
+          at: j.at,
+          error: j.error ?? '',
+        })),
       dailyLeft: this.dailyLeft,
       error: this.error,
     };
@@ -290,11 +312,47 @@ export class CyberpunkMods {
     return this.status();
   }
 
+  /** Jobs waiting on Vortex are marked installed once its new folder appears; finished ones
+   *  are dropped after an hour. */
+  private settle(): void {
+    if (!this.jobs.length) return;
+    const now = Date.now();
+    this.jobs = settleJobs(this.jobs, this.list(), now).filter(
+      (j) => !(j.state === 'installed' || j.state === 'failed') || now - j.at < 3_600_000,
+    );
+  }
+
+  private job(modId: number, state: UpdateJob['state'], error?: string): UpdateJob {
+    let j = this.jobs.find((x) => x.modId === modId);
+    if (!j) {
+      const mods = this.list().filter((m) => m.modId === modId);
+      j = {
+        modId,
+        name: mods[0]?.name ?? `mod ${modId}`,
+        state,
+        at: Date.now(),
+        before: mods.map((m) => m.folder),
+      };
+      this.jobs.push(j);
+    }
+    j.state = state;
+    j.at = Date.now();
+    if (error) j.error = error;
+    else delete j.error;
+    return j;
+  }
+
   /** Send one mod's update to Vortex (Premium) or open its Files page (free). */
   async update(modId: number): Promise<{ ok: boolean; message: string }> {
-    const name = this.list().find((m) => m.modId === modId)?.name ?? `mod ${modId}`;
+    const j = this.job(modId, 'sending');
+    const name = j.name;
+    // A fresh "before" snapshot, so an earlier install doesn't count as this one.
+    j.before = this.list()
+      .filter((m) => m.modId === modId)
+      .map((m) => m.folder);
     if (!this.account?.premium) {
       await shell.openExternal(nexusPage(modId, true));
+      this.job(modId, 'opened');
       return {
         ok: true,
         message: `Opened ${name} on Nexus: press “Mod manager download” on the newest main file and Vortex installs it.`,
@@ -302,6 +360,8 @@ export class CyberpunkMods {
     }
     try {
       const r = await this.nexus(`/games/${GAME}/mods/${modId}/files.json`);
+      if (r.status === 401) throw new Error('Nexus Mods refused your API key.');
+      if (r.status === 429) throw new Error('Nexus Mods’ rate limit: try again later.');
       const files = ((r.json as { files?: unknown[] } | null)?.files ?? []) as Array<{
         file_id?: number;
         category_name?: string | null;
@@ -315,6 +375,7 @@ export class CyberpunkMods {
         .sort((a, b) => (b.uploaded_timestamp ?? 0) - (a.uploaded_timestamp ?? 0))[0];
       if (!main?.file_id) {
         await shell.openExternal(nexusPage(modId, true));
+        this.job(modId, 'opened');
         return {
           ok: true,
           message: `${name} has no single main file, so I opened its Files page.`,
@@ -323,30 +384,62 @@ export class CyberpunkMods {
       await shell.openExternal(`nxm://${GAME}/mods/${modId}/files/${main.file_id}`);
       const c = this.cache.get(modId);
       if (c) this.cache.set(modId, { ...c, fileId: main.file_id });
+      this.job(modId, 'in-vortex');
       return { ok: true, message: `Sent ${name} to Vortex to download and install.` };
     } catch (e) {
-      return { ok: false, message: e instanceof Error ? e.message : 'Couldn’t start the update.' };
+      const msg = e instanceof Error ? e.message : 'Couldn’t start the update.';
+      this.job(modId, 'failed', msg);
+      return { ok: false, message: msg };
     }
   }
 
-  /** Every update in turn (a couple of seconds apart, so Vortex keeps up). */
-  async updateAll(): Promise<{ ok: boolean; message: string }> {
-    const list = this.updates().slice(0, 25);
-    if (!list.length) return { ok: true, message: 'Everything is up to date.' };
-    if (!this.account?.premium) {
-      for (const u of list.slice(0, 5)) await shell.openExternal(nexusPage(u.latest.modId, true));
+  /** Every update, in the background (Premium: all of them, a couple of seconds apart so
+   *  Vortex keeps up; free: the next 10 Files pages). Progress shows in status(). */
+  updateAll(): { ok: boolean; message: string } {
+    if (this.run) return { ok: true, message: 'Already updating.' };
+    this.settle();
+    const busy = new Set(this.jobs.filter((j) => j.state !== 'failed').map((j) => j.modId));
+    const todo = this.updates()
+      .map((u) => u.latest.modId)
+      .filter((id) => !busy.has(id));
+    if (!todo.length)
       return {
         ok: true,
-        message: `Opened the first ${Math.min(5, list.length)} of ${list.length} on Nexus (free accounts download each one from its page).`,
+        message: this.updatesNow.length
+          ? 'They’re all on their way already.'
+          : 'Everything is up to date.',
       };
-    }
-    let sent = 0;
-    for (const u of list) {
-      const r = await this.update(u.latest.modId);
-      if (r.ok) sent++;
-      await new Promise((res) => setTimeout(res, 2500));
-    }
-    return { ok: true, message: `Sent ${sent} update${sent === 1 ? '' : 's'} to Vortex.` };
+    const premium = this.account?.premium === true;
+    const list = premium ? todo : todo.slice(0, 10);
+    for (const id of list) this.job(id, 'queued');
+    const run = { total: list.length, done: 0, current: '', cancel: false };
+    this.run = run;
+    void (async () => {
+      for (const id of list) {
+        if (run.cancel) break;
+        if (premium && this.dailyLeft >= 0 && this.dailyLeft < 20) {
+          this.error = 'Nexus Mods’ daily limit is nearly used up: the rest can go tomorrow.';
+          break;
+        }
+        run.current = this.jobs.find((j) => j.modId === id)?.name ?? '';
+        await this.update(id);
+        run.done++;
+        await new Promise((res) => setTimeout(res, premium ? 2500 : 1500));
+      }
+      // Anything not reached goes back to plain "update available".
+      this.jobs = this.jobs.filter((j) => j.state !== 'queued');
+      if (this.run === run) this.run = null;
+    })();
+    return {
+      ok: true,
+      message: premium
+        ? `Sending ${list.length} update${list.length === 1 ? '' : 's'} to Vortex…`
+        : `Opening ${list.length} of ${todo.length} on Nexus (free accounts download each one from its page). Press Update all again for the next ones.`,
+    };
+  }
+
+  cancelUpdates(): void {
+    if (this.run) this.run.cancel = true;
   }
 
   /** Open a mod's folder, its Nexus page, the game folder or the Vortex mods folder. */

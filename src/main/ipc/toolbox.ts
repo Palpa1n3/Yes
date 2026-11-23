@@ -95,6 +95,10 @@ export function registerToolbox(
   );
   handle(IPC.mods.updateAll, () => mods.updateAll());
   handle(IPC.mods.diagnose, () => mods.diagnose());
+  handle(IPC.mods.cancel, () => {
+    mods.cancelUpdates();
+    return true;
+  });
   handle(IPC.mods.open, (what, id) =>
     ['folder', 'page', 'game', 'vortex'].includes(String(what))
       ? mods.open(what, typeof id === 'number' ? id : undefined)

@@ -159,10 +159,15 @@ result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' �
   opens the Files page. Alton never unpacks or runs mod files. The tool asks approval before updating.
   Helpers `src/shared/cpmods.ts` (tests/cpmods.test.ts).
   Launch check (0.61, Mods tab › Won't start? and cyberpunk_mods action 'diagnose'): `src/shared/cplaunch.ts`
-  reads red4ext\logsed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …" = crashed
+  reads red4ext\logs
+ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …" = crashed
   loading that plugin; "plugin(s) loaded"/"scc invoked"/"shut down" = got further. Reports the plugin recent
   launches keep stopping on, the date the game version changed, plugins whose DLLs predate it, redscript
   [ERROR] lines, and the Vortex mod that ships the plugin. Read only.
+  Update progress (0.62): no 25 cap. updateAll() runs in the background (Premium: every update, 2.5 s apart;
+  free: next 10 Files pages) with UpdateJob per mod (queued → sending → in-vortex/opened → installed, or failed),
+  `updating` progress and Stop (mods.cancel). "installed" = a new Vortex folder for that mod id appeared
+  (settleJobs/installedSince); finished jobs drop after an hour. The tab polls while anything is waiting.
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
