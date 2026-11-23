@@ -1,4 +1,5 @@
 import '@shared/space-backdrops.css';
+import '@shared/flat-backdrops.css';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { paintSpace } from '@renderer/components/core/spaceArt';
 import { startBgMotion } from '@renderer/components/core/bgMotion';

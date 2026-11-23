@@ -54,6 +54,9 @@ export const IPC = {
     hover: 'desk:hover',
     resize: 'desk:resize',
     onSnapshot: 'desk:snapshot',
+    displays: 'desk:displays',
+    wallpapers: 'desk:wallpapers',
+    setWallpaper: 'desk:set-wallpaper',
   },
   smarthome: {
     status: 'smarthome:status',
@@ -306,6 +309,12 @@ export interface InvokeMap {
   [IPC.updates.state]: { args: []; result: UpdateState };
   [IPC.agent.status]: { args: []; result: AgentStatus };
   [IPC.desk.get]: { args: []; result: import('./desk').DeskSnapshot };
+  [IPC.desk.displays]: {
+    args: [];
+    result: Array<{ id: number; label: string; primary: boolean }>;
+  };
+  [IPC.desk.wallpapers]: { args: []; result: import('./wallpapers').Wallpaper[] };
+  [IPC.desk.setWallpaper]: { args: [path: string]; result: { ok: boolean; error?: string } };
   [IPC.smarthome.status]: { args: []; result: boolean };
   [IPC.smarthome.set]: { args: [token: string]; result: { ok: boolean; message: string } };
   [IPC.smarthome.clear]: { args: []; result: boolean };
@@ -517,6 +526,11 @@ export interface ArcAPI {
     /** The widget's content height, so its window fits. */
     resize(height: number): void;
     onSnapshot(cb: (s: import('./desk').DeskSnapshot) => void): Unsubscribe;
+    /** The screens, for choosing where the widget sits. */
+    displays(): Promise<Array<{ id: number; label: string; primary: boolean }>>;
+    /** Windows desktop wallpapers: the user's previous ones and Windows' own, with previews. */
+    wallpapers(): Promise<import('./wallpapers').Wallpaper[]>;
+    setWallpaper(path: string): Promise<{ ok: boolean; error?: string }>;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */

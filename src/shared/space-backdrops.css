@@ -144,7 +144,6 @@
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.9;
 }
 
 /* Preview tiles (both apps): a size container, so the art inside scales to the tile. */

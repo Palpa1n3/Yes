@@ -28,6 +28,15 @@ export function DeskSection() {
   const set = (ch: Partial<DeskSettings>): void =>
     void update({ desk: cleanDesk({ ...d, ...ch }) });
   const [snap, setSnap] = useState<DeskSnapshot | null>(null);
+  const [screens, setScreens] = useState<Array<{ id: number; label: string; primary: boolean }>>(
+    [],
+  );
+  useEffect(() => {
+    void window.arc.desk
+      .displays()
+      .then(setScreens)
+      .catch(() => undefined);
+  }, []);
   const [stats, setStats] = useState<SystemStats | null>(null);
   useEffect(() => {
     const load = (): void => {
@@ -134,6 +143,20 @@ export function DeskSection() {
             ))}
           </ul>
         </Field>
+        {screens.length > 1 && (
+          <Field label="Screen" hint="Which monitor the widget sits on.">
+            <Select
+              label="Screen"
+              value={String(
+                screens.some((x) => x.id === d.display)
+                  ? d.display
+                  : (screens.find((x) => x.primary)?.id ?? ''),
+              )}
+              onChange={(v) => set({ display: Number(v) })}
+              options={screens.map((x) => ({ value: String(x.id), label: x.label }))}
+            />
+          </Field>
+        )}
         <Field
           label="Corner"
           hint="Or drag the clock (when not locked): it snaps to the nearest corner of whichever screen you drop it on."

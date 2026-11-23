@@ -1,6 +1,6 @@
 /** Pure validation for stored settings: unknown keys dropped, wrong types replaced by
  *  defaults, so a hand-edited or corrupted settings.json can't break the app. */
-import { isSpaceBackdrop } from './backdrops';
+import { isBackdrop } from './backdrops';
 import { cleanUiStyle } from './ui-style';
 import { cleanDesk } from './desk';
 import { sanitizePersonality } from './personalities';
@@ -264,7 +264,7 @@ export function sanitizeSettings(raw: unknown): Settings {
       ? (r['screensaverMinutes'] as number)
       : d.screensaverMinutes,
     screensaverWhen: r['screensaverWhen'] === 'alton' ? 'alton' : 'idle',
-    backdrop: isSpaceBackdrop(r['backdrop']) ? r['backdrop'] : 'none',
+    backdrop: isBackdrop(r['backdrop']) ? r['backdrop'] : 'none',
     homeAddress: str('homeAddress', 200).trim(),
   };
 }

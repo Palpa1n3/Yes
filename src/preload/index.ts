@@ -107,6 +107,9 @@ const api: ArcAPI = {
     hover: (on) => send(IPC.desk.hover, on),
     resize: (h) => send(IPC.desk.resize, h),
     onSnapshot: (cb) => subscribe(IPC.desk.onSnapshot, cb),
+    displays: () => invoke(IPC.desk.displays),
+    wallpapers: () => invoke(IPC.desk.wallpapers),
+    setWallpaper: (p) => invoke(IPC.desk.setWallpaper, p),
   },
   smarthome: {
     status: () => invoke(IPC.smarthome.status),

@@ -27,6 +27,7 @@ import { describeWeather, tempSymbol, type WeatherData } from '@shared/weather';
 import type { MainContext } from './context';
 import { BADGE_COLOURS, SHAPES, makeIcon } from './desk-icons';
 import { deskState } from './desk-state';
+import { listWallpapers, setWallpaper } from './services/wallpapers';
 import { lastPayday, phoneStatus } from './services/phone-status';
 
 export interface DeskDeps {
@@ -64,6 +65,18 @@ export class DeskService {
   constructor(private readonly d: DeskDeps) {
     this.snap = this.build();
     ipcMain.handle(IPC.desk.get, () => this.snap);
+    ipcMain.handle(IPC.desk.displays, () => {
+      const main = screen.getPrimaryDisplay().id;
+      return screen.getAllDisplays().map((x, i) => ({
+        id: x.id,
+        primary: x.id === main,
+        label: `Screen ${i + 1}${x.id === main ? ' (main)' : ''} · ${Math.round(x.size.width * x.scaleFactor)}×${Math.round(x.size.height * x.scaleFactor)}`,
+      }));
+    });
+    ipcMain.handle(IPC.desk.wallpapers, () => listWallpapers());
+    ipcMain.handle(IPC.desk.setWallpaper, (_e, p: unknown) =>
+      typeof p === 'string' ? setWallpaper(p) : { ok: false, error: 'No picture.' },
+    );
     ipcMain.removeAllListeners(IPC.desk.action);
     ipcMain.on(IPC.desk.action, (_e, a: DeskAction) => this.act(a));
     ipcMain.removeAllListeners(IPC.desk.hover);

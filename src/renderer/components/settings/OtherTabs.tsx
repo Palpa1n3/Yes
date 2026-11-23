@@ -1,5 +1,6 @@
 import { UI_STYLE_GROUPS, cleanUiStyle, type UiStyle } from '@shared/ui-style';
-import { SPACE_BACKDROPS } from '@shared/backdrops';
+import { FLAT_BACKDROPS, SPACE_BACKDROPS } from '@shared/backdrops';
+import type { Wallpaper } from '@shared/wallpapers';
 import { SPACE_LOOKS } from '@shared/looks';
 import { SpaceTileArt } from '@renderer/components/hud/Background';
 import { DeskSection } from './DeskSection';
@@ -420,34 +421,37 @@ export function AppearanceTab() {
           />
         </Field>
         <Field
-          label="Space background"
-          hint="A space scene behind the HUD. Goes well with the Event Horizon, Deep Space, Nebula and Exoplanet colours."
+          label="Background"
+          hint="Behind the HUD: a space scene, or one of the phone's backgrounds. Space scenes go well with the Event Horizon, Deep Space, Nebula and Exoplanet colours."
           stacked
         >
           {/* Previews: each tile is drawn with the real background. */}
-          <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Space background">
-            {[{ id: 'none' as const, label: 'None' }, ...SPACE_BACKDROPS].map((b) => {
-              const active = s.backdrop === b.id;
-              return (
-                <button
-                  key={b.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  aria-label={b.label}
-                  title={b.label}
-                  onClick={() => void update({ backdrop: b.id })}
-                  className={`bg-tile h-16 border bg-void transition-[border-color,box-shadow] ${active ? 'border-accent shadow-glow-sm' : 'border-line hover:border-accent'}`}
-                >
-                  {b.id !== 'none' && <SpaceTileArt id={b.id} />}
-                  <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 text-left text-[10px] leading-tight text-white">
-                    {b.label.replace(/ \(.*\)$/, '')}
-                  </span>
-                </button>
-              );
-            })}
+          <div className="grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Background">
+            {[{ id: 'none' as const, label: 'None' }, ...SPACE_BACKDROPS, ...FLAT_BACKDROPS].map(
+              (b) => {
+                const active = s.backdrop === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    aria-label={b.label}
+                    title={b.label}
+                    onClick={() => void update({ backdrop: b.id })}
+                    className={`bg-tile h-16 border bg-void transition-[border-color,box-shadow] ${active ? 'border-accent shadow-glow-sm' : 'border-line hover:border-accent'}`}
+                  >
+                    {b.id !== 'none' && <SpaceTileArt id={b.id} />}
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 text-left text-[10px] leading-tight text-white">
+                      {b.label.replace(/ \(.*\)$/, '')}
+                    </span>
+                  </button>
+                );
+              },
+            )}
           </div>
         </Field>
+        <WallpaperField />
         <Field
           label="Screensaver starts when"
           hint={
@@ -1120,5 +1124,81 @@ function InterfaceSection() {
         </Section>
       ))}
     </>
+  );
+}
+
+/** Windows desktop wallpaper: the user's previous ones and Windows' own, set with one tap. */
+function WallpaperField() {
+  const [list, setList] = useState<Wallpaper[] | null>(null);
+  const [msg, setMsg] = useState('');
+  const load = (): void => {
+    setList(null);
+    void window.arc.desk
+      .wallpapers()
+      .then(setList)
+      .catch(() => setList([]));
+  };
+  useEffect(load, []);
+  const pick = async (w: Wallpaper): Promise<void> => {
+    setMsg('Setting it…');
+    const r = await window.arc.desk
+      .setWallpaper(w.path)
+      .catch(() => ({ ok: false, error: 'Couldn’t set it.' }));
+    setMsg(r.ok ? `Desktop wallpaper set: ${w.name}` : (r.error ?? 'Couldn’t set it.'));
+    if (r.ok) setList((l) => l?.map((x) => ({ ...x, current: x.path === w.path })) ?? l);
+  };
+  const groups: Array<[Wallpaper['group'], string]> = [
+    ['yours', 'Your wallpapers'],
+    ['windows', 'Windows’ own'],
+  ];
+  return (
+    <Field
+      label="Desktop wallpaper"
+      hint="Your previous Windows wallpapers (Windows remembers the last few) and the ones that come with Windows. Tap one to put it on your desktop."
+      stacked
+    >
+      {list === null ? (
+        <p className="text-[12px] text-text-muted">Looking for your wallpapers…</p>
+      ) : !list.length ? (
+        <p className="text-[12px] text-text-muted">No wallpapers found.</p>
+      ) : (
+        groups.map(([g, title]) =>
+          list.some((w) => w.group === g) ? (
+            <div key={g} className="mb-2">
+              <div className="mb-1 font-mono text-[10px] uppercase tracking-wider text-text-muted">
+                {title}
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {list
+                  .filter((w) => w.group === g)
+                  .map((w) => (
+                    <button
+                      key={w.path}
+                      type="button"
+                      title={w.path}
+                      aria-label={`Set ${w.name} as the desktop wallpaper`}
+                      aria-pressed={w.current}
+                      onClick={() => void pick(w)}
+                      className={`relative h-16 overflow-hidden rounded border bg-void bg-cover bg-center transition-[border-color,box-shadow] ${w.current ? 'border-accent shadow-glow-sm' : 'border-line hover:border-accent'}`}
+                      style={w.thumb ? { backgroundImage: `url("${w.thumb}")` } : undefined}
+                    >
+                      <span className="absolute inset-x-0 bottom-0 truncate bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 text-left text-[10px] leading-tight text-white">
+                        {w.current ? '✓ ' : ''}
+                        {w.name}
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ) : null,
+        )
+      )}
+      <div className="flex items-center gap-2">
+        <button type="button" className="hud-button" onClick={load}>
+          Refresh
+        </button>
+        {msg && <span className="text-[12px] text-text-muted">{msg}</span>}
+      </div>
+    </Field>
   );
 }

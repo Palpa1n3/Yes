@@ -137,6 +137,9 @@ export function installArcMock(): ArcAPI {
       hover: vi.fn(),
       resize: vi.fn(),
       onSnapshot: vi.fn(() => () => undefined),
+      displays: vi.fn(async () => [{ id: 1, label: 'Screen 1 (main)', primary: true }]),
+      wallpapers: vi.fn(async () => []),
+      setWallpaper: vi.fn(async () => ({ ok: true })),
     },
     smarthome: {
       status: vi.fn(async () => false),

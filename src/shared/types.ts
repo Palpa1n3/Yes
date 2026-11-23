@@ -276,7 +276,7 @@ export interface Settings {
    *  go full-screen on its own screen while you work on another). */
   screensaverWhen: 'idle' | 'alton';
   /** A space background behind the HUD ('none' = the plain theme colour). */
-  backdrop: import('./backdrops').SpaceBackdrop | 'none';
+  backdrop: import('./backdrops').Backdrop | 'none';
   /** Saver mode: cheapest model for chat and research, fewer web searches, no background
    *  memory learning. Agent Mode keeps its own model. */
   saver: boolean;

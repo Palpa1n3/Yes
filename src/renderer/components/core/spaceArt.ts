@@ -827,7 +827,7 @@ function render(id: SpaceArtId, w: number, h: number): Promise<string> {
       cv.toBlob(
         (b) => (b ? resolve(URL.createObjectURL(b)) : reject(new Error('no image'))),
         'image/jpeg',
-        0.9,
+        0.96,
       );
     });
     cache.set(key, p);
@@ -843,7 +843,7 @@ function render(id: SpaceArtId, w: number, h: number): Promise<string> {
 /** Paint a space scene as `el`'s background (or clear it for any other id). The painting is
  *  sized to the element (capped, so big screens stay quick) and done after a frame so it
  *  never blocks the tap that chose it. */
-export function paintSpace(el: HTMLElement, id: string, maxSide = 1600): void {
+export function paintSpace(el: HTMLElement, id: string, maxSide = 2560): void {
   const token = `${id}:${Date.now()}`;
   el.dataset.spaceArt = token;
   if (!isSpaceArt(id)) {

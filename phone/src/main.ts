@@ -22,6 +22,7 @@ import { md, plain } from './md';
 import { digestForAi, groupMessages, quickSummary, type PhoneMsg } from '@shared/messages';
 import { metresBetween, mountWorkMap, type WorkMap } from './workmap';
 import '@shared/ui-style.css';
+import '@shared/flat-backdrops.css';
 import '@fontsource/rajdhani/500.css';
 import '@fontsource/orbitron/400.css';
 import '@fontsource/jetbrains-mono/400.css';

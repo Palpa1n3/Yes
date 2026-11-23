@@ -135,6 +135,13 @@ result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' �
   Animations: Off. UiStyle gained bgMotion (default calm), shooting, parallax, weight, shadow, border 'pulse',
   lift, enter, aiStyle (PC answers have class `chat-ai`), chatSize, scrollbar, focusGlow; CSS in ui-style.css.
   Phone CSP now allows `font-src 'self' data:` (the bundled fonts were blocked). tests/bgMotion.test.ts.
+  0.59: the phone's CSS backgrounds moved to `src/shared/flat-backdrops.css` and are on the PC too
+  (`FLAT_BACKDROPS`, settings `backdrop: Backdrop`). Space paintings now up to 2560 px (was 1600) at JPEG 0.96, and
+  the PC layer is no longer faded (opacity 1). Desktop widget: Settings › Desktop & taskbar › Screen (desk.displays).
+  Windows wallpapers: `main/services/wallpapers.ts` reads the history (HKCU …\Explorer\Wallpapers, current
+  WallPaper, Themes\CachedFiles) and %WINDIR%\Web\Wallpaper with nativeImage previews; `setWallpaper` only takes
+  a path from the last list (SystemParametersInfo via PowerShell, path passed as an env var). Helpers in
+  `src/shared/wallpapers.ts` (tests/wallpapers.test.ts).
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
