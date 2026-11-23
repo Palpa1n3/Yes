@@ -104,7 +104,7 @@ const api: ArcAPI = {
   desk: {
     get: () => invoke(IPC.desk.get),
     action: (a) => send(IPC.desk.action, a),
-    hover: (on) => send(IPC.desk.hover, on),
+    hits: (r) => send(IPC.desk.hits, r),
     resize: (h) => send(IPC.desk.resize, h),
     onSnapshot: (cb) => subscribe(IPC.desk.onSnapshot, cb),
     displays: () => invoke(IPC.desk.displays),

@@ -51,7 +51,7 @@ export const IPC = {
   desk: {
     get: 'desk:get',
     action: 'desk:action',
-    hover: 'desk:hover',
+    hits: 'desk:hits',
     resize: 'desk:resize',
     onSnapshot: 'desk:snapshot',
     displays: 'desk:displays',
@@ -389,7 +389,7 @@ export interface InvokeMap {
 /** Fire-and-forget channels (ipcRenderer.send -> ipcMain.on). */
 export interface SendMap {
   [IPC.desk.action]: [action: DeskAction];
-  [IPC.desk.hover]: [on: boolean];
+  [IPC.desk.hits]: [rects: import('./desk').HitRect[]];
   [IPC.desk.resize]: [height: number];
   [IPC.app.reportState]: [state: string];
   [IPC.window.minimize]: [];
@@ -521,8 +521,9 @@ export interface ArcAPI {
     /** What the desktop widget and taskbar strip show (pushed again on every change). */
     get(): Promise<import('./desk').DeskSnapshot>;
     action(a: DeskAction): void;
-    /** The mouse is over a tile (buttons need clicks) or left it (clicks pass through). */
-    hover(on: boolean): void;
+    /** Where the widget's clickable tiles are; everywhere else, clicks pass through. Main checks
+     *  the cursor against these a few times a second (no mouse hook, so the cursor never waits). */
+    hits(rects: import('./desk').HitRect[]): void;
     /** The widget's content height, so its window fits. */
     resize(height: number): void;
     onSnapshot(cb: (s: import('./desk').DeskSnapshot) => void): Unsubscribe;

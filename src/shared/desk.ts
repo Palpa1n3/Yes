@@ -339,3 +339,38 @@ export interface DeskSnapshot {
   agentWaiting: boolean;
   warning: string | null;
 }
+
+/** A clickable area of the widget or strip, in page pixels (from the window's top-left). */
+export interface HitRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Is the cursor (screen point) over one of the window's clickable areas? */
+export function overHit(
+  cursor: { x: number; y: number },
+  win: { x: number; y: number; width: number; height: number },
+  hits: HitRect[],
+): boolean {
+  const x = cursor.x - win.x;
+  const y = cursor.y - win.y;
+  if (x < 0 || y < 0 || x >= win.width || y >= win.height) return false;
+  return hits.some((r) => x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height);
+}
+
+/** Clickable areas from the page, made safe (at most 40, finite, non-negative sizes). */
+export function cleanHits(raw: unknown): HitRect[] {
+  if (!Array.isArray(raw)) return [];
+  const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : NaN);
+  return raw
+    .slice(0, 40)
+    .map((r) => {
+      const o = (r && typeof r === 'object' ? r : {}) as Record<string, unknown>;
+      return { x: n(o.x), y: n(o.y), width: n(o.width), height: n(o.height) };
+    })
+    .filter(
+      (r) => [r.x, r.y, r.width, r.height].every(Number.isFinite) && r.width > 0 && r.height > 0,
+    );
+}

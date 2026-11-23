@@ -142,6 +142,11 @@ result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' �
   WallPaper, Themes\CachedFiles) and %WINDIR%\Web\Wallpaper with nativeImage previews; `setWallpaper` only takes
   a path from the last list (SystemParametersInfo via PowerShell, path passed as an env var). Helpers in
   `src/shared/wallpapers.ts` (tests/wallpapers.test.ts).
+  0.59.1: holo notifications go on the widget's screen (HoloDeps.display). 0.59.2: the widget and strip no longer
+  use setIgnoreMouseEvents(…, { forward: true }) — that installs a system-wide low-level mouse hook, and the
+  cursor stuttered whenever the main process was busy. Now the page sends its clickable areas
+  ([data-desk-hit] → desk.hits) and DeskService.checkCursor polls getCursorScreenPoint every 66 ms
+  (`overHit`), toggling setIgnoreMouseEvents without forwarding. Don't bring `forward: true` back.
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

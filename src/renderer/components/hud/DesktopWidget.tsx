@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   Battery,
   BatteryCharging,
@@ -109,13 +109,9 @@ function Tile({
   interactive?: boolean;
   preview?: boolean;
 }) {
-  const hover = (on: boolean) => () => {
-    if (interactive && !preview) window.arc.desk.hover(on);
-  };
   return (
     <section
-      onMouseEnter={hover(true)}
-      onMouseLeave={hover(false)}
+      data-desk-hit={interactive && !preview ? '' : undefined}
       className={
         hud
           ? 'rounded-[16px] border border-accent/35 bg-[rgb(var(--bg-void)/0.72)] px-4 py-3 shadow-glow-sm'
@@ -555,10 +551,46 @@ function useDeskData(): { snap: DeskSnapshot | null; stats: SystemStats | null }
   return { snap, stats };
 }
 
+/** Tell main where the clickable parts ([data-desk-hit]) are, whenever they move or change. */
+function useDeskHits(ref: RefObject<HTMLElement | null>, ready: boolean): void {
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    let last = '';
+    const send = (): void => {
+      const rects = [...root.querySelectorAll('[data-desk-hit]')].map((e) => {
+        const r = e.getBoundingClientRect();
+        return {
+          x: Math.round(r.left),
+          y: Math.round(r.top),
+          width: Math.round(r.width),
+          height: Math.round(r.height),
+        };
+      });
+      const key = JSON.stringify(rects);
+      if (key === last) return;
+      last = key;
+      window.arc.desk.hits(rects);
+    };
+    send();
+    const ro = new ResizeObserver(send);
+    ro.observe(root);
+    const mo = new MutationObserver(send);
+    mo.observe(root, { subtree: true, childList: true, attributes: true });
+    const t = setInterval(send, 2000);
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+      clearInterval(t);
+    };
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 /** The desktop widget window (#widget): see-through, clicks pass through except on tiles. */
 export function DesktopWidget() {
   const { snap, stats } = useDeskData();
   const ref = useRef<HTMLDivElement>(null);
+  useDeskHits(ref, snap !== null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -578,6 +610,8 @@ export function DesktopWidget() {
 export function TaskbarStrip() {
   const { snap, stats } = useDeskData();
   const now = useClock(1000).getTime();
+  const ref = useRef<HTMLDivElement>(null);
+  useDeskHits(ref, snap !== null);
   if (!snap) return null;
   const desk = snap.look.desk;
   const hud = desk.style === 'hud';
@@ -587,14 +621,11 @@ export function TaskbarStrip() {
   const bit = 'flex min-w-0 items-center gap-1.5 whitespace-nowrap';
   return (
     <div
+      ref={ref}
       className={`flex h-[34px] items-center gap-4 rounded-full px-4 text-[12.5px] text-white ${hud ? 'border border-accent/40 bg-[rgb(var(--bg-void)/0.8)] font-mono text-ice' : 'bg-[rgb(14_18_26/0.62)] shadow-[0_6px_20px_rgba(0,0,0,0.35)]'}`}
     >
       {items.includes('music') && m && (
-        <span
-          className={bit}
-          onMouseEnter={() => window.arc.desk.hover(true)}
-          onMouseLeave={() => window.arc.desk.hover(false)}
-        >
+        <span className={bit} data-desk-hit="">
           <button
             type="button"
             className="grid h-6 w-6 place-items-center rounded-full bg-white/10 hover:bg-[rgb(var(--accent)/0.4)]"

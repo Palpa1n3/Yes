@@ -134,7 +134,7 @@ export function installArcMock(): ArcAPI {
         warning: null,
       })),
       action: vi.fn(),
-      hover: vi.fn(),
+      hits: vi.fn(),
       resize: vi.fn(),
       onSnapshot: vi.fn(() => () => undefined),
       displays: vi.fn(async () => [{ id: 1, label: 'Screen 1 (main)', primary: true }]),

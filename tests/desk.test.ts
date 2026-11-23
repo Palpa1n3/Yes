@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_DESK,
   cleanDesk,
+  cleanHits,
+  overHit,
   clockLeft,
   cornerPosition,
   countdown,
@@ -146,5 +148,27 @@ describe('words and times', () => {
     expect(nextHours([h(14, 3)], now)).toBe('dry for now');
     expect(paydayIn('2026-11-27', now)).toBe('Payday in 3 days');
     expect(paydayIn('2026-11-25', now)).toBe('Payday tomorrow');
+  });
+});
+
+describe('widget clicks without a mouse hook', () => {
+  const win = { x: 2000, y: 40, width: 300, height: 400 };
+  const hits = [{ x: 10, y: 10, width: 280, height: 100 }];
+  it('takes clicks only over a tile', () => {
+    expect(overHit({ x: 2050, y: 80 }, win, hits)).toBe(true);
+    expect(overHit({ x: 2050, y: 300 }, win, hits)).toBe(false);
+    expect(overHit({ x: 100, y: 80 }, win, hits)).toBe(false);
+    expect(overHit({ x: 2050, y: 80 }, win, [])).toBe(false);
+  });
+  it('ignores bad rectangles from the page', () => {
+    expect(
+      cleanHits([
+        { x: 1, y: 2, width: 3, height: 4 },
+        { x: 'a' },
+        { x: 1, y: 1, width: 0, height: 5 },
+        null,
+      ]),
+    ).toEqual([{ x: 1, y: 2, width: 3, height: 4 }]);
+    expect(cleanHits('nope')).toEqual([]);
   });
 });

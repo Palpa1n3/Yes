@@ -18,6 +18,9 @@ import {
   nextHours,
   type DeskSettings,
   type DeskSnapshot,
+  cleanHits,
+  overHit,
+  type HitRect,
 } from '@shared/desk';
 import { IPC, type DeskAction } from '@shared/ipc';
 import type { NowPlaying } from '@shared/media';
@@ -79,12 +82,16 @@ export class DeskService {
     );
     ipcMain.removeAllListeners(IPC.desk.action);
     ipcMain.on(IPC.desk.action, (_e, a: DeskAction) => this.act(a));
-    ipcMain.removeAllListeners(IPC.desk.hover);
-    ipcMain.on(IPC.desk.hover, (e, on: boolean) => {
+    ipcMain.removeAllListeners(IPC.desk.hits);
+    ipcMain.on(IPC.desk.hits, (e, rects: unknown) => {
       const w = BrowserWindow.fromWebContents(e.sender);
-      if (w && (w === this.widget || w === this.strip))
-        w.setIgnoreMouseEvents(!on, { forward: true });
+      if (w && (w === this.widget || w === this.strip)) this.hits.set(w.id, cleanHits(rects));
     });
+    // Clicks pass through except over a tile. The cursor is checked ~15 times a second instead of
+    // forwarding every mouse move: forwarding needs a system-wide mouse hook, and whenever Alton
+    // was busy for a moment the cursor stuttered everywhere.
+    const poll = setInterval(() => this.checkCursor(), 66);
+    poll.unref?.();
     ipcMain.removeAllListeners(IPC.desk.resize);
     ipcMain.on(IPC.desk.resize, (e, h: number) => {
       const w = BrowserWindow.fromWebContents(e.sender);
@@ -102,6 +109,22 @@ export class DeskService {
     screen.on('display-metrics-changed', () => this.placeAll());
     screen.on('display-added', () => this.placeAll());
     screen.on('display-removed', () => this.placeAll());
+  }
+
+  /** Clickable areas per window id, and whether each window takes clicks right now. */
+  private hits = new Map<number, HitRect[]>();
+  private takesClicks = new Map<number, boolean>();
+
+  private checkCursor(): void {
+    if (this.hidden || (!this.widget && !this.strip)) return;
+    const cursor = screen.getCursorScreenPoint();
+    for (const w of [this.widget, this.strip]) {
+      if (!w || w.isDestroyed() || !w.isVisible()) continue;
+      const on = overHit(cursor, w.getBounds(), this.hits.get(w.id) ?? []);
+      if (on === (this.takesClicks.get(w.id) ?? false)) continue;
+      this.takesClicks.set(w.id, on);
+      w.setIgnoreMouseEvents(!on);
+    }
   }
 
   private get s(): DeskSettings {
@@ -300,8 +323,14 @@ export class DeskService {
         sandbox: true,
       },
     });
-    // Clicks pass through until the mouse is over a tile (the page says so via desk.hover).
-    w.setIgnoreMouseEvents(true, { forward: true });
+    // Clicks pass through until the cursor is over a tile (see checkCursor).
+    w.setIgnoreMouseEvents(true);
+    this.takesClicks.set(w.id, false);
+    const id = w.id;
+    w.on('closed', () => {
+      this.hits.delete(id);
+      this.takesClicks.delete(id);
+    });
     return w;
   }
 
