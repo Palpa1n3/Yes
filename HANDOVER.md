@@ -147,6 +147,17 @@ result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' �
   cursor stuttered whenever the main process was busy. Now the page sends its clickable areas
   ([data-desk-hit] → desk.hits) and DeskService.checkCursor polls getCursorScreenPoint every 66 ms
   (`overHit`), toggling setIgnoreMouseEvents without forwarding. Don't bring `forward: true` back.
+  Telemetry (0.60): cpuTemperature stops after 2 empty answers, battery after one "no battery", blockDevices every
+  10th slow run — WMI/ACPI queries that can stutter the mouse.
+  Cyberpunk mods (0.60, Mods tab + tool `cyberpunk_mods`): `main/services/cyberpunk-mods.ts` finds the game (GOG
+  registry 1423049311, Steam libraries, Epic) and Vortex's staging folder (%APPDATA%\Vortex\cyberpunk2077\mods),
+  parses folder names (`parseModFolder`: old "Name-id-1-2-3-unix" and new "Name id ver ISO-date code"), asks
+  Nexus Mods v1 with the user's API key (SecretStore nexus-key.bin; headers apikey/Application-Name) — first
+  check = one mods/{id}.json per mod (4 at a time, stops under 30 daily requests left), later only stale (>7 d)
+  or listed in updated.json?period=1m. Cache userData/cpmods-cache.json. Update: Premium → files.json newest MAIN
+  → shell.openExternal(nxm://cyberpunk2077/mods/{id}/files/{fileId}) so Vortex downloads and installs; free →
+  opens the Files page. Alton never unpacks or runs mod files. The tool asks approval before updating.
+  Helpers `src/shared/cpmods.ts` (tests/cpmods.test.ts).
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

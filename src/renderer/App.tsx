@@ -10,6 +10,7 @@ import { TopBar } from '@renderer/components/hud/TopBar';
 import { AppsTab } from '@renderer/components/tabs/AppsTab';
 import { NetworkTab } from '@renderer/components/tabs/NetworkTab';
 import { OverviewTab } from '@renderer/components/tabs/OverviewTab';
+import { ModsTab } from '@renderer/components/tabs/ModsTab';
 import { RoutinesTab } from '@renderer/components/tabs/RoutinesTab';
 import { StorageTab } from '@renderer/components/tabs/StorageTab';
 import { SystemTab } from '@renderer/components/tabs/SystemTab';
@@ -69,6 +70,7 @@ const VIEWS: Record<TabId, ComponentType> = {
   network: NetworkTab,
   storage: StorageTab,
   routines: RoutinesTab,
+  mods: ModsTab,
 };
 
 export function App() {

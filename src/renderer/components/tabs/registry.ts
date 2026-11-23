@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Network,
   Workflow,
+  Puzzle,
   type LucideIcon,
 } from 'lucide-react';
 import type { TabId } from '@renderer/stores/uiStore';
@@ -29,4 +30,5 @@ export const TABS: TabDef[] = [
   { id: 'network', label: 'Network', code: 'SEC.04', icon: Network },
   { id: 'storage', label: 'Storage', code: 'SEC.05', icon: HardDrive },
   { id: 'routines', label: 'Routines', code: 'SEC.06', icon: Workflow },
+  { id: 'mods', label: 'Mods', code: 'SEC.10', icon: Puzzle },
 ];

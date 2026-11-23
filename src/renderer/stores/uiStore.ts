@@ -10,6 +10,7 @@ export const TAB_IDS = [
   'network',
   'storage',
   'routines',
+  'mods',
 ] as const;
 export type TabId = (typeof TAB_IDS)[number];
 

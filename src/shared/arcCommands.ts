@@ -38,6 +38,7 @@ export const ARC_TABS = [
   'network',
   'storage',
   'routines',
+  'mods',
 ] as const;
 export type ArcTab = (typeof ARC_TABS)[number];
 
@@ -51,6 +52,7 @@ const TAB_WORDS: Array<[RegExp, ArcTab]> = [
   [/^(network|internet|wi-?fi|connection)$/, 'network'],
   [/^(storage|drives?|disks?|disk space|space)$/, 'storage'],
   [/^(routines?|automations?)$/, 'routines'],
+  [/^(mods?|cyberpunk( mods)?|game mods)$/, 'mods'],
 ];
 
 const SETTINGS_WORDS: Array<[RegExp, string]> = [

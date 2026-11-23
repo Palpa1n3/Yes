@@ -58,6 +58,17 @@ export const IPC = {
     wallpapers: 'desk:wallpapers',
     setWallpaper: 'desk:set-wallpaper',
   },
+  mods: {
+    status: 'mods:status',
+    list: 'mods:list',
+    setKey: 'mods:set-key',
+    clearKey: 'mods:clear-key',
+    openKeyPage: 'mods:key-page',
+    check: 'mods:check',
+    update: 'mods:update',
+    updateAll: 'mods:update-all',
+    open: 'mods:open',
+  },
   smarthome: {
     status: 'smarthome:status',
     set: 'smarthome:set',
@@ -315,6 +326,18 @@ export interface InvokeMap {
   };
   [IPC.desk.wallpapers]: { args: []; result: import('./wallpapers').Wallpaper[] };
   [IPC.desk.setWallpaper]: { args: [path: string]; result: { ok: boolean; error?: string } };
+  [IPC.mods.status]: { args: []; result: ModsStatus };
+  [IPC.mods.list]: { args: []; result: import('./cpmods').CpMod[] };
+  [IPC.mods.setKey]: { args: [key: string]; result: { ok: boolean; message: string } };
+  [IPC.mods.clearKey]: { args: []; result: boolean };
+  [IPC.mods.openKeyPage]: { args: []; result: boolean };
+  [IPC.mods.check]: { args: []; result: ModsStatus };
+  [IPC.mods.update]: { args: [modId: number]; result: { ok: boolean; message: string } };
+  [IPC.mods.updateAll]: { args: []; result: { ok: boolean; message: string } };
+  [IPC.mods.open]: {
+    args: [what: 'folder' | 'page' | 'game' | 'vortex', modId?: number];
+    result: string;
+  };
   [IPC.smarthome.status]: { args: []; result: boolean };
   [IPC.smarthome.set]: { args: [token: string]; result: { ok: boolean; message: string } };
   [IPC.smarthome.clear]: { args: []; result: boolean };
@@ -532,6 +555,20 @@ export interface ArcAPI {
     /** Windows desktop wallpapers: the user's previous ones and Windows' own, with previews. */
     wallpapers(): Promise<import('./wallpapers').Wallpaper[]>;
     setWallpaper(path: string): Promise<{ ok: boolean; error?: string }>;
+  };
+  mods: {
+    /** Cyberpunk 2077 mods (Vortex) and updates (Nexus Mods). The API key never comes back. */
+    status(): Promise<ModsStatus>;
+    list(): Promise<import('./cpmods').CpMod[]>;
+    setKey(key: string): Promise<{ ok: boolean; message: string }>;
+    clearKey(): Promise<boolean>;
+    openKeyPage(): Promise<boolean>;
+    /** Ask Nexus which mods have newer versions (the first time: about a minute). */
+    check(): Promise<ModsStatus>;
+    /** Premium: Vortex downloads and installs it; free: opens the mod's Files page. */
+    update(modId: number): Promise<{ ok: boolean; message: string }>;
+    updateAll(): Promise<{ ok: boolean; message: string }>;
+    open(what: 'folder' | 'page' | 'game' | 'vortex', modId?: number): Promise<string>;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */
@@ -825,3 +862,24 @@ export interface BackupInfo {
 
 export type OpenTarget =
   'userData' | 'appsJson' | 'settingsJson' | 'logs' | 'backups' | 'saveBackups' | 'plugins';
+
+/** Cyberpunk 2077 mods (Mods tab). */
+export interface ModsStatus {
+  game: string | null;
+  vortex: string | null;
+  mods: number;
+  files: { archives: number; cet: number; redscript: number; tweaks: number; red4ext: number };
+  keySet: boolean;
+  account: { name: string; premium: boolean } | null;
+  checking: { done: number; total: number } | null;
+  lastCheck: number;
+  updates: Array<{
+    modId: number;
+    name: string;
+    installed: string;
+    latest: string;
+    updatedAt: number;
+  }>;
+  dailyLeft: number;
+  error: string;
+}

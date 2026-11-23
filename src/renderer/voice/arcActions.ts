@@ -19,6 +19,7 @@ const TAB_NAMES: Record<ArcTab, string> = {
   network: 'the Network tab',
   storage: 'Storage',
   routines: 'your routines',
+  mods: 'your Cyberpunk mods',
 };
 
 export interface ArcResult {

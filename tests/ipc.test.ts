@@ -35,6 +35,7 @@ describe('IPC channel contract', () => {
         'gaming',
         'initiative',
         'media',
+        'mods',
         'network',
         'notes',
         'previews',

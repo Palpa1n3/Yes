@@ -241,13 +241,23 @@ export class TelemetryService {
     });
   }
 
+  /* Temperature and battery are ACPI queries on Windows (WMI), which can hold the system up
+     for a moment, a known cause of mouse stutter. Stop asking once they come back empty (most
+     desktops have no battery; Windows rarely gives the CPU temperature without admin). */
+  private tempTries = 0;
+  private hasBattery: boolean | null = null;
+  private slowRuns = 0;
+  private blk: Awaited<ReturnType<SiSource['blockDevices']>> | null = null;
+
   private refreshMedium(): Promise<void> {
     return this.once('medium', async () => {
+      const askTemp = this.tempTries < 2 || this.stats.cpu.temp !== null;
       const [gfx, temp, speed] = await Promise.all([
         this.si.graphics(),
-        this.si.cpuTemperature(),
+        askTemp ? this.si.cpuTemperature() : Promise.resolve({ main: null }),
         this.si.cpuCurrentSpeed(),
       ]);
+      if (askTemp && num(temp.main) === null) this.tempTries++;
       this.patch({
         gpu: mapGpu(gfx),
         cpu: {
@@ -268,12 +278,18 @@ export class TelemetryService {
 
   private refreshSlow(): Promise<void> {
     return this.once('slow', async () => {
+      // Disk models rarely change: every 10th run (5 min). Battery: until we know there's none.
+      const run = this.slowRuns++;
       const [fs, blk, bat, def] = await Promise.all([
         this.si.fsSize(),
-        this.si.blockDevices(),
-        this.si.battery(),
+        this.blk && run % 10 !== 0 ? Promise.resolve(this.blk) : this.si.blockDevices(),
+        this.hasBattery === false
+          ? Promise.resolve({ hasBattery: false, percent: 0, isCharging: false })
+          : this.si.battery(),
         this.si.networkInterfaceDefault(),
       ]);
+      this.blk = blk;
+      this.hasBattery = bat.hasBattery;
       this.iface = def;
       const ifaces = await this.si.networkInterfaces();
       const info = (Array.isArray(ifaces) ? ifaces : [ifaces]).find((i) => i.iface === def);

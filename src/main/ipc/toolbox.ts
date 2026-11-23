@@ -12,6 +12,7 @@ import { ST_API, cleanSmartInput, smartHome, type StFetch } from '@shared/smartt
 import type { MainContext } from '../context';
 import type { NotesStore } from '../services/notes-store';
 import { SecretStore } from '../services/secret-store';
+import { cyberpunkMods } from '../services/cyberpunk-mods';
 import { ps } from '../services/system-actions';
 import {
   applyTidy,
@@ -74,6 +75,30 @@ export function registerToolbox(
   });
   const input = (i: unknown): Record<string, unknown> =>
     i && typeof i === 'object' ? (i as Record<string, unknown>) : {};
+
+  // Mods tab: Cyberpunk 2077 mods (Vortex) and their updates (Nexus Mods).
+  const mods = cyberpunkMods();
+  handle(IPC.mods.status, () => mods.status());
+  handle(IPC.mods.list, () => mods.list());
+  handle(IPC.mods.setKey, (k) => mods.setKey(String(k ?? '')));
+  handle(IPC.mods.clearKey, () => {
+    mods.clearKey();
+    return false;
+  });
+  handle(IPC.mods.openKeyPage, async () => {
+    await shell.openExternal('https://www.nexusmods.com/users/myaccount?tab=api');
+    return true;
+  });
+  handle(IPC.mods.check, () => mods.check());
+  handle(IPC.mods.update, (id) =>
+    typeof id === 'number' ? mods.update(id) : { ok: false, message: 'Which mod?' },
+  );
+  handle(IPC.mods.updateAll, () => mods.updateAll());
+  handle(IPC.mods.open, (what, id) =>
+    ['folder', 'page', 'game', 'vortex'].includes(String(what))
+      ? mods.open(what, typeof id === 'number' ? id : undefined)
+      : 'Open what?',
+  );
 
   // Settings › Connections › Smart home: SmartThings personal access token.
   handle(IPC.smarthome.status, () => smartToken.has());
@@ -265,6 +290,83 @@ export function registerToolbox(
       if (!pm) return { error: 'Phone messages are not set up.' };
       return {
         result: await pm.reply(String(o.text ?? ''), typeof o.to === 'string' ? o.to : undefined),
+      };
+    },
+    cyberpunk_mods: async (raw) => {
+      const o = input(raw);
+      const action = String(o.action ?? 'summary');
+      const name = typeof o.name === 'string' ? o.name.trim() : '';
+      const pick = (): { modId: number | null; name: string } | null => {
+        const found = name ? mods.find(name) : [];
+        return found[0] ?? null;
+      };
+      if (action === 'check') {
+        const s = await mods.check();
+        if (s.error) return { error: s.error };
+        return {
+          updates: s.updates.map(
+            (u) => `${u.name}: ${u.installed || '?'} → ${u.latest || 'newer'}`,
+          ),
+          checked: s.mods,
+        };
+      }
+      if (action === 'find') {
+        const found = mods.find(name).slice(0, 15);
+        return {
+          mods: found.map((m) => ({
+            name: m.name,
+            version: m.version,
+            nexusId: m.modId,
+            latest: m.modId ? (mods.info(m.modId)?.version ?? null) : null,
+          })),
+        };
+      }
+      if (action === 'open') {
+        const what =
+          o.what === 'page' || o.what === 'game' || o.what === 'vortex' ? o.what : 'folder';
+        if (what === 'game' || what === 'vortex') return { result: await mods.open(what) };
+        const m = pick();
+        if (!m?.modId) return { error: `No installed mod matches “${name}”.` };
+        return { result: await mods.open(what, m.modId) };
+      }
+      if (action === 'update') {
+        const s = await mods.status();
+        if (!s.keySet)
+          return { error: 'Nexus Mods isn’t connected: add the API key in the Mods tab.' };
+        if (name.toLowerCase() === 'all') {
+          if (!s.updates.length)
+            return { result: 'Everything is up to date (as of the last check).' };
+          const ok = await ctx.askApproval?.(
+            `Update ${s.updates.length} Cyberpunk mod${s.updates.length === 1 ? '' : 's'}?`,
+            s.account?.premium
+              ? 'Vortex will download and install them.'
+              : 'Each one opens on Nexus Mods for you to download with Vortex.',
+          );
+          if (!ok) return { result: 'Not updated: you said no.' };
+          return { result: (await mods.updateAll()).message };
+        }
+        const m = pick();
+        if (!m?.modId) return { error: `No installed mod matches “${name}”.` };
+        const ok = await ctx.askApproval?.(
+          `Update ${m.name}?`,
+          s.account?.premium
+            ? 'Vortex will download and install it.'
+            : 'Its Files page opens on Nexus Mods.',
+        );
+        if (!ok) return { result: 'Not updated: you said no.' };
+        return { result: (await mods.update(m.modId)).message };
+      }
+      const s = await mods.status();
+      return {
+        game: s.game ? 'found' : 'not found',
+        vortexMods: s.mods,
+        gameFolderFiles: s.files,
+        nexusConnected: s.keySet,
+        premium: s.account?.premium ?? false,
+        lastCheck: s.lastCheck ? new Date(s.lastCheck).toISOString() : 'never',
+        updates: s.updates
+          .slice(0, 30)
+          .map((u) => `${u.name}: ${u.installed || '?'} → ${u.latest || 'newer'}`),
       };
     },
     smart_home: async (raw) => {

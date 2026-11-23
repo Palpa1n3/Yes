@@ -115,6 +115,21 @@ describe('TelemetryService', () => {
     t.stop();
   });
 
+  it('stops asking for temperature and battery once Windows has none (they can stutter the mouse)', async () => {
+    const { src, calls } = fakeSi();
+    const t = new TelemetryService(src, vi.fn());
+    t.start();
+    await vi.advanceTimersByTimeAsync(CADENCE.slow * 4);
+    await flush();
+    // 12+ medium runs and 5 slow runs in 2 minutes, but only the first tries ask.
+    expect(calls['gfx']).toBeGreaterThanOrEqual(10);
+    expect(calls['temp']).toBe(2);
+    expect(calls['bat']).toBe(1);
+    expect(calls['fs']).toBeGreaterThanOrEqual(4);
+    expect(calls['blk']).toBe(1);
+    t.stop();
+  });
+
   it('only lists processes while asked to', async () => {
     const { src, calls } = fakeSi();
     const t = new TelemetryService(src, vi.fn());

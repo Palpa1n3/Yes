@@ -111,6 +111,17 @@ const api: ArcAPI = {
     wallpapers: () => invoke(IPC.desk.wallpapers),
     setWallpaper: (p) => invoke(IPC.desk.setWallpaper, p),
   },
+  mods: {
+    status: () => invoke(IPC.mods.status),
+    list: () => invoke(IPC.mods.list),
+    setKey: (k) => invoke(IPC.mods.setKey, k),
+    clearKey: () => invoke(IPC.mods.clearKey),
+    openKeyPage: () => invoke(IPC.mods.openKeyPage),
+    check: () => invoke(IPC.mods.check),
+    update: (id) => invoke(IPC.mods.update, id),
+    updateAll: () => invoke(IPC.mods.updateAll),
+    open: (what, id) => invoke(IPC.mods.open, what, id),
+  },
   smarthome: {
     status: () => invoke(IPC.smarthome.status),
     set: (t) => invoke(IPC.smarthome.set, t),
