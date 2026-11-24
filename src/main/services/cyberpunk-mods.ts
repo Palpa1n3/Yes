@@ -70,6 +70,7 @@ import {
   isFramework,
   parseCrashInfo,
   parseCrashProbe,
+  placesNear,
   summarizeCrashes,
   type CrashSummary,
 } from '@shared/cpcrash';
@@ -1147,6 +1148,35 @@ export class CyberpunkMods {
     return newest;
   }
 
+  /** Mods whose scripts (CET Lua or redscript) put V or objects at the spot where the game
+   *  crashed (e.g. a test area built in the sky on every load). */
+  private placeSuspects(game: string, pos: { x: number; y: number; z: number }): FixAction[] {
+    const v = this.vortexDir();
+    if (!v) return [];
+    const out: FixAction[] = [];
+    for (const m of this.list()) {
+      const files = this.modFiles(m.folder);
+      const code = files.filter((f) => /\.(lua|reds)$/i.test(f));
+      if (!code.length) continue;
+      const hit = code.some((f) => {
+        try {
+          return placesNear(readFileSync(join(v, m.folder, f), 'utf8'), pos);
+        } catch {
+          return false;
+        }
+      });
+      if (!hit || this.removed().some((r) => r.folder === m.folder)) continue;
+      if (!this.deployed(game, m.folder, files)) continue;
+      out.push({
+        kind: 'save-mod',
+        folder: m.folder,
+        name: m.name,
+        why: `the game crashed exactly where this mod sends V (${Math.round(pos.x)}, ${Math.round(pos.y)}, ${Math.round(pos.z)})`,
+      });
+    }
+    return out.slice(0, 3);
+  }
+
   /** The game crashed while playing soon after Alton put mods back: the ones that change the
    *  world as it loads (or were made before the game's last update) are switched off again. */
   private crashSuspects(game: string, crashAt: number): FixAction[] {
@@ -1305,6 +1335,15 @@ export class CyberpunkMods {
           d.crash.context?.at ?? 0,
         );
         if (at) plan.push(...this.crashSuspects(game, at));
+        // A mod that sends V (or builds something) right where it crashed.
+        const pos = d.crash.context?.position;
+        if (pos)
+          for (const s of this.placeSuspects(game, pos))
+            if (
+              s.kind === 'save-mod' &&
+              !plan.some((p) => p.kind === 'save-mod' && p.folder === s.folder)
+            )
+              plan.push(s);
       }
       // Patches loading after the mods they patch: fix the archive load order too (never over
       // an order another tool wrote).

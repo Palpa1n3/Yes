@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.76.0, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.77.0, 24 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,12 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.77** Crash position: `parseCrashInfo` reads `location` X/Y/Z from CrashInfo.json; `placesNear` finds
+  coordinates in a mod's Lua/redscript (`{ x =, y =, z = }`, `Vector4.new(...)`) within 5 m; after a crash
+  while playing, auto-fix saves away the deployed mod that sends V there (`placeSuspects`, `save-mod`).
+  On 24 Nov: **Authentic Shift Test Platform** (38671, on by default) teleported V onto a test track in the
+  sky at (600, −5325, 901) on every save load and built 38 pieces + vehicles → "no buildings" and a crash
+  (Codeware DynamicEntitySystem). Switched off in Vortex by hand; of 3,498 mod scripts only it matched.
 - **0.76** (a) Deploying really works now: Vortex 2 has no "Deploy Mods" button; it's the menu item
   **"Manual apply (Deploy)"** in the Mods page's **"More actions"** menu (opened with a real mouse click,
   no Invoke pattern; the cursor is put back). `deployWhenOpen` opens Mods, the menu, then the item; it

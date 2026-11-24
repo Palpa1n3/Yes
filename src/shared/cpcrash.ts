@@ -65,6 +65,44 @@ export interface CrashContext {
   /** Seconds played before the crash. */
   session: number;
   at: number;
+  /** Where V was when it crashed (world coordinates), if the game said. */
+  position?: { x: number; y: number; z: number } | null;
+}
+
+/** Coordinates written in a mod's code (Lua tables like `{ x = 600, y = -5325, z = 901 }` or
+ *  `Vector4.new(600, -5325, 901, 1)`) within `near` metres of `pos`: the mod sends V (or builds
+ *  something) right where the game crashed. */
+export function placesNear(
+  src: string,
+  pos: { x: number; y: number; z: number },
+  near = 5,
+): boolean {
+  const num = String.raw`(-?\d+(?:\.\d+)?)`;
+  const sep = String.raw`\s*,\s*`;
+  const patterns = [
+    new RegExp(
+      String.raw`x\s*=\s*` +
+        num +
+        sep +
+        String.raw`y\s*=\s*` +
+        num +
+        sep +
+        String.raw`z\s*=\s*` +
+        num,
+      'g',
+    ),
+    new RegExp(String.raw`Vector4\.new\(\s*` + num + sep + num + sep + num, 'g'),
+    new RegExp(String.raw`new\s+Vector4\(\s*` + num + sep + num + sep + num, 'g'),
+  ];
+  for (const re of patterns)
+    for (const m of src.matchAll(re)) {
+      const [x, y, z] = [Number(m[1]), Number(m[2]), Number(m[3])];
+      // Far from the map's middle only: (0, 0, 0)-ish placeholders don't count.
+      if (Math.abs(x) + Math.abs(y) < 50) continue;
+      if (Math.abs(x - pos.x) <= near && Math.abs(y - pos.y) <= near && Math.abs(z - pos.z) <= near)
+        return true;
+    }
+  return false;
 }
 
 export function parseCrashInfo(json: string): CrashContext | null {
@@ -73,7 +111,13 @@ export function parseCrashInfo(json: string): CrashContext | null {
       ?.postMortem;
     if (!d) return null;
     const q = (d.trackedQuest ?? {}) as { name?: string };
+    const l = (d.location ?? {}) as { X?: unknown; Y?: unknown; Z?: unknown };
+    const [x, y, z] = [Number(l.X), Number(l.Y), Number(l.Z)];
     return {
+      position:
+        Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z) && (x || y || z)
+          ? { x, y, z }
+          : null,
       quest: String(q.name ?? ''),
       district: String(d.district ?? ''),
       session: Number(d.sessionLength) || 0,
