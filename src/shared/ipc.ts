@@ -73,6 +73,10 @@ export const IPC = {
     loadOrder: 'mods:load-order',
     setOrder: 'mods:set-order',
     resetOrder: 'mods:reset-order',
+    fixes: 'mods:fixes',
+    autofix: 'mods:autofix',
+    undoFix: 'mods:undo-fix',
+    setAutoFix: 'mods:set-auto-fix',
   },
   smarthome: {
     status: 'smarthome:status',
@@ -340,6 +344,10 @@ export interface InvokeMap {
     result: { ok: boolean; message: string };
   };
   [IPC.mods.resetOrder]: { args: []; result: { ok: boolean; message: string } };
+  [IPC.mods.fixes]: { args: []; result: FixesState };
+  [IPC.mods.autofix]: { args: []; result: { message: string; state: FixesState } };
+  [IPC.mods.undoFix]: { args: [id: string]; result: { ok: boolean; message: string } };
+  [IPC.mods.setAutoFix]: { args: [on: boolean]; result: FixesState };
   [IPC.mods.list]: { args: []; result: import('./cpmods').CpMod[] };
   [IPC.mods.setKey]: { args: [key: string]; result: { ok: boolean; message: string } };
   [IPC.mods.clearKey]: { args: []; result: boolean };
@@ -593,6 +601,12 @@ export interface ArcAPI {
       change: { kind: 'suggested' } | { kind: 'prefer'; archive: string; over: string },
     ): Promise<{ ok: boolean; message: string }>;
     resetOrder(): Promise<{ ok: boolean; message: string }>;
+    /** Launch fixes Alton has made (newest first) and whether it fixes things by itself. */
+    fixes(): Promise<FixesState>;
+    /** Fix the last launch's problem now (switch off a crashing plugin, redeploy REDmod…). */
+    autofix(): Promise<{ message: string; state: FixesState }>;
+    undoFix(id: string): Promise<{ ok: boolean; message: string }>;
+    setAutoFix(on: boolean): Promise<FixesState>;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */
@@ -938,4 +952,11 @@ export interface LoadOrderReport {
   moves: import('./loadorder').Move[];
   redmod: import('./cplaunch').RedmodReport | null;
   error: string;
+}
+
+/** Mods tab › Won't start?: automatic fixes. */
+export interface FixesState {
+  auto: boolean;
+  fixing: boolean;
+  fixes: import('./cpfix').FixRecord[];
 }

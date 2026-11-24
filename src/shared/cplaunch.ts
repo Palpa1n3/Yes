@@ -23,6 +23,8 @@ export interface LaunchRun {
     'stopped-loading' | 'plugins-loaded' | 'scripts-ok' | 'scripts-failed' | 'closed' | 'unknown';
   /** The plugin it was loading when the log ends (stopped-loading only). */
   stoppedOn: string | null;
+  /** The DLL it was loading, without ".dll" (e.g. "RadioExt"). */
+  stoppedFile: string | null;
   loaded: number;
 }
 
@@ -60,6 +62,7 @@ export function readRun(log: LaunchLog): LaunchRun {
   const last = lines[lines.length - 1] ?? '';
   let outcome: LaunchRun['outcome'] = 'unknown';
   let stoppedOn: string | null = null;
+  let stoppedFile: string | null = null;
   if (/has been shut down|plugin\(s\) unloaded/.test(log.text)) outcome = 'closed';
   else if (/scc invoked successfully|Scripts blob path was updated/i.test(log.text))
     outcome = 'scripts-ok';
@@ -68,8 +71,16 @@ export function readRun(log: LaunchLog): LaunchRun {
   else if (/Loading plugin from/.test(last)) {
     outcome = 'stopped-loading';
     stoppedOn = /plugins[\\/]([^\\/]+)[\\/]/.exec(last)?.[1] ?? null;
+    stoppedFile = /([^\\/]+)\.dll'/i.exec(last)?.[1] ?? null;
   }
-  return { at: at(first) || fromName(log.name), gameVersion, outcome, stoppedOn, loaded };
+  return {
+    at: at(first) || fromName(log.name),
+    gameVersion,
+    outcome,
+    stoppedOn,
+    stoppedFile,
+    loaded,
+  };
 }
 
 export function diagnoseLaunch(

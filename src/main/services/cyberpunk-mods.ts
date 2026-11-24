@@ -3,7 +3,7 @@
  *  and install (Premium: straight away via an nxm:// link; free accounts: the mod's Files page,
  *  where "Mod manager download" sends it to Vortex). Alton never runs or unpacks mod files
  *  itself. Pure parts in src/shared/cpmods.ts. */
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import {
   closeSync,
   existsSync,
@@ -33,6 +33,14 @@ import {
 } from '@shared/cpmods';
 import type { LaunchCheck, LoadOrderReport, ModsStatus } from '@shared/ipc';
 import { diagnoseLaunch, redmodReport, type PluginFile } from '@shared/cplaunch';
+import {
+  describeFix,
+  ignoredPlugins,
+  planFixes,
+  setIgnored,
+  type FixAction,
+  type FixRecord,
+} from '@shared/cpfix';
 import {
   archiveHashes,
   archiveHeader,
@@ -703,6 +711,253 @@ export class CyberpunkMods {
     } catch (e) {
       return { ok: false, message: e instanceof Error ? e.message : 'Couldn’t undo it.' };
     }
+  }
+
+  /* ── Fixing launch problems by itself ── */
+  private fixFile = join(app.getPath('userData'), 'cpfix.json');
+  private fixState: { auto: boolean; fixes: FixRecord[]; seen: string } = (() => {
+    try {
+      const j = JSON.parse(readFileSync(join(app.getPath('userData'), 'cpfix.json'), 'utf8')) as {
+        auto?: boolean;
+        fixes?: FixRecord[];
+        seen?: string;
+      };
+      return { auto: j.auto !== false, fixes: j.fixes ?? [], seen: j.seen ?? '' };
+    } catch {
+      return { auto: true, fixes: [], seen: '' };
+    }
+  })();
+  private fixing = false;
+
+  private saveFixes(): void {
+    try {
+      writeFileSync(this.fixFile, JSON.stringify(this.fixState));
+    } catch {
+      /* not fatal */
+    }
+  }
+
+  fixes(): { auto: boolean; fixing: boolean; fixes: FixRecord[] } {
+    return {
+      auto: this.fixState.auto,
+      fixing: this.fixing,
+      fixes: [...this.fixState.fixes].reverse().slice(0, 30),
+    };
+  }
+
+  setAutoFix(on: boolean): void {
+    this.fixState.auto = on;
+    this.saveFixes();
+  }
+
+  private async gameRunning(): Promise<boolean> {
+    const out = await run('tasklist', ['/FI', 'IMAGENAME eq Cyberpunk2077.exe', '/NH']);
+    return /Cyberpunk2077\.exe/i.test(out);
+  }
+
+  private iniPath(game: string): string {
+    return join(game, 'red4ext', 'config.ini');
+  }
+
+  /** Run REDmod's own deploy with this list of mods (what Vortex does). */
+  private redmodDeploy(game: string, mods: string[]): Promise<boolean> {
+    const list = join(game, 'V2077', 'alton-modlist.txt');
+    writeFileSync(list, `${mods.join('\n')}\n`);
+    const exe = join(game, 'tools', 'redmod', 'bin', 'redMod.exe');
+    return new Promise((resolve) => {
+      const p = spawn(
+        exe,
+        [
+          'deploy',
+          '-reportProgress',
+          '-root',
+          game,
+          `-rttiSchemaPath=${join(game, 'tools', 'redmod', 'metadata.json')}`,
+          `-modlist=${list}`,
+        ],
+        { windowsHide: true, cwd: join(game, 'tools', 'redmod', 'bin') },
+      );
+      const t = setTimeout(() => p.kill(), 10 * 60_000);
+      p.on('error', () => resolve(false));
+      p.on('exit', () => {
+        clearTimeout(t);
+        let log = '';
+        try {
+          log = readFileSync(join(game, 'tools', 'redmod', 'bin', 'REDmodLog.txt'), 'utf8');
+        } catch {
+          /* no log */
+        }
+        resolve(redmodReport(log)?.failed === false);
+      });
+    });
+  }
+
+  /** Look at the last launch and fix what can be fixed. Returns what was done. */
+  async autofix(): Promise<{ done: FixRecord[]; message: string }> {
+    if (this.fixing) return { done: [], message: 'Already fixing.' };
+    const game = await this.findGame();
+    if (!game) return { done: [], message: 'I couldn’t find Cyberpunk 2077.' };
+    if (await this.gameRunning())
+      return { done: [], message: 'Cyberpunk is running: close it first, then I can fix it.' };
+    this.fixing = true;
+    const done: FixRecord[] = [];
+    try {
+      const d = await this.diagnose();
+      let ini = '';
+      try {
+        ini = readFileSync(this.iniPath(game), 'utf8');
+      } catch {
+        /* no config yet */
+      }
+      const modId = d.vortexMod?.modId ?? null;
+      const upd = modId !== null ? this.updates().find((u) => u.latest.modId === modId) : undefined;
+      const skipped = this.fixState.fixes
+        .filter((f) => !f.undone && f.action.kind === 'redmod-without')
+        .flatMap((f) => (f.action.kind === 'redmod-without' ? f.action.mods : []));
+      const plan = planFixes({
+        report: d,
+        redmod: d.redmod,
+        culpritMod: d.vortexMod,
+        // Only Premium updates install by themselves; otherwise switch the plugin off for now.
+        updateFor:
+          upd && this.account?.premium ? { modId: upd.latest.modId, name: upd.mod.name } : null,
+        ignored: ignoredPlugins(ini),
+        redmodSkipped: skipped,
+      });
+      for (const action of plan) {
+        let ok = true;
+        let note = describeFix(action);
+        if (action.kind === 'update') {
+          const r = await this.update(action.modId);
+          ok = r.ok;
+          if (!ok) note = r.message;
+        } else if (action.kind === 'ignore-plugin') {
+          try {
+            ini = setIgnored(ini, action.plugin, true);
+            // RED4ext may go by the DLL's name rather than the folder's: ignore both.
+            const file = d.runs[d.runs.length - 1]?.stoppedFile;
+            if (file && file.toLowerCase() !== action.plugin.toLowerCase())
+              ini = setIgnored(ini, file, true);
+            writeFileSync(this.iniPath(game), ini);
+            if (upd) note += ` An update is waiting on Nexus: update it, then undo this.`;
+          } catch (e) {
+            ok = false;
+            note = `Couldn’t change RED4ext’s settings: ${e instanceof Error ? e.message : 'no access'}.`;
+          }
+        } else {
+          const mods = (d.redmod?.mods ?? []).filter((m) => !action.mods.includes(m));
+          ok = await this.redmodDeploy(game, mods);
+          if (!ok)
+            note = `REDmod still failed without ${action.mods.join(', ')}: check the REDmod log.`;
+        }
+        if (!ok) {
+          this.error = note;
+          continue;
+        }
+        const rec: FixRecord = {
+          id: `f${Date.now().toString(36)}${done.length}`,
+          at: Date.now(),
+          action,
+          note,
+          undone: false,
+        };
+        this.fixState.fixes.push(rec);
+        done.push(rec);
+      }
+      this.fixState.fixes = this.fixState.fixes.slice(-50);
+      this.saveFixes();
+      return {
+        done,
+        message: done.length
+          ? `${done.map((f) => f.note).join(' ')} Try starting the game again.`
+          : d.culprit || d.redmod?.failed
+            ? 'I couldn’t fix this one by myself. The launch check above says what to do.'
+            : 'Nothing to fix: the last launch didn’t fail on a mod.',
+      };
+    } finally {
+      this.fixing = false;
+    }
+  }
+
+  /** Put a fix back (switch the plugin on again, or redeploy REDmod with every mod). */
+  async undoFix(id: string): Promise<{ ok: boolean; message: string }> {
+    const f = this.fixState.fixes.find((x) => x.id === id);
+    const game = await this.findGame();
+    if (!f || f.undone || !game) return { ok: false, message: 'Nothing to undo.' };
+    const a: FixAction = f.action;
+    if (a.kind === 'ignore-plugin') {
+      try {
+        const ini = readFileSync(this.iniPath(game), 'utf8');
+        let next = setIgnored(ini, a.plugin, false);
+        // …and the DLL name it may have been ignored under too.
+        for (const name of ignoredPlugins(next))
+          if (name.toLowerCase().startsWith(a.plugin.toLowerCase()))
+            next = setIgnored(next, name, false);
+        writeFileSync(this.iniPath(game), next);
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : 'Couldn’t change it back.' };
+      }
+    } else if (a.kind === 'redmod-without') {
+      let all: string[] = [];
+      try {
+        all = readFileSync(join(game, 'V2077', 'modlist.txt'), 'utf8')
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+      } catch {
+        /* none */
+      }
+      if (!(await this.redmodDeploy(game, all)))
+        return {
+          ok: false,
+          message: 'REDmod failed again with every mod: the fix is still needed.',
+        };
+    } else return { ok: false, message: 'Updates can’t be undone here: use Vortex.' };
+    f.undone = true;
+    this.saveFixes();
+    return {
+      ok: true,
+      message:
+        a.kind === 'ignore-plugin'
+          ? `${a.plugin} is switched back on.`
+          : 'REDmod deployed again with every mod.',
+    };
+  }
+
+  /** Every minute (while the game isn't running): a new failed launch or REDmod deploy gets
+   *  fixed by itself when that's switched on, and the user is told. */
+  watch(notify: (title: string, body: string) => void): void {
+    const check = async (): Promise<void> => {
+      if (!this.fixState.auto || this.fixing) return;
+      const game = await this.findGame();
+      if (!game) return;
+      let newest = '';
+      try {
+        newest =
+          readdirSync(join(game, 'red4ext', 'logs'))
+            .filter((n) => /^red4ext-\d{4}-.*\.log$/.test(n))
+            .sort()
+            .pop() ?? '';
+      } catch {
+        /* no logs */
+      }
+      let redmodAt = 0;
+      try {
+        redmodAt = statSync(join(game, 'tools', 'redmod', 'bin', 'REDmodLog.txt')).mtimeMs;
+      } catch {
+        /* none */
+      }
+      const key = `${newest}|${Math.round(redmodAt)}`;
+      if (key === this.fixState.seen) return;
+      if (await this.gameRunning()) return;
+      this.fixState.seen = key;
+      this.saveFixes();
+      const r = await this.autofix();
+      if (r.done.length) notify('Cyberpunk: fixed a launch problem', r.message);
+    };
+    const t = setInterval(() => void check(), 60_000);
+    t.unref?.();
+    setTimeout(() => void check(), 20_000).unref?.();
   }
 
   find(q: string): CpMod[] {

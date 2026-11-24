@@ -13,6 +13,7 @@ import type { MainContext } from '../context';
 import type { NotesStore } from '../services/notes-store';
 import { SecretStore } from '../services/secret-store';
 import { cyberpunkMods } from '../services/cyberpunk-mods';
+import { notifyUser } from '../holo';
 import { ps } from '../services/system-actions';
 import {
   applyTidy,
@@ -104,6 +105,18 @@ export function registerToolbox(
     return { ok: false, message: 'Which order?' };
   });
   handle(IPC.mods.resetOrder, () => mods.resetOrder());
+  handle(IPC.mods.fixes, () => mods.fixes());
+  handle(IPC.mods.autofix, async () => {
+    const r = await mods.autofix();
+    return { message: r.message, state: mods.fixes() };
+  });
+  handle(IPC.mods.undoFix, (id) => mods.undoFix(String(id ?? '')));
+  handle(IPC.mods.setAutoFix, (on) => {
+    mods.setAutoFix(on === true);
+    return mods.fixes();
+  });
+  // Fix Cyberpunk launch problems by itself (when switched on in the Mods tab).
+  mods.watch((title, body) => notifyUser(title, body, 'warn'));
   handle(IPC.mods.cancel, () => {
     mods.cancelUpdates();
     return true;
@@ -314,6 +327,14 @@ export function registerToolbox(
         const found = name ? mods.find(name) : [];
         return found[0] ?? null;
       };
+      if (action === 'fix') {
+        const ok = await ctx.askApproval?.(
+          'Fix Cyberpunk’s launch problem?',
+          'Alton may switch off the crashing RED4ext plugin, send an update to Vortex, or deploy REDmod again without broken script mods. Each can be undone in the Mods tab.',
+        );
+        if (!ok) return { result: 'Not changed: you said no.' };
+        return { result: (await mods.autofix()).message };
+      }
       if (action === 'load_order') {
         const r = await mods.loadOrder();
         return {

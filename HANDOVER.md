@@ -176,6 +176,13 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   win" write modlist.txt (header "# Archive load order written by Alton", another tool's file kept as
   modlist.txt.before-alton); Undo removes ours. REDmod: `redmodReport` parses tools\redmod\bin\REDmodLog.txt
   (last deploy, failed stage, REDmods flagged SCRIPTS) — also in the launch check.
+  Auto-fix (0.64, Won't start? › Fix it for me / "Fix launch problems by itself", on by default; tool action
+  'fix' with approval): `src/shared/cpfix.ts` planFixes → crashing RED4ext plugin: Premium + update on Nexus →
+  send update; else add the plugin folder (and DLL name) to red4ext\config.ini [plugins] ignored (not a Vortex
+  file). REDmod script compile failed → run tools\redmod\bin\redMod.exe deploy with V2077\alton-modlist.txt =
+  Vortex's list minus SCRIPTS mods (Vortex re-adds them on its next deploy unless disabled there). Records in
+  userData/cpfix.json with Undo (un-ignore / redeploy with V2077\modlist.txt). Watcher: every minute while
+  Cyberpunk2077.exe isn't running, a new red4ext log or REDmodLog change triggers autofix + holo notification.
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

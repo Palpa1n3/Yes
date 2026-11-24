@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, FolderOpen, RefreshCw, Search, Download } from 'lucide-react';
 import type { CpMod, UpdateState } from '@shared/cpmods';
-import type { LaunchCheck, LoadOrderReport, ModsStatus } from '@shared/ipc';
+import type { FixesState, LaunchCheck, LoadOrderReport, ModsStatus } from '@shared/ipc';
 import { Chip } from '@renderer/components/panels/Chip';
 import { Panel } from '@renderer/components/panels/Panel';
 import { Columns } from './Columns';
@@ -247,6 +247,11 @@ export function ModsTab() {
   const [msg, setMsg] = useState('');
   const [diag, setDiag] = useState<LaunchCheck | null>(null);
   const [diagBusy, setDiagBusy] = useState(false);
+  const [fx, setFx] = useState<FixesState | null>(null);
+  const [fxMsg, setFxMsg] = useState('');
+  useEffect(() => {
+    void window.arc.mods.fixes().then(setFx);
+  }, []);
   const load = (): void => {
     void window.arc.mods.status().then(setSt);
     void window.arc.mods.list().then(setMods);
@@ -403,6 +408,68 @@ export function ModsTab() {
               >
                 {diagBusy ? 'Reading the logs…' : 'Check why it won’t start'}
               </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="hud-button"
+                  disabled={fx?.fixing}
+                  onClick={() => {
+                    setFxMsg('Fixing…');
+                    void window.arc.mods.autofix().then((r) => {
+                      setFxMsg(r.message);
+                      setFx(r.state);
+                      void window.arc.mods.diagnose().then(setDiag);
+                    });
+                  }}
+                >
+                  Fix it for me
+                </button>
+                <label className="flex items-center gap-1.5 text-[12px]">
+                  <input
+                    type="checkbox"
+                    checked={fx?.auto ?? true}
+                    onChange={(e) => void window.arc.mods.setAutoFix(e.target.checked).then(setFx)}
+                  />
+                  Fix launch problems by itself
+                </label>
+              </div>
+              <p className="text-[11.5px] text-text-muted">
+                After a failed start Alton switches off the plugin that crashed it (or sends its
+                update to Vortex on Premium) and deploys REDmod again without broken script mods,
+                then tells you. Nothing is deleted, and each fix can be undone.
+              </p>
+              {fxMsg && <p className="text-[12.5px] text-accent">{fxMsg}</p>}
+              {!!fx?.fixes.length && (
+                <ul className="space-y-1">
+                  {fx.fixes.map((f) => (
+                    <li key={f.id} className="flex items-start gap-2 text-[12px]">
+                      <span
+                        className={`min-w-0 flex-1 ${f.undone ? 'text-text-muted line-through' : ''}`}
+                      >
+                        {new Date(f.at).toLocaleString([], {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })}
+                        : {f.note}
+                      </span>
+                      {!f.undone && f.action.kind !== 'update' && (
+                        <button
+                          type="button"
+                          className="hud-button !px-1.5 text-[11px]"
+                          onClick={() =>
+                            void window.arc.mods.undoFix(f.id).then((r) => {
+                              setFxMsg(r.message);
+                              void window.arc.mods.fixes().then(setFx);
+                            })
+                          }
+                        >
+                          Undo
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {diag && (
                 <div className="space-y-1.5">
                   <p className="text-text-primary">{diag.verdict}</p>

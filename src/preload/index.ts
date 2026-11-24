@@ -126,6 +126,10 @@ const api: ArcAPI = {
     loadOrder: () => invoke(IPC.mods.loadOrder),
     setOrder: (c) => invoke(IPC.mods.setOrder, c),
     resetOrder: () => invoke(IPC.mods.resetOrder),
+    fixes: () => invoke(IPC.mods.fixes),
+    autofix: () => invoke(IPC.mods.autofix),
+    undoFix: (id) => invoke(IPC.mods.undoFix, id),
+    setAutoFix: (on) => invoke(IPC.mods.setAutoFix, on),
   },
   smarthome: {
     status: () => invoke(IPC.smarthome.status),

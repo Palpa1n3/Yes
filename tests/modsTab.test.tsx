@@ -122,3 +122,44 @@ describe('Mods tab load order', () => {
     });
   });
 });
+
+describe('Mods tab fixes', () => {
+  it('fixes on request, lists the fix and can undo it', async () => {
+    vi.mocked(arc.mods.status).mockResolvedValue(status({}));
+    vi.mocked(arc.mods.diagnose).mockResolvedValue({
+      runs: [],
+      gameVersion: '2.50',
+      patchSeen: 0,
+      lastGood: 0,
+      culprit: null,
+      outdated: [],
+      scriptErrors: [],
+      verdict: 'The last launch got past loading the mod plugins.',
+      vortexMod: null,
+      redmod: null,
+    });
+    const fix = {
+      id: 'f1',
+      at: Date.now(),
+      action: { kind: 'ignore-plugin' as const, plugin: 'RadioExt', mod: 'RadioExt 2.81' },
+      note: 'Switched off the RadioExt plugin (from RadioExt 2.81), which crashed the game on start-up.',
+      undone: false,
+    };
+    vi.mocked(arc.mods.autofix).mockResolvedValue({
+      message: `${fix.note} Try starting the game again.`,
+      state: { auto: true, fixing: false, fixes: [fix] },
+    });
+    render(<ModsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fix it for me' }));
+    expect(await screen.findByText(/Try starting the game again/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Switched off the RadioExt plugin \(from RadioExt 2\.81\), which crashed the game on start-up\.$/,
+      ),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    expect(arc.mods.undoFix).toHaveBeenCalledWith('f1');
+    fireEvent.click(screen.getByRole('checkbox', { name: /Fix launch problems by itself/ }));
+    expect(arc.mods.setAutoFix).toHaveBeenCalledWith(false);
+  });
+});

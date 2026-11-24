@@ -41,6 +41,7 @@ describe('why Cyberpunk won’t start', () => {
     expect(readRun(stuck('2026-11-23-22-54-07', 'RadioExt'))).toMatchObject({
       outcome: 'stopped-loading',
       stoppedOn: 'RadioExt',
+      stoppedFile: 'RadioExt',
       loaded: 1,
     });
   });
