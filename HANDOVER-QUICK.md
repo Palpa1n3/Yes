@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.75.2, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.76.0, 24 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,15 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.76** (a) Deploying really works now: Vortex 2 has no "Deploy Mods" button; it's the menu item
+  **"Manual apply (Deploy)"** in the Mods page's **"More actions"** menu (opened with a real mouse click,
+  no Invoke pattern; the cursor is put back). `deployWhenOpen` opens Mods, the menu, then the item; it
+  also retries every 5 min while `needsDeploy`. Earlier "deploys" only happened by luck. (b) The
+  automatic dependency run no longer puts back saved mods (only the button does). On 24 Nov it had put
+  back **Fake Lights No More** (0.5, June; hooks every streaming sector through Codeware) → crash on
+  loading a save with no buildings. (c) Crash guard: mods Alton put back (`fixState.switchedOn`, a day)
+  that hook world streaming (`hooksWorldStreaming`) or predate the game's newest base archive are
+  saved away again after a crash while playing (`save-mod` fix, undoable).
 - **0.75.2** Changes for Vortex no longer wait for the owner to close it: `VortexSync.applyNow()` closes
   Vortex politely (`taskkill /IM Vortex.exe`, no /F; it exits in ~1 s), syncs, reopens it and presses
   Deploy. Used for mods to switch back on (auto-fix, Put back), the Sync button, and every 10 min while

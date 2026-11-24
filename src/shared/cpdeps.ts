@@ -153,7 +153,17 @@ export function definesSymbol(src: string, symbol: string): boolean {
   ).test(src);
 }
 
-/** Does a mod (its game-relative files) provide `name`: scripts in r6\scripts\<name> or a
+/** Does this redscript change the world as it streams in (a callback on every loaded
+ *  worldStreamingSector, e.g. hiding or editing nodes)? Such mods break easily after a game
+ *  update and take whole areas (buildings) with them. */
+export function hooksWorldStreaming(src: string): boolean {
+  return (
+    /worldStreamingSector/.test(src) &&
+    /RegisterCallback\s*\(\s*n"Resource\/(Load|Ready)"/.test(src)
+  );
+}
+
+/** Does a mod (its game-relative files) provide `name`:scripts in r6\scripts\<name> or a
  *  RED4ext plugin DLL in red4ext\plugins\<name>? (Other mods often drop sounds or settings into
  *  someone else's folder; that doesn't make them the mod.) */
 export function providesName(files: string[], name: string): boolean {

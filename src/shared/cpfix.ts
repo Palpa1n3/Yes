@@ -8,6 +8,8 @@ export type FixAction =
   | { kind: 'update'; modId: number; name: string; plugin: string; why?: string }
   /** A mod the scripts need is installed but off (or saved by Alton): switch it back on. */
   | { kind: 'switch-on'; folder: string; name: string; for: string; saved: boolean }
+  /** The game crashed right after this mod was put back: save it away again. */
+  | { kind: 'save-mod'; folder: string; name: string; why: string }
   /** No update: RED4ext skips the plugin (red4ext\config.ini [plugins] ignored). */
   | { kind: 'ignore-plugin'; plugin: string; mod: string; why?: 'start' | 'crash' }
   /** REDmod's script compile fails: deploy again without the REDmods that change scripts. */
@@ -121,6 +123,8 @@ export function describeFix(a: FixAction): string {
       .join(', ');
     return `Fixed the load order so patches win: ${first}${a.moves.length > 3 ? ` and ${a.moves.length - 3} more` : ''}.`;
   }
+  if (a.kind === 'save-mod')
+    return `Switched ${a.name} off again (saved, not deleted): ${a.why}. Undo puts it back.`;
   if (a.kind === 'switch-on')
     return `Switching ${a.name} back on: ${a.for} needs it and its scripts didn’t compile without it${a.saved ? ' (Alton had saved it away earlier)' : ''}. Alton closes Vortex for a moment to do it, then opens it again and deploys.`;
   if (a.kind === 'update' && a.why) return `Sent ${a.name} from Nexus to Vortex: ${a.why}`;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   definesSymbol,
+  hooksWorldStreaming,
   mainFiles,
   missingDeps,
   parseRedRequire,
@@ -159,6 +160,14 @@ Redscript reported 23 errors.
     );
     expect(definesSymbol('  RPO_Log("x");', 'RPO_Log')).toBe(false);
     expect(definesSymbol('public class AudioXLAPI extends IScriptable {', 'AudioXLAPI')).toBe(true);
+  });
+  it('spots scripts that edit the world as it loads', () => {
+    expect(
+      hooksWorldStreaming(
+        'GameInstance.GetCallbackSystem().RegisterCallback(n"Resource/Load", this, n"ProcessStreamingSector").AddTarget(ResourceTarget.Type(n"worldStreamingSector"));',
+      ),
+    ).toBe(true);
+    expect(hooksWorldStreaming('let s: ref<worldStreamingSector>;')).toBe(false);
   });
   it('matches the mod that provides a name', () => {
     expect(providesName(['red4ext\\plugins\\AudioXL\\AudioXL.dll'], 'audioxl')).toBe(true);

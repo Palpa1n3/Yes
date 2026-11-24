@@ -141,6 +141,7 @@ export function registerToolbox(
   // Every minute: when Vortex and the game are closed and something's waiting, do it.
   let vortexWasOpen = false;
   let lastApply = 0;
+  let lastDeploy = 0;
   const vt = setInterval(async () => {
     // Also every time Vortex is closed (new installs may have brought new conflicts).
     if (vortex.isApplying()) return;
@@ -149,10 +150,16 @@ export function registerToolbox(
     const justOpened = !vortexWasOpen && open;
     vortexWasOpen = open;
     // Vortex just opened after Alton changed it while it was closed: deploy.
-    if (justOpened)
+    // …or it's open and a deploy is still owed (tried at most every 5 minutes).
+    if (
+      justOpened ||
+      (open && vortex.state().needsDeploy && Date.now() - lastDeploy > 5 * 60_000)
+    ) {
+      lastDeploy = Date.now();
       void vortex.deployWhenOpen().then((ok) => {
         if (ok) notifyUser('Vortex', 'Deployed your mods so Alton’s changes take effect.', 'info');
       });
+    }
     // Changes waiting while Vortex stays open (e.g. from before an update): apply them, at most
     // every 10 minutes (closes and reopens Vortex).
     // (Only for mods to switch back on, which the sync always clears, so this can't loop.)

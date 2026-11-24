@@ -36,6 +36,7 @@ import {
 import {
   REQUIREMENTS_QUERY,
   definesSymbol,
+  hooksWorldStreaming,
   missingDeps,
   parseRedRequire,
   providesName,
@@ -1095,18 +1096,93 @@ export class CyberpunkMods {
 
   /* ── Fixing launch problems by itself ── */
   private fixFile = join(app.getPath('userData'), 'cpfix.json');
-  private fixState: { auto: boolean; fixes: FixRecord[]; seen: string } = (() => {
+  private fixState: {
+    auto: boolean;
+    fixes: FixRecord[];
+    seen: string;
+    /** Saved mods Alton switched back on (put back), to suspect first if the game then crashes. */
+    switchedOn: Array<{ folder: string; name: string; at: number }>;
+  } = (() => {
     try {
       const j = JSON.parse(readFileSync(join(app.getPath('userData'), 'cpfix.json'), 'utf8')) as {
         auto?: boolean;
         fixes?: FixRecord[];
         seen?: string;
+        switchedOn?: Array<{ folder: string; name: string; at: number }>;
       };
-      return { auto: j.auto !== false, fixes: j.fixes ?? [], seen: j.seen ?? '' };
+      return {
+        auto: j.auto !== false,
+        fixes: j.fixes ?? [],
+        seen: j.seen ?? '',
+        switchedOn: j.switchedOn ?? [],
+      };
     } catch {
-      return { auto: true, fixes: [], seen: '' };
+      return { auto: true, fixes: [], seen: '', switchedOn: [] };
     }
   })();
+
+  /** Remember mods put back, for the crash check (kept for a day). */
+  private notePutBack(mods: Array<{ folder: string; name: string }>): void {
+    const now = Date.now();
+    this.fixState.switchedOn = [
+      ...this.fixState.switchedOn.filter(
+        (s) => now - s.at < 86_400_000 && !mods.some((m) => m.folder === s.folder),
+      ),
+      ...mods.map((m) => ({ folder: m.folder, name: m.name, at: now })),
+    ];
+    this.saveFixes();
+  }
+
+  /** When the game files arrived (the newest base-game archive): mods older than this were
+   *  made for an earlier version of the game. */
+  private patchDate(game: string): number {
+    let newest = 0;
+    try {
+      const dir = join(game, 'archive', 'pc', 'content');
+      for (const n of readdirSync(dir))
+        if (n.endsWith('.archive')) newest = Math.max(newest, statSync(join(dir, n)).mtimeMs);
+    } catch {
+      /* unknown */
+    }
+    return newest;
+  }
+
+  /** The game crashed while playing soon after Alton put mods back: the ones that change the
+   *  world as it loads (or were made before the game's last update) are switched off again. */
+  private crashSuspects(game: string, crashAt: number): FixAction[] {
+    const patch = this.patchDate(game);
+    const v = this.vortexDir();
+    const mods = this.list();
+    const out: FixAction[] = [];
+    for (const s of this.fixState.switchedOn) {
+      if (s.at > crashAt || crashAt - s.at > 86_400_000) continue;
+      if (this.removed().some((r) => r.folder === s.folder)) continue;
+      const files = this.modFiles(s.folder);
+      if (!this.deployed(game, s.folder, files)) continue;
+      const world =
+        !!v &&
+        files.some((f) => {
+          if (!/\.reds$/i.test(f)) return false;
+          try {
+            return hooksWorldStreaming(readFileSync(join(v, s.folder, f), 'utf8'));
+          } catch {
+            return false;
+          }
+        });
+      const m = mods.find((x) => x.folder === s.folder);
+      const old = !!patch && !!m?.installedAt && m.installedAt < patch;
+      if (!world && !old) continue;
+      out.push({
+        kind: 'save-mod',
+        folder: s.folder,
+        name: s.name,
+        why: world
+          ? 'it changes the world as it loads, and the game crashed right after it was put back'
+          : 'it was made before the game’s last update, and the game crashed right after it was put back',
+      });
+    }
+    return out;
+  }
   private fixing = false;
 
   private saveFixes(): void {
@@ -1222,6 +1298,14 @@ export class CyberpunkMods {
       // Scripts didn't compile (RedRequire): switch on what they need / get missing main files.
       const sf = this.scriptFixes(game, d.scriptNeeds);
       plan.push(...sf.plan);
+      // Crashed while playing just after mods were put back: switch the likely ones off again.
+      if (d.crash) {
+        const at = Math.max(
+          d.crash.recent[d.crash.recent.length - 1]?.at ?? 0,
+          d.crash.context?.at ?? 0,
+        );
+        if (at) plan.push(...this.crashSuspects(game, at));
+      }
       // Patches loading after the mods they patch: fix the archive load order too (never over
       // an order another tool wrote).
       const lo = await this.loadOrder();
@@ -1263,6 +1347,14 @@ export class CyberpunkMods {
           const r = await this.setOrder({ kind: 'suggested' });
           ok = r.ok;
           if (!ok) note = r.message;
+        } else if (action.kind === 'save-mod') {
+          const r = await this.removeMods([action.folder]);
+          ok = r.ok;
+          if (!ok) note = r.message;
+          else
+            this.fixState.switchedOn = this.fixState.switchedOn.filter(
+              (s) => s.folder !== action.folder,
+            );
         } else if (action.kind === 'switch-on') {
           if (action.saved) {
             const r = await this.restoreMods([action.folder]);
@@ -1359,6 +1451,9 @@ export class CyberpunkMods {
     } else if (a.kind === 'switch-on') {
       const r = await this.removeMods([a.folder]);
       if (!r.ok) return r;
+    } else if (a.kind === 'save-mod') {
+      const r = await this.restoreMods([a.folder]);
+      if (!r.ok) return r;
     } else return { ok: false, message: 'Updates can’t be undone here: use Vortex.' };
     f.undone = true;
     this.saveFixes();
@@ -1371,7 +1466,9 @@ export class CyberpunkMods {
             ? `${a.plugin} is switched back on.`
             : a.kind === 'switch-on'
               ? `${a.name} is saved away again.`
-              : 'REDmod deployed again with every mod.',
+              : a.kind === 'save-mod'
+                ? `${a.name} is being put back.`
+                : 'REDmod deployed again with every mod.',
     };
   }
 
@@ -1789,6 +1886,7 @@ export class CyberpunkMods {
     // Mods switched off in Vortex come back through Vortex (next time it's closed).
     const inVortex = this.removed().filter((r) => r.vortexOff && folders.includes(r.folder));
     if (inVortex.length && this.onVortexEnable) {
+      this.notePutBack(inVortex);
       this.onVortexEnable(inVortex.map((r) => r.folder));
       folders = folders.filter((f) => !inVortex.some((r) => r.folder === f));
       if (!folders.length)
@@ -1820,6 +1918,7 @@ export class CyberpunkMods {
       }
       back.push(r.name);
     }
+    this.notePutBack(removed.filter((x) => folders.includes(x.folder)));
     this.saveRemoved(removed.filter((x) => !folders.includes(x.folder)));
     if (redmods) await this.redmodDeploy(game, this.redmodList(game));
     return {
@@ -2067,14 +2166,18 @@ export class CyberpunkMods {
 
   /** Download and install every missing dependency (Premium: through Vortex, one after
    *  another; free: opens their Files pages, up to 5). Saved mods are put back instead. */
-  async installDependencies(): Promise<{ ok: boolean; message: string }> {
+  async installDependencies(putBack = true): Promise<{ ok: boolean; message: string }> {
     const r = await this.dependencies(true);
     if (r.error && !r.missing.length)
       return { ok: false, message: `Couldn’t check dependencies: ${r.error}.` };
     if (!r.missing.length) return { ok: true, message: 'Every mod has what it needs.' };
     const busy = new Set(this.jobs.filter((j) => j.state !== 'failed').map((j) => j.modId));
     const toGet = r.missing.filter((m) => !m.saved && !busy.has(m.modId));
-    const toRestore = r.missing.filter((m) => m.saved && m.savedFolder).map((m) => m.savedFolder);
+    // Saved mods were taken out for a reason: only put back when asked (the button), never by
+    // the automatic run.
+    const toRestore = putBack
+      ? r.missing.filter((m) => m.saved && m.savedFolder).map((m) => m.savedFolder)
+      : [];
     const done: string[] = [];
     if (toRestore.length) {
       const x = await this.restoreMods(toRestore);
@@ -2110,7 +2213,7 @@ export class CyberpunkMods {
     this.lastAutoDeps = Date.now();
     const r = await this.dependencies(true);
     if (!r.missing.some((m) => !m.saved)) return;
-    const x = await this.installDependencies();
+    const x = await this.installDependencies(false);
     if (x.ok) notify('Cyberpunk: installing missing dependencies', x.message);
   }
 

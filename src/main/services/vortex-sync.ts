@@ -471,27 +471,69 @@ export class VortexSync {
   async deployWhenOpen(): Promise<boolean> {
     if (!this.state().needsDeploy || this.deploying) return false;
     this.deploying = true;
+    // Vortex 2 has no "Deploy Mods" button: deploying is "Manual apply (Deploy)" in the Mods
+    // page's "More actions" menu (opened with a real click; it has no Invoke pattern).
     const ps = `
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class AltonMouse {
+  [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] public static extern void mouse_event(int f, int x, int y, int d, int e);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
+  public struct POINT { public int X; public int Y; }
+}
+'@
 $A = [System.Windows.Automation.AutomationElement]
 $T = [System.Windows.Automation.TreeScope]::Descendants
-Add-Type -AssemblyName System.Windows.Forms
+function Find-Named($root, $name, $type) {
+  $c = New-Object System.Windows.Automation.AndCondition(
+    (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, $name)),
+    (New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, $type)))
+  $root.FindFirst($T, $c)
+}
+function Find-Apply($root) {
+  $items = $root.FindAll($T, (New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::MenuItem)))
+  $items | Where-Object { $_.Current.Name -like 'Manual apply (Deploy)*' } | Select-Object -First 1
+}
+function Invoke-El($el) {
+  try { $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); return $true } catch { return $false }
+}
+function Click-El($h, $el, $dx) {
+  $r = $el.Current.BoundingRectangle
+  $pt = New-Object AltonMouse+POINT; [void][AltonMouse]::GetCursorPos([ref]$pt)
+  [void][AltonMouse]::SetForegroundWindow($h)
+  $x = if ($dx -gt 0) { $r.X + $dx } else { $r.X + $r.Width / 2 }
+  [void][AltonMouse]::SetCursorPos([int]$x, [int]($r.Y + $r.Height / 2))
+  [AltonMouse]::mouse_event(2, 0, 0, 0, 0); [AltonMouse]::mouse_event(4, 0, 0, 0, 0)
+  Start-Sleep -Milliseconds 120
+  [void][AltonMouse]::SetCursorPos($pt.X, $pt.Y)
+}
+$Btn = [System.Windows.Automation.ControlType]::Button
 $stop = (Get-Date).AddMinutes(4)
-Start-Sleep -Seconds 8
+Start-Sleep -Seconds 6
 while ((Get-Date) -lt $stop) {
   foreach ($p in Get-Process Vortex -ErrorAction SilentlyContinue) {
     if ($p.MainWindowHandle -eq 0) { continue }
     try {
       $root = $A::FromHandle($p.MainWindowHandle)
-      $b = $root.FindFirst($T, (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, 'Deploy Mods')))
-      if ($b -and $b.Current.IsEnabled) {
-        try { $b.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
-        catch { $b.SetFocus(); [System.Windows.Forms.SendKeys]::SendWait('{ENTER}') }
+      $old = Find-Named $root 'Deploy Mods' $Btn
+      if ($old -and $old.Current.IsEnabled -and (Invoke-El $old)) { 'clicked'; exit 0 }
+      $item = Find-Apply $root
+      if (-not $item) {
+        $mods = Find-Named $root 'Mods' $Btn
+        if ($mods) { [void](Invoke-El $mods); Start-Sleep -Seconds 2 }
+        $more = Find-Named $root 'More actions' $Btn
+        if ($more) { Click-El $p.MainWindowHandle $more 0; Start-Sleep -Seconds 1; $item = Find-Apply $root }
+      }
+      if ($item) {
+        if (-not (Invoke-El $item)) { Click-El $p.MainWindowHandle $item 40 }
         'clicked'; exit 0
       }
     } catch {}
   }
-  Start-Sleep -Seconds 2
+  Start-Sleep -Seconds 3
 }
 'not found'`;
     try {
