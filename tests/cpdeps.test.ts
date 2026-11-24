@@ -163,5 +163,7 @@ Redscript reported 23 errors.
   it('matches the mod that provides a name', () => {
     expect(providesName(['red4ext\\plugins\\AudioXL\\AudioXL.dll'], 'audioxl')).toBe(true);
     expect(providesName(['r6/scripts/AudioXLEqualizer/a.reds'], 'AudioXL')).toBe(false);
+    // Another mod's sounds dropped into AudioXL's folder don't make it AudioXL.
+    expect(providesName(['red4ext/plugins/AudioXL/sounds/IVDE/a.Mp3'], 'AudioXL')).toBe(false);
   });
 });

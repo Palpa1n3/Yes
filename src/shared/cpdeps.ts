@@ -153,11 +153,16 @@ export function definesSymbol(src: string, symbol: string): boolean {
   ).test(src);
 }
 
-/** Does a mod (its game-relative files) provide `name` (a script folder or RED4ext plugin)? */
+/** Does a mod (its game-relative files) provide `name`: scripts in r6\scripts\<name> or a
+ *  RED4ext plugin DLL in red4ext\plugins\<name>? (Other mods often drop sounds or settings into
+ *  someone else's folder; that doesn't make them the mod.) */
 export function providesName(files: string[], name: string): boolean {
   const n = name.toLowerCase();
   return files.some((f) => {
     const p = f.replace(/\\/g, '/').toLowerCase();
-    return p.startsWith(`r6/scripts/${n}/`) || p.startsWith(`red4ext/plugins/${n}/`);
+    return (
+      (p.startsWith(`r6/scripts/${n}/`) && p.endsWith('.reds')) ||
+      (p.startsWith(`red4ext/plugins/${n}/`) && p.endsWith('.dll'))
+    );
   });
 }

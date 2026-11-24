@@ -823,6 +823,8 @@ export class CyberpunkMods {
       // Mods that define what's missing, or are named like it.
       const providers = mods
         .filter((m) => {
+          // The failing mod can't be what it's missing.
+          if (owner && m.folder === owner.folder) return false;
           const fl = filesOf(m.folder);
           if (providesName(fl, n.needs) && !n.newer) return true;
           return fl.some((f) => {

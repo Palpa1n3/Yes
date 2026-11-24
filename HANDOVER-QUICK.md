@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.75.0, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.75.1, 24 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,9 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.75.1** `providesName` only counts real code (`.reds` in r6\scripts\<name>, `.dll` in
+  red4ext\plugins\<name>): Immersive V Dialogue Expanded ships sounds into AudioXL's folder, so AudioXL looked
+  "on" and wasn't switched back on. 0.75 fixed Ragdoll Physics Overhaul on the owner's PC (main file + hotfix).
 - **0.75** Script compile failures fixed by themselves from RedRequire's report: mods that define what's
   missing are switched back on (or put back from Alton's saved list); a mod whose main file is missing is
   downloaded again. Updates now install the primary main file (+ newer hotfixes), not just a hotfix.
