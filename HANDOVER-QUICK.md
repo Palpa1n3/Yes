@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.77.0, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.78.0, 24 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,15 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.78** Crash blame by timing (`repeatedLead` in shared/cpcrash.ts, `crashLead` in the service): when
+  ≥3 recent crashes hit the same game address with only frameworks on the stack, Alton reads the RED4ext
+  plugin logs (`red4ext\logs\<plugin>-<date>.log`) and blames a plugin that logged the same (normalised)
+  line within 8 s before nearly every crash → `ignore-plugin` with a `reason` (undoable). Frameworks never
+  blamed this way, except ARP. On 24 Nov: 8 crashes at `Cyberpunk2077.exe+0x278938` (Codeware+0xB3E25 on
+  the stack) since 00:30, each 2–3 s after ARP's "[FaceGraph] unregistered build … pma_paperdoll_sermo"
+  (the inventory/photo-mode V model going away). ACM isn't installed (ARP in AMM-only mode). ARP added to
+  RED4ext's ignore list by hand (`red4ext\config.ini` `ignored = ["RadioExt", "AppearanceRuntimePlugin"]`).
+  NB: with ARP off there are no ARP crash reports; Alton falls back to CrashInfo.json.
 - **0.77** Crash position: `parseCrashInfo` reads `location` X/Y/Z from CrashInfo.json; `placesNear` finds
   coordinates in a mod's Lua/redscript (`{ x =, y =, z = }`, `Vector4.new(...)`) within 5 m; after a crash
   while playing, auto-fix saves away the deployed mod that sends V there (`placeSuspects`, `save-mod`).

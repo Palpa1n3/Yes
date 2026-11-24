@@ -11,7 +11,7 @@ export type FixAction =
   /** The game crashed right after this mod was put back: save it away again. */
   | { kind: 'save-mod'; folder: string; name: string; why: string }
   /** No update: RED4ext skips the plugin (red4ext\config.ini [plugins] ignored). */
-  | { kind: 'ignore-plugin'; plugin: string; mod: string; why?: 'start' | 'crash' }
+  | { kind: 'ignore-plugin'; plugin: string; mod: string; why?: 'start' | 'crash'; reason?: string }
   /** REDmod's script compile fails: deploy again without the REDmods that change scripts. */
   | { kind: 'redmod-without'; mods: string[] }
   /** Patches loading after the mods they patch: save the fixed archive load order
@@ -44,7 +44,7 @@ export function planFixes(o: {
   /** REDmods already left out by Alton. */
   redmodSkipped: string[];
   /** A mod plugin the game keeps crashing in while playing (from the crash reports). */
-  crashCulprit?: { plugin: string; mod: string } | null;
+  crashCulprit?: { plugin: string; mod: string; reason?: string } | null;
 }): FixAction[] {
   const out: FixAction[] = [];
   const cc = o.crashCulprit;
@@ -53,7 +53,13 @@ export function planFixes(o: {
     !o.ignored.some((i) => i.toLowerCase() === cc.plugin.toLowerCase()) &&
     cc.plugin.toLowerCase() !== o.report.culprit?.plugin.toLowerCase()
   )
-    out.push({ kind: 'ignore-plugin', plugin: cc.plugin, mod: cc.mod, why: 'crash' });
+    out.push({
+      kind: 'ignore-plugin',
+      plugin: cc.plugin,
+      mod: cc.mod,
+      why: 'crash',
+      ...(cc.reason ? { reason: cc.reason } : {}),
+    });
   const c = o.report.culprit;
   if (c && !o.ignored.some((i) => i.toLowerCase() === c.plugin.toLowerCase())) {
     if (o.updateFor)
@@ -130,6 +136,8 @@ export function describeFix(a: FixAction): string {
   if (a.kind === 'update' && a.why) return `Sent ${a.name} from Nexus to Vortex: ${a.why}`;
   if (a.kind === 'update')
     return `Sent the update for ${a.name} (the ${a.plugin} plugin that crashed the game).`;
+  if (a.kind === 'ignore-plugin' && a.why === 'crash' && a.reason)
+    return `Switched off the ${a.plugin} plugin (from ${a.mod}): ${a.reason}. Its mod stays installed; undo this to switch it back on.`;
   if (a.kind === 'ignore-plugin' && a.why === 'crash')
     return `Switched off the ${a.plugin} plugin (from ${a.mod}): the game kept crashing inside it while you played. Its mod stays installed; update it later and undo this.`;
   if (a.kind === 'ignore-plugin')

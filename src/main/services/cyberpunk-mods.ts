@@ -70,7 +70,10 @@ import {
   isFramework,
   parseCrashInfo,
   parseCrashProbe,
+  parsePluginLogLine,
   placesNear,
+  repeatedLead,
+  type PluginLogLine,
   summarizeCrashes,
   type CrashSummary,
 } from '@shared/cpcrash';
@@ -883,6 +886,63 @@ export class CyberpunkMods {
     return { plan, notes };
   }
 
+  /** No mod on the crash stack, but the same RED4ext plugin did the same thing seconds before
+   *  each of the recent crashes at that spot: switch that plugin off (undoable). */
+  private crashLead(
+    game: string,
+    crash: CrashSummary | null,
+  ): { plugin: string; mod: string; reason: string } | null {
+    if (!crash || crash.recent.length < 3) return null;
+    const since = (crash.recent[0]?.at ?? 0) - 3_600_000;
+    const logs = new Map<string, PluginLogLine[]>();
+    const dir = join(game, 'red4ext', 'logs');
+    try {
+      for (const f of readdirSync(dir)) {
+        const m = /^(.+?)-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.log$/i.exec(f);
+        if (!m?.[1]) continue;
+        const full = join(dir, f);
+        if (statSync(full).mtimeMs < since) continue;
+        const lines = readFileSync(full, 'utf8')
+          .split(/\r?\n/)
+          .map(parsePluginLogLine)
+          .filter((x): x is PluginLogLine => x !== null);
+        const key = m[1].toLowerCase();
+        logs.set(key, [...(logs.get(key) ?? []), ...lines]);
+      }
+    } catch {
+      return null;
+    }
+    const lead = repeatedLead(crash.recent, logs);
+    if (!lead) return null;
+    // The log name → its plugin folder (folder named like it, or holding a DLL named like it).
+    const pdir = join(game, 'red4ext', 'plugins');
+    let folder = '';
+    try {
+      for (const p of readdirSync(pdir)) {
+        if (p.toLowerCase() === lead.plugin) folder = p;
+        else if (!folder)
+          try {
+            if (readdirSync(join(pdir, p)).some((x) => x.toLowerCase() === `${lead.plugin}.dll`))
+              folder = p;
+          } catch {
+            /* not a folder */
+          }
+      }
+    } catch {
+      return null;
+    }
+    if (!folder) return null;
+    const v = this.vortexDir();
+    const owner =
+      this.list().find((m) => !!v && existsSync(join(v, m.folder, 'red4ext', 'plugins', folder)))
+        ?.name ?? folder;
+    return {
+      plugin: folder,
+      mod: owner,
+      reason: `it did the same thing (“${lead.message.slice(0, 80)}”) seconds before ${lead.times} crashes in a row at the same spot`,
+    };
+  }
+
   /** Crash reports (AppearanceRuntimePlugin's), the game's CrashInfo.json and TweakXL's log. */
   private crashes(game: string, read: (p: string) => string): CrashSummary | null {
     const dir = join(game, 'red4ext', 'plugins', 'AppearanceRuntimePlugin', 'Logs');
@@ -1309,8 +1369,9 @@ export class CyberpunkMods {
           upd && this.account?.premium ? { modId: upd.latest.modId, name: upd.mod.name } : null,
         ignored: ignoredPlugins(ini),
         redmodSkipped: skipped,
-        crashCulprit: d.crash?.culprit?.plugin
-          ? {
+        crashCulprit: !d.crash?.culprit?.plugin
+          ? this.crashLead(game, d.crash)
+          : {
               plugin: d.crash.culprit.plugin,
               mod:
                 this.list().find((m) => {
@@ -1322,8 +1383,7 @@ export class CyberpunkMods {
                     )
                   );
                 })?.name ?? d.crash.culprit.plugin,
-            }
-          : null,
+            },
       });
       // Scripts didn't compile (RedRequire): switch on what they need / get missing main files.
       const sf = this.scriptFixes(game, d.scriptNeeds);

@@ -30,6 +30,70 @@ const FRAMEWORKS = new Set(
     'appearanceruntimeplugin',
   ].map((x) => x.toLowerCase()),
 );
+/** Plugins that only report or load things for everyone: never blamed for a crash by timing. */
+const NEVER_LEAD = new Set([...FRAMEWORKS].filter((f) => f !== 'appearanceruntimeplugin'));
+
+export interface PluginLogLine {
+  at: number;
+  text: string;
+}
+
+/** One RED4ext plugin log line: "[2026-11-24 17:53:11.409] [info    ] [ 67812] [Plugin] text". */
+export function parsePluginLogLine(line: string): PluginLogLine | null {
+  const m = /^\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?\]\s*(.*)$/.exec(
+    line,
+  );
+  if (!m) return null;
+  const n = m.slice(1, 8).map((x) => Number(x ?? 0));
+  const at = new Date(
+    n[0] ?? 0,
+    (n[1] ?? 1) - 1,
+    n[2] ?? 1,
+    n[3] ?? 0,
+    n[4] ?? 0,
+    n[5] ?? 0,
+    n[6] ?? 0,
+  ).getTime();
+  return { at, text: m[8] ?? '' };
+}
+
+/** The same plugin doing the same thing in the seconds before most of the recent crashes at
+ *  one spot in the game's code (with only frameworks on the stack): that plugin is the likely
+ *  cause. `logs`: plugin (DLL name, lower case) → its log lines from those sessions. */
+export function repeatedLead(
+  crashes: Array<{ at: number; where: string }>,
+  logs: Map<string, PluginLogLine[]>,
+  windowMs = 8000,
+): { plugin: string; message: string; times: number } | null {
+  const last = crashes[crashes.length - 1];
+  if (!last) return null;
+  const same = crashes.filter((c) => c.where === last.where && c.at > 0);
+  if (same.length < 3) return null;
+  const norm = (t: string): string =>
+    t
+      .replace(/^\[[^\]]*\]\s*\[\s*\d+\]\s*/, '')
+      .replace(/0x[0-9a-f]+/gi, '#')
+      .replace(/\d+/g, '#')
+      .trim();
+  let best: { plugin: string; message: string; times: number } | null = null;
+  for (const [plugin, lines] of logs) {
+    if (NEVER_LEAD.has(plugin.toLowerCase())) continue;
+    const counts = new Map<string, number>();
+    for (const c of same) {
+      const msgs = new Set(
+        lines
+          .filter((l) => l.at <= c.at && c.at - l.at <= windowMs && !/crash/i.test(l.text))
+          .map((l) => norm(l.text)),
+      );
+      for (const m of msgs) counts.set(m, (counts.get(m) ?? 0) + 1);
+    }
+    for (const [message, times] of counts)
+      if (times >= Math.max(3, same.length - 1) && (!best || times > best.times))
+        best = { plugin, message, times };
+  }
+  return best;
+}
+
 export const isFramework = (dll: string): boolean =>
   FRAMEWORKS.has(
     dll
