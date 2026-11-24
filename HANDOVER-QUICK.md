@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.73.0, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.74.0, 24 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,10 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.74** Missing Cyberpunk dependencies (Nexus "Requirements", read from Nexus' public GraphQL, no key)
+  install by themselves (Premium + auto-fix, every 6 h) or from Mods › Dependencies; Vortex's "Potential
+  Duplicate Mods" entries (old copies that are off) are taken out during the sync, folders kept in
+  `%APPDATA%\Vortex\cyberpunk2077\_alton_old_copies\`.
 - **0.73** Vortex changes were being saved but never deployed: Alton now flags a deploy and presses
   Vortex's "Deploy Mods" button the next time Vortex opens.
 - **0.72** Vortex conflicts: older copies of the same Nexus mod that deploy the same files as a newer copy
@@ -86,6 +90,8 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
   conflict rules saved, automation on. Still to confirm: the automatic "Deploy Mods" press when Vortex
   opens (`%APPDATA%\ARC\vortex-sync.json` `needsDeploy` should turn false). 179 mods had an old and a new
   copy installed side by side (updates installed as new mods rather than replacing).
+- 0.74 on the owner's PC: the next sync (Vortex closed) should take out 22 duplicate entries; 3 dependencies
+  should install (ME Armor System, Romanced Enhanced Showers Feature, Virtual Atelier Delivery).
 - Cyberpunk state on 24 Nov: game 2.50; RadioExt switched off via RED4ext ignore list (2.92 downloaded,
   not deployed; Alton re-enables a plugin automatically when its DLL changes); NCPD Prevention's REDmod
   scripts break REDmod's compile; 102 mods saved/removed (13 frameworks were put back); TweakXL rejects

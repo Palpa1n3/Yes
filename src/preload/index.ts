@@ -139,6 +139,8 @@ const api: ArcAPI = {
     hideRec: (id) => invoke(IPC.mods.hideRec, id),
     install: (id) => invoke(IPC.mods.install, id),
     setShowAdult: (on) => invoke(IPC.mods.setShowAdult, on),
+    deps: (fresh) => invoke(IPC.mods.deps, fresh),
+    installDeps: () => invoke(IPC.mods.installDeps),
   },
   minecraft: {
     profiles: () => invoke(IPC.minecraft.profiles),

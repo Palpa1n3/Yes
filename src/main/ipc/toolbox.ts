@@ -150,6 +150,8 @@ export function registerToolbox(
   handle(IPC.mods.install, (id) =>
     typeof id === 'number' ? mods.install(id) : { ok: false, message: 'Which mod?' },
   );
+  handle(IPC.mods.deps, (fresh) => mods.dependencies(fresh === true));
+  handle(IPC.mods.installDeps, () => mods.installDependencies());
   handle(IPC.mods.setShowAdult, (on) => {
     mods.setShowAdult(on === true);
     return true;
@@ -407,6 +409,19 @@ export function registerToolbox(
         const found = name ? mods.find(name) : [];
         return found[0] ?? null;
       };
+      if (action === 'dependencies') {
+        const r = await mods.dependencies();
+        if (r.error && !r.missing.length) return { error: r.error };
+        return {
+          checked: r.checked,
+          missing: r.missing.slice(0, 30).map((m) => ({
+            name: m.name,
+            neededBy: m.neededBy.slice(0, 5),
+            savedByAlton: m.saved,
+          })),
+        };
+      }
+      if (action === 'install_dependencies') return mods.installDependencies();
       if (action === 'recommend') {
         const r = await mods.recommend();
         if (r.error) return { error: r.error };

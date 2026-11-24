@@ -86,6 +86,8 @@ export const IPC = {
     hideRec: 'mods:hide-rec',
     install: 'mods:install',
     setShowAdult: 'mods:show-adult',
+    deps: 'mods:deps',
+    installDeps: 'mods:install-deps',
   },
   minecraft: {
     profiles: 'minecraft:profiles',
@@ -378,6 +380,8 @@ export interface InvokeMap {
   [IPC.mods.hideRec]: { args: [modId: number]; result: boolean };
   [IPC.mods.install]: { args: [modId: number]; result: { ok: boolean; message: string } };
   [IPC.mods.setShowAdult]: { args: [on: boolean]; result: boolean };
+  [IPC.mods.deps]: { args: [fresh?: boolean]; result: DepsReport };
+  [IPC.mods.installDeps]: { args: []; result: { ok: boolean; message: string } };
   [IPC.mods.list]: { args: []; result: import('./cpmods').CpMod[] };
   [IPC.mods.setKey]: { args: [key: string]; result: { ok: boolean; message: string } };
   [IPC.mods.clearKey]: { args: []; result: boolean };
@@ -672,6 +676,10 @@ export interface ArcAPI {
     /** Premium: Vortex downloads and installs it; free: opens its Files page. */
     install(modId: number): Promise<{ ok: boolean; message: string }>;
     setShowAdult(on: boolean): Promise<boolean>;
+    /** Requirements (Nexus) of your mods that aren't installed. */
+    deps(fresh?: boolean): Promise<DepsReport>;
+    /** Install every missing dependency (Premium: through Vortex; saved ones put back). */
+    installDeps(): Promise<{ ok: boolean; message: string }>;
   };
   minecraft: {
     /** Minecraft profiles with mods (Lunar Client and .minecraft). */
@@ -1067,6 +1075,17 @@ export interface RecReport {
   items: Array<import('./cprecommend').Recommendation & { thumb: string }>;
   error: string;
   showAdult: boolean;
+}
+
+/** Mods tab › Dependencies. */
+export interface DepsReport {
+  /** Mods whose requirements were read. */
+  checked: number;
+  at: number;
+  missing: Array<import('./cpdeps').MissingDep & { savedFolder: string }>;
+  error: string;
+  premium: boolean;
+  jobs: Array<{ modId: number; state: string; error: string }>;
 }
 
 /** Minecraft tab. */

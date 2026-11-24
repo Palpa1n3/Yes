@@ -114,3 +114,33 @@ export function olderDuplicates(
   }
   return out;
 }
+
+export interface VortexEntry {
+  id: string;
+  archiveId: string;
+  variant: string;
+  /** Switched on in any Vortex profile. */
+  enabled: boolean;
+  installedAt: number;
+}
+
+/** Vortex's "Potential Duplicate Mods" warning: two entries made from the same download (same
+ *  archive id and variant). The copies switched off everywhere can go; if none is on, the
+ *  newest stays. */
+export function sameDownloadCopies(entries: VortexEntry[]): string[] {
+  const groups = new Map<string, VortexEntry[]>();
+  for (const e of entries) {
+    if (!e.archiveId) continue;
+    const k = `${e.archiveId}\u0000${e.variant || 'default'}`;
+    groups.set(k, [...(groups.get(k) ?? []), e]);
+  }
+  const out: string[] = [];
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    const keep = g.some((e) => e.enabled)
+      ? new Set(g.filter((e) => e.enabled).map((e) => e.id))
+      : new Set([[...g].sort((a, b) => b.installedAt - a.installedAt)[0]?.id]);
+    for (const e of g) if (!keep.has(e.id)) out.push(e.id);
+  }
+  return out;
+}

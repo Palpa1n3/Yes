@@ -9,6 +9,7 @@ import type {
   OutdatedReport,
   RecReport,
   VortexSyncState,
+  DepsReport,
 } from '@shared/ipc';
 import { Chip } from '@renderer/components/panels/Chip';
 import { Panel } from '@renderer/components/panels/Panel';
@@ -317,6 +318,93 @@ function VortexPanel() {
           </ul>
         </details>
       )}
+    </Panel>
+  );
+}
+
+/** Dependencies: what your mods list as requirements on Nexus but isn't installed. */
+function DepsPanel() {
+  const [r, setR] = useState<DepsReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const load = (fresh = false): void => {
+    setBusy(true);
+    void window.arc.mods
+      .deps(fresh)
+      .then(setR)
+      .finally(() => setBusy(false));
+  };
+  useEffect(() => load(), []);
+  // While installs run, keep the list current.
+  useEffect(() => {
+    if (!r?.jobs.some((j) => j.state !== 'installed' && j.state !== 'failed')) return;
+    const t = setInterval(() => void window.arc.mods.deps().then(setR), 4000);
+    return () => clearInterval(t);
+  }, [r]);
+  const state = new Map(r?.jobs.map((j) => [j.modId, j]) ?? []);
+  return (
+    <Panel
+      code="MOD.10"
+      title="Dependencies"
+      className="shrink-0"
+      bodyClassName="space-y-1.5 text-[12px]"
+    >
+      <p className="text-text-muted">
+        Mods your mods need (their Nexus “Requirements”) that aren’t installed. With auto-fix on and
+        Premium, Alton installs them by itself through Vortex.
+      </p>
+      {r?.error && <p className="text-alert">{r.error}</p>}
+      {r && !r.error && (
+        <p className={r.missing.length ? 'text-amber' : 'text-ok'}>
+          {r.missing.length
+            ? `${r.missing.length} missing (checked ${r.checked} mods)`
+            : `Nothing missing (checked ${r.checked} mods).`}
+        </p>
+      )}
+      {!!r?.missing.length && (
+        <ul className="space-y-1">
+          {r.missing.map((m) => {
+            const j = state.get(m.modId);
+            return (
+              <li key={m.modId}>
+                <span className="text-ice">{m.name}</span>
+                <span className="text-text-muted">
+                  {' '}
+                  · needed by {m.neededBy.slice(0, 3).join(', ')}
+                  {m.neededBy.length > 3 ? ` +${m.neededBy.length - 3}` : ''}
+                  {m.saved ? ' · saved by Alton (it’s put back)' : ''}
+                  {j ? ` · ${j.state}${j.error ? `: ${j.error}` : ''}` : ''}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {!!r?.missing.length && (
+          <button
+            type="button"
+            className="hud-button"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void window.arc.mods
+                .installDeps()
+                .then((x) => setMsg(x.message))
+                .finally(() => {
+                  setBusy(false);
+                  void window.arc.mods.deps().then(setR);
+                });
+            }}
+          >
+            {r.premium ? 'Install them all' : 'Open them on Nexus'}
+          </button>
+        )}
+        <button type="button" className="hud-button" disabled={busy} onClick={() => load(true)}>
+          {busy ? 'Checking…' : 'Check again'}
+        </button>
+      </div>
+      {msg && <p className="text-accent">{msg}</p>}
     </Panel>
   );
 }
@@ -1034,6 +1122,7 @@ export function ModsTab() {
       right={
         <>
           <VortexPanel />
+          <DepsPanel />
           <OutdatedPanel />
           <Panel
             code="MOD.04"

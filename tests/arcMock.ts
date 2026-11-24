@@ -191,6 +191,15 @@ export function installArcMock(): ArcAPI {
       hideRec: vi.fn(async () => true),
       install: vi.fn(async () => ({ ok: true, message: '' })),
       setShowAdult: vi.fn(async () => true),
+      deps: vi.fn(async () => ({
+        checked: 0,
+        at: 0,
+        missing: [],
+        error: '',
+        premium: false,
+        jobs: [],
+      })),
+      installDeps: vi.fn(async () => ({ ok: true, message: '' })),
     },
     minecraft: {
       profiles: vi.fn(async () => []),

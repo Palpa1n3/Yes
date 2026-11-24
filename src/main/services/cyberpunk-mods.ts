@@ -33,7 +33,14 @@ import {
   type ModUpdate,
   type NexusInfo,
 } from '@shared/cpmods';
+import {
+  REQUIREMENTS_QUERY,
+  missingDeps,
+  parseRequirements,
+  type ModRequirements,
+} from '@shared/cpdeps';
 import type {
+  DepsReport,
   LaunchCheck,
   LoadOrderReport,
   ModsStatus,
@@ -1193,6 +1200,7 @@ export class CyberpunkMods {
       if (!this.fixState.auto || this.fixing) return;
       const game = await this.findGame();
       if (!game) return;
+      void this.autoDependencies(notify).catch(() => undefined);
       // A plugin Alton switched off has been updated since: switch it back on.
       for (const name of await this.reenableUpdated(game))
         notify(
@@ -1779,6 +1787,131 @@ export class CyberpunkMods {
   setShowAdult(on: boolean): void {
     writeFileSync(this.recFile, JSON.stringify({ ...this.recPrefs(), showAdult: on }));
     this.recCache = null;
+  }
+
+  /* ── Dependencies (Nexus "Requirements") ── */
+  private depsCache: { at: number; report: DepsReport } | null = null;
+  private lastAutoDeps = 0;
+
+  /** Requirements of the installed mods that aren't installed (Nexus Mods' public GraphQL,
+   *  no key needed; asked at most every 6 hours unless `fresh`). */
+  async dependencies(fresh = false): Promise<DepsReport> {
+    if (!fresh && this.depsCache && Date.now() - this.depsCache.at < 6 * 3_600_000)
+      return this.depsReport(this.depsCache.report);
+    const list = this.list();
+    const installed = new Set(list.map((m) => m.modId).filter((id): id is number => id !== null && id > 0));
+    const removed = this.removed();
+    const saved = new Set(
+      removed.map((r) => parseModFolder(r.folder).modId).filter((id): id is number => id !== null && id > 0),
+    );
+    // Saved mods' folders are kept by Vortex too, so they count as installed but saved.
+    for (const id of saved) installed.add(id);
+    const ids = [...installed];
+    const reqs: ModRequirements[] = [];
+    let error = '';
+    for (let i = 0; i < ids.length; i += 50) {
+      try {
+        const r = await fetch('https://api.nexusmods.com/v2/graphql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Application-Name': 'Alton',
+            'Application-Version': app.getVersion(),
+          },
+          body: JSON.stringify({
+            query: REQUIREMENTS_QUERY,
+            variables: {
+              ids: ids.slice(i, i + 50).map((modId) => ({ gameDomain: GAME, modId })),
+            },
+          }),
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (!r.ok) throw new Error(`Nexus Mods said ${r.status}`);
+        reqs.push(...parseRequirements(await r.json()));
+      } catch (e) {
+        error = e instanceof Error ? e.message : 'Couldn’t reach Nexus Mods';
+        break;
+      }
+    }
+    const missing = missingDeps(installed, saved, reqs).map((d) => ({
+      ...d,
+      savedFolder: d.saved
+        ? (removed.find((r) => parseModFolder(r.folder).modId === d.modId)?.folder ?? '')
+        : '',
+    }));
+    const report: DepsReport = {
+      checked: reqs.length,
+      at: Date.now(),
+      missing,
+      error,
+      premium: this.account?.premium === true,
+      jobs: [],
+    };
+    if (!error) this.depsCache = { at: Date.now(), report };
+    return this.depsReport(report);
+  }
+
+  private depsReport(r: DepsReport): DepsReport {
+    this.settle();
+    const ids = new Set(r.missing.map((m) => m.modId));
+    const installedNow = new Set(this.list().map((m) => m.modId));
+    return {
+      ...r,
+      premium: this.account?.premium === true,
+      missing: r.missing.filter((m) => m.saved || !installedNow.has(m.modId)),
+      jobs: this.jobs
+        .filter((j) => ids.has(j.modId))
+        .map((j) => ({ modId: j.modId, state: j.state, error: j.error ?? '' })),
+    };
+  }
+
+  /** Download and install every missing dependency (Premium: through Vortex, one after
+   *  another; free: opens their Files pages, up to 5). Saved mods are put back instead. */
+  async installDependencies(): Promise<{ ok: boolean; message: string }> {
+    const r = await this.dependencies(true);
+    if (r.error && !r.missing.length)
+      return { ok: false, message: `Couldn’t check dependencies: ${r.error}.` };
+    if (!r.missing.length) return { ok: true, message: 'Every mod has what it needs.' };
+    const busy = new Set(this.jobs.filter((j) => j.state !== 'failed').map((j) => j.modId));
+    const toGet = r.missing.filter((m) => !m.saved && !busy.has(m.modId));
+    const toRestore = r.missing.filter((m) => m.saved && m.savedFolder).map((m) => m.savedFolder);
+    const done: string[] = [];
+    if (toRestore.length) {
+      const x = await this.restoreMods(toRestore);
+      done.push(x.message);
+    }
+    const premium = this.account?.premium === true;
+    const list = premium ? toGet : toGet.slice(0, 5);
+    let sent = 0;
+    for (const m of list) {
+      const j = this.job(m.modId, 'queued');
+      if (j.name.startsWith('mod ')) j.name = m.name;
+      const x = await this.update(m.modId);
+      if (x.ok) sent++;
+      if (premium) await new Promise((res) => setTimeout(res, 2500));
+    }
+    if (list.length)
+      done.push(
+        premium
+          ? `Sent ${sent} missing dependenc${sent === 1 ? 'y' : 'ies'} to Vortex (${list
+              .slice(0, 5)
+              .map((m) => m.name)
+              .join(', ')}${list.length > 5 ? '…' : ''}).`
+          : `Opened ${list.length} missing dependenc${list.length === 1 ? 'y' : 'ies'} on Nexus: press “Mod manager download” on each.`,
+      );
+    this.depsCache = null;
+    return { ok: true, message: done.join(' ') || 'They’re on their way already.' };
+  }
+
+  /** Auto-fix on + Premium: install missing dependencies by themselves (at most every 6 h). */
+  private async autoDependencies(notify: (title: string, body: string) => void): Promise<void> {
+    if (!this.account?.premium || Date.now() - this.lastAutoDeps < 6 * 3_600_000) return;
+    if (this.run || (await this.gameRunning())) return;
+    this.lastAutoDeps = Date.now();
+    const r = await this.dependencies(true);
+    if (!r.missing.some((m) => !m.saved)) return;
+    const x = await this.installDependencies();
+    if (x.ok) notify('Cyberpunk: installing missing dependencies', x.message);
   }
 
   /** Install a recommended mod: Premium → Vortex downloads it; free → its Files page. */

@@ -254,6 +254,22 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   saved, automation on) — Vortex just never deploys after outside changes. The sync now also sets
   persistent.deployment.needToDeploy.cyberpunk2077=true and, the next time Vortex opens, presses its
   "Deploy Mods" toolbar button via UI Automation (deployWhenOpen; vortex-sync.json needsDeploy).
+  0.74: checked on the owner's PC with Vortex closed — after the 0.73 deploy only 1 file clash between enabled
+  mods had no rule, so conflicts were settled. What remained: (a) Vortex's "Potential Duplicate Mods" warning
+  = two entries with the same archiveId+variant (22 groups: an old copy that's off + the new one). The sync now
+  takes out the copies that are off in every profile (`sameDownloadCopies` in shared/vortex.ts, `tidyCopies`):
+  their staging folder moves to `%APPDATA%\Vortex\cyberpunk2077\_alton_old_copies\` (kept), then
+  `Vortex.exe --del persistent.mods.cyberpunk2077.<id>` (and each profile's modState entry); read back, and the
+  folder moves back if the entry stayed. `--del` removes a whole branch (tested on a throwaway key);
+  `--get persistent.mods.cyberpunk2077` prints the whole list (~6 MB) in one go. (b) Missing dependencies:
+  Nexus' public GraphQL (`https://api.nexusmods.com/v2/graphql`, no key) `legacyModsByDomain` →
+  `modRequirements.nexusRequirements` (what Vortex's check-nexus-mod-requirements uses). `shared/cpdeps.ts`
+  (missingDeps, parseRequirements); `CyberpunkMods.dependencies()/installDependencies()` (Premium: update()
+  path → download_link + --install-archive; saved ones put back via restoreMods); auto every 6 h from watch()
+  when auto-fix is on and Premium. Mods tab › Dependencies (MOD.10); tool actions dependencies /
+  install_dependencies. On 24 Nov 3 were missing: ME Armor System (Cyber Enemies), Romanced Enhanced
+  Showers Feature (Really Want To Stay At Your House – River/Panam), Virtual Atelier Delivery.
+  Minecraft already adds missing dependencies in fixAll (addMissing, Modrinth).
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
   payday eve/morning (payInfo), end-of-shift summary (replaces shiftEndNotes). "Running late": leave-by

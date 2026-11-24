@@ -26,6 +26,8 @@ import {
   hasRule,
   olderDuplicates,
   parseGet,
+  sameDownloadCopies,
+  type VortexEntry,
   type VortexRule,
 } from '@shared/vortex';
 import { QUARANTINE } from '@shared/cpoutdated';
@@ -41,7 +43,12 @@ interface Pending {
   rulesAdded: Array<{ winner: string; loser: string; reason: string; at: number }>;
   /** Alton changed Vortex while it was closed: deploy the next time it opens. */
   needsDeploy?: boolean;
+  /** Duplicate entries Alton took out of Vortex (folders kept in OLD_COPIES). */
+  tidied?: Array<{ id: string; at: number }>;
 }
+
+/** Next to Vortex's Cyberpunk mods folder: old duplicate copies' files, kept. */
+const OLD_COPIES = '_alton_old_copies';
 
 const run = (
   file: string,
@@ -72,6 +79,7 @@ export class VortexSync {
         lastRun: j.lastRun ?? null,
         rulesAdded: j.rulesAdded ?? [],
         needsDeploy: j.needsDeploy === true,
+        tidied: j.tidied ?? [],
       };
     } catch {
       return { enable: [], lastRun: null, rulesAdded: [] };
@@ -257,6 +265,17 @@ export class VortexSync {
             : r,
         );
       this.mods.saveRemoved(saved.filter((r) => !p.enable.includes(r.folder)));
+      // 5. Vortex's "Potential Duplicate Mods": extra entries made from the same download that
+      //    are off everywhere. Their folders are moved aside (kept), then the entries go.
+      let tidied: string[] = [];
+      try {
+        tidied = await this.tidyCopies(exe, get, [
+          ...this.mods.removed().map((r) => r.folder),
+          ...p.enable,
+        ]);
+      } catch {
+        /* the rest still counts */
+      }
       const msg = [
         toOff.length
           ? `Switched off ${toOff.length - notOff.length} saved mod${toOff.length === 1 ? '' : 's'} in Vortex.`
@@ -267,6 +286,9 @@ export class VortexSync {
               .slice(0, 6)
               .map((d) => d.name)
               .join(', ')}${dupsOff.length > 6 ? '…' : ''}).`
+          : '',
+        tidied.length
+          ? `Took out ${tidied.length} duplicate entr${tidied.length === 1 ? 'y' : 'ies'} Vortex warned about (old copies that were already off; their files are kept in Vortex\\cyberpunk2077\\${OLD_COPIES}).`
           : '',
         rulesKept.length
           ? `Settled ${rulesKept.length} file conflict${rulesKept.length === 1 ? '' : 's'}.`
@@ -284,7 +306,8 @@ export class VortexSync {
         enable: [],
         lastRun: { at: Date.now(), message: msg, ok: true },
         rulesAdded: [...p.rulesAdded, ...rulesKept].slice(-300),
-        needsDeploy: p.needsDeploy === true || toWrite.length > 3,
+        needsDeploy: p.needsDeploy === true || toWrite.length > 3 || tidied.length > 0,
+        tidied: [...(p.tidied ?? []), ...tidied.map((id) => ({ id, at: Date.now() }))].slice(-500),
       };
       this.save(next);
       return { ok: true, message: msg };
@@ -297,8 +320,103 @@ export class VortexSync {
     }
   }
 
-  /** While updates install: press Continue on Vortex's "already installed" question (Replace is
-   *  the selected answer) for the next `minutes`. */
+  /** Take out Vortex entries that duplicate another entry's download and are switched off in
+   *  every profile (Vortex's "Potential Duplicate Mods"). Each folder is moved to OLD_COPIES
+   *  first and moved back if Vortex doesn't drop the entry. Returns the ids taken out. */
+  private async tidyCopies(
+    exe: string,
+    get: (paths: string[]) => Promise<Map<string, unknown>>,
+    keep: string[],
+  ): Promise<string[]> {
+    const modsPre = `persistent.mods.${GAME}.`;
+    const all = await get([`persistent.mods.${GAME}`]);
+    const entries = new Map<string, VortexEntry & { path: string }>();
+    const field =
+      /^(.+)\.(archiveId|installationPath|attributes\.variant|attributes\.installTime)$/;
+    for (const [k, v] of all) {
+      if (!k.startsWith(modsPre)) continue;
+      const m = field.exec(k.slice(modsPre.length));
+      if (!m?.[1]) continue;
+      const e = entries.get(m[1]) ?? {
+        id: m[1],
+        archiveId: '',
+        variant: '',
+        enabled: false,
+        installedAt: 0,
+        path: '',
+      };
+      if (m[2] === 'archiveId' && typeof v === 'string') e.archiveId = v;
+      if (m[2] === 'installationPath' && typeof v === 'string') e.path = v;
+      if (m[2] === 'attributes.variant' && typeof v === 'string') e.variant = v;
+      if (m[2] === 'attributes.installTime')
+        e.installedAt = typeof v === 'number' ? v : Date.parse(String(v)) || 0;
+      entries.set(m[1], e);
+    }
+    if (!entries.size) return [];
+    const profiles = await get(['persistent.profiles']);
+    const inProfiles = new Map<string, string[]>();
+    const st = /^persistent\.profiles\.([^.]+)\.modState\.(.+)\.enabled$/;
+    for (const [k, v] of profiles) {
+      const m = st.exec(k);
+      if (!m?.[1] || !m[2]) continue;
+      inProfiles.set(m[2], [...(inProfiles.get(m[2]) ?? []), m[1]]);
+      const e = entries.get(m[2]);
+      if (e && v === true) e.enabled = true;
+    }
+    const keepSet = new Set(keep);
+    const staging = this.mods.vortexDir();
+    if (!staging) return [];
+    const aside = join(staging, '..', OLD_COPIES);
+    const ids = sameDownloadCopies([...entries.values()])
+      .filter((id) => !keepSet.has(id))
+      .slice(0, 100);
+    const moved: Array<{ id: string; from: string; to: string }> = [];
+    for (const id of ids) {
+      const e = entries.get(id);
+      if (!e?.path || /[\\/]|\.\./.test(e.path)) continue;
+      const from = join(staging, e.path);
+      const to = join(aside, e.path);
+      try {
+        if (existsSync(from)) {
+          if (existsSync(to)) continue;
+          mkdirSync(aside, { recursive: true });
+          renameSync(from, to);
+        }
+        moved.push({ id, from, to });
+      } catch {
+        /* left alone */
+      }
+    }
+    if (!moved.length) return [];
+    const dels = moved.flatMap(({ id }) => [
+      `${modsPre}${escPath(id)}`,
+      ...(inProfiles.get(id) ?? []).map(
+        (pid) => `persistent.profiles.${escPath(pid)}.modState.${escPath(id)}`,
+      ),
+    ]);
+    for (let i = 0; i < dels.length; i += 30)
+      await run(
+        exe,
+        dels.slice(i, i + 30).flatMap((d) => ['--del', d]),
+      );
+    // Read back: an entry still there keeps its folder.
+    const back = await get(moved.map(({ id }) => `${modsPre}${escPath(id)}`));
+    const left = new Set<string>();
+    for (const k of back.keys())
+      for (const { id } of moved) if (k.startsWith(`${modsPre}${id}.`)) left.add(id);
+    const done: string[] = [];
+    for (const m of moved) {
+      if (left.has(m.id)) {
+        try {
+          if (existsSync(m.to) && !existsSync(m.from)) renameSync(m.to, m.from);
+        } catch {
+          /* stays aside */
+        }
+      } else done.push(m.id);
+    }
+    return done;
+  }
+
   /** Vortex just opened after Alton changed it: press its "Deploy Mods" button once (Vortex
    *  only deploys by itself after changes made inside it). */
   async deployWhenOpen(): Promise<boolean> {
