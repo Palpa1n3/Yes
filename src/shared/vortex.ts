@@ -154,3 +154,16 @@ export function sameDownloadCopies(entries: VortexEntry[]): string[] {
   }
   return out;
 }
+
+/** The last profile Vortex switched to, from its log ("switched to profile {"gameId":…,
+ *  "current":…}"), with the log line's time. */
+export function lastProfileSwitch(
+  log: string,
+): { gameId: string; profile: string; at: number } | null {
+  let found: { gameId: string; profile: string; at: number } | null = null;
+  for (const m of log.matchAll(
+    /^(\S+) \[INFO\] \[RENDERER\] switched to profile \{"gameId":"([^"]+)","current":"([^"]+)"\}/gm,
+  ))
+    found = { at: Date.parse(m[1] ?? '') || 0, gameId: m[2] ?? '', profile: m[3] ?? '' };
+  return found;
+}

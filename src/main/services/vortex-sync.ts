@@ -26,6 +26,7 @@ import {
   hasRule,
   olderDuplicates,
   parseGet,
+  lastProfileSwitch,
   sameDownloadCopies,
   type VortexEntry,
   type VortexRule,
@@ -43,6 +44,10 @@ interface Pending {
   rulesAdded: Array<{ winner: string; loser: string; reason: string; at: number }>;
   /** Alton changed Vortex while it was closed: deploy the next time it opens. */
   needsDeploy?: boolean;
+  /** The Cyberpunk profile Alton changed (Vortex's active one at the last sync). */
+  profileId?: string;
+  /** Last time Vortex was found on another game or profile, so Alton didn't deploy. */
+  wrongProfile?: { at: number; gameId: string; profile: string } | null;
   /** Duplicate entries Alton took out of Vortex (folders kept in OLD_COPIES). */
   tidied?: Array<{ id: string; at: number }>;
 }
@@ -80,6 +85,8 @@ export class VortexSync {
         rulesAdded: j.rulesAdded ?? [],
         needsDeploy: j.needsDeploy === true,
         tidied: j.tidied ?? [],
+        ...(j.profileId ? { profileId: j.profileId } : {}),
+        wrongProfile: j.wrongProfile ?? null,
       };
     } catch {
       return { enable: [], lastRun: null, rulesAdded: [] };
@@ -92,6 +99,68 @@ export class VortexSync {
   async vortexRunning(): Promise<boolean> {
     const { out } = await run('tasklist', ['/FI', 'IMAGENAME eq Vortex.exe', '/NH'], 10_000);
     return /Vortex\.exe/i.test(out);
+  }
+
+  /** Vortex's log, the last few MB. */
+  private vortexLog(): string {
+    try {
+      const p = join(process.env.APPDATA ?? '', 'Vortex', 'vortex.log');
+      const s = readFileSync(p);
+      return s.subarray(Math.max(0, s.length - 4_000_000)).toString('utf8');
+    } catch {
+      return '';
+    }
+  }
+
+  /** Wait (up to `waitMs`) for Vortex to settle on a profile; true when it's Cyberpunk on the
+   *  profile Alton changed. Records where it was otherwise. */
+  private async onRightProfile(since = 0, waitMs = 90_000): Promise<boolean> {
+    const want = this.state().profileId;
+    const stop = Date.now() + waitMs;
+    for (;;) {
+      const s = lastProfileSwitch(this.vortexLog());
+      if (s && s.at >= since) {
+        if (s.gameId === GAME && (!want || s.profile === want)) {
+          if (this.state().wrongProfile) this.save({ ...this.state(), wrongProfile: null });
+          return true;
+        }
+        this.save({
+          ...this.state(),
+          wrongProfile: { at: Date.now(), gameId: s.gameId, profile: s.profile },
+        });
+        // A switch may still be on its way (Vortex starts on one game, then moves).
+        if (Date.now() > stop) return false;
+      } else if (Date.now() > stop) return false;
+      await new Promise((res) => setTimeout(res, 3000));
+    }
+  }
+
+  /** After Alton reopened Vortex: make sure it's on the right profile (putting it back once if
+   *  Vortex lost it), then deploy. */
+  private async afterReopen(exe: string, opened: number): Promise<void> {
+    const want = this.state().profileId;
+    if (await this.onRightProfile(opened - 5000)) {
+      await this.deployWhenOpen();
+      return;
+    }
+    if (!want) return;
+    // Vortex lost track of Cyberpunk's profile while restarting: point it back, then reopen.
+    await run('taskkill', ['/IM', 'Vortex.exe'], 15_000);
+    for (let i = 0; i < 30 && (await this.vortexRunning()); i++)
+      await new Promise((res) => setTimeout(res, 1000));
+    if (await this.vortexRunning()) return;
+    const v = JSON.stringify(want);
+    await run(exe, [
+      '--set',
+      `settings.profiles.activeProfileId=${v}`,
+      '--set',
+      `settings.profiles.lastActiveProfile.${GAME}=${v}`,
+      '--set',
+      `settings.profiles.nextProfileId=${v}`,
+    ]);
+    const again = Date.now();
+    spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
+    if (await this.onRightProfile(again - 5000)) await this.deployWhenOpen();
   }
 
   private applying = false;
@@ -126,8 +195,9 @@ export class VortexSync {
       if (wasOpen) {
         try {
           const exe = await this.mods.vortexExe();
+          const opened = Date.now();
           spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
-          void this.deployWhenOpen();
+          void this.afterReopen(exe, opened);
         } catch {
           /* reopen by hand */
         }
@@ -357,6 +427,7 @@ export class VortexSync {
         rulesAdded: [...p.rulesAdded, ...rulesKept].slice(-300),
         needsDeploy: p.needsDeploy === true || toWrite.length > 3 || tidied.length > 0,
         tidied: [...(p.tidied ?? []), ...tidied.map((id) => ({ id, at: Date.now() }))].slice(-500),
+        profileId,
       };
       this.save(next);
       return { ok: true, message: msg };
@@ -470,6 +541,9 @@ export class VortexSync {
    *  only deploys by itself after changes made inside it). */
   async deployWhenOpen(): Promise<boolean> {
     if (!this.state().needsDeploy || this.deploying) return false;
+    // Only ever deploy the profile Alton changed: Vortex sometimes comes back on another game or
+    // a new empty "Default" profile, and deploying that takes every mod out of the game.
+    if (!(await this.onRightProfile())) return false;
     this.deploying = true;
     // Vortex 2 has no "Deploy Mods" button: deploying is "Manual apply (Deploy)" in the Mods
     // page's "More actions" menu (opened with a real click; it has no Invoke pattern).

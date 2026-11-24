@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { escPath, fileConflicts, hasRule, olderDuplicates, parseGet } from '@shared/vortex';
+import {
+  escPath,
+  fileConflicts,
+  hasRule,
+  lastProfileSwitch,
+  olderDuplicates,
+  parseGet,
+} from '@shared/vortex';
 
 describe('Vortex command line helpers', () => {
   it('escapes dots in mod ids and reads --get output', () => {
@@ -102,5 +109,21 @@ describe('older copies of the same mod', () => {
         newer: 'Shift 22340 1.14.0 2026-10-26T18-15Z x',
       },
     ]);
+  });
+});
+
+describe('which profile Vortex is on', () => {
+  it('reads the last profile switch from its log', () => {
+    const log = [
+      '2026-11-24T18:45:19.703Z [INFO] [RENDERER] switched to profile {"gameId":"moonsweepers","current":"mmOdPjWk7"}',
+      '2026-11-24T18:46:00.000Z [DEBG] [RENDERER] something else',
+      '2026-11-24T18:47:29.392Z [INFO] [RENDERER] switched to profile {"gameId":"cyberpunk2077","current":"FoaOfSF7u"}',
+    ].join('\n');
+    expect(lastProfileSwitch(log)).toEqual({
+      gameId: 'cyberpunk2077',
+      profile: 'FoaOfSF7u',
+      at: Date.parse('2026-11-24T18:47:29.392Z'),
+    });
+    expect(lastProfileSwitch('nothing')).toBeNull();
   });
 });

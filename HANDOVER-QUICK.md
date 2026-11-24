@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.78.0, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.79.0, 24 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,18 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.79** Deploy guard: Vortex can come back from a restart on another game and a **new empty
+  "Default" Cyberpunk profile** (log: "the active game is no longer known, resetting"); deploying that
+  takes every mod out of the game (happened 24 Nov 18:47, fixed by hand: `settings.profiles.activeProfileId`,
+  `lastActiveProfile.cyberpunk2077`, `nextProfileId` = "wpFTd0uli" via `--set`, then redeploy).
+  `vortex-sync.json` now keeps `profileId` (from each sync); `deployWhenOpen` reads the last
+  "switched to profile" line in `%APPDATA%\Vortex\vortex.log` (`lastProfileSwitch`) and only presses
+  Deploy on that profile; after Alton reopens Vortex (`afterReopen`) a wrong profile is pointed back once.
+  ARP turned out not to be the cause (crashes continued without it, now ~30 s after loading, in a car).
+  The minidump (`%LOCALAPPDATA%\REDEngine\ReportQueue\…\Cyberpunk2077.dmp`) shows CET → Codeware → game.
+  Test in progress: Authentic Shift (6823) + GUI + Sound Mixer + Realistic Vehicle Physics (beta) + Test
+  Platform + Shift (22340) switched off (two transmission mods at once). Vortex's own "install missing
+  requirements" re-installed the Test Platform at 18:11.
 - **0.78** Crash blame by timing (`repeatedLead` in shared/cpcrash.ts, `crashLead` in the service): when
   ≥3 recent crashes hit the same game address with only frameworks on the stack, Alton reads the RED4ext
   plugin logs (`red4ext\logs\<plugin>-<date>.log`) and blames a plugin that logged the same (normalised)
