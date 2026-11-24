@@ -1,6 +1,6 @@
 # Handover: where Alton (ARC) stands
 
-Read this first in a new chat, then README.md for the feature list.
+Read this first in a new chat, then README.md for the feature list. A short stand-alone version is in HANDOVER-QUICK.md.
 
 ## What it is
 
