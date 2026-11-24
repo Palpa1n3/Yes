@@ -106,6 +106,11 @@ export function registerToolbox(
   });
   handle(IPC.mods.resetOrder, () => mods.resetOrder());
   handle(IPC.mods.fixes, () => mods.fixes());
+  handle(IPC.mods.outdated, () => mods.findOutdated());
+  const folderList = (f: unknown): string[] =>
+    Array.isArray(f) ? f.filter((x): x is string => typeof x === 'string').slice(0, 500) : [];
+  handle(IPC.mods.remove, (f) => mods.removeMods(folderList(f)));
+  handle(IPC.mods.restore, (f) => mods.restoreMods(folderList(f)));
   handle(IPC.mods.autofix, async () => {
     const r = await mods.autofix();
     return { message: r.message, state: mods.fixes() };
@@ -327,6 +332,28 @@ export function registerToolbox(
         const found = name ? mods.find(name) : [];
         return found[0] ?? null;
       };
+      if (action === 'outdated') {
+        const r = await mods.findOutdated();
+        return {
+          outdated: r.mods.map((m) => ({
+            name: m.name,
+            reasons: m.reasons,
+            updateAvailable: m.hasUpdate,
+          })),
+          alreadyRemoved: r.removed.map((m) => m.name),
+          note: 'Use action remove_outdated to remove them all (the user approves); they can be put back in the Mods tab.',
+        };
+      }
+      if (action === 'remove_outdated') {
+        const r = await mods.findOutdated();
+        if (!r.mods.length) return { result: 'No outdated mods found.' };
+        const ok = await ctx.askApproval?.(
+          `Remove ${r.mods.length} outdated Cyberpunk mod${r.mods.length === 1 ? '' : 's'}?`,
+          `${r.mods.map((m) => m.name).join(', ')}\n\nTheir files are moved out of the game folder and can be put back in the Mods tab.`,
+        );
+        if (!ok) return { result: 'Not removed: you said no.' };
+        return { result: (await mods.removeMods(r.mods.map((m) => m.folder))).message };
+      }
       if (action === 'fix') {
         const ok = await ctx.askApproval?.(
           'Fix Cyberpunk’s launch problem?',

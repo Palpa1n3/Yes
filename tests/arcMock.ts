@@ -177,6 +177,9 @@ export function installArcMock(): ArcAPI {
       })),
       undoFix: vi.fn(async () => ({ ok: true, message: '' })),
       setAutoFix: vi.fn(async () => ({ auto: true, fixing: false, fixes: [] })),
+      outdated: vi.fn(),
+      remove: vi.fn(async () => ({ ok: true, message: '' })),
+      restore: vi.fn(async () => ({ ok: true, message: '' })),
     },
     smarthome: {
       status: vi.fn(async () => false),

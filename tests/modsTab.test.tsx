@@ -164,3 +164,40 @@ describe('Mods tab fixes', () => {
     expect(arc.mods.setAutoFix).toHaveBeenCalledWith(false);
   });
 });
+
+describe('Mods tab outdated mods', () => {
+  it('lists outdated mods with reasons, removes them all and puts one back', async () => {
+    vi.mocked(arc.mods.status).mockResolvedValue(status({}));
+    vi.mocked(arc.mods.outdated).mockResolvedValue({
+      mods: [
+        {
+          folder: 'Boomerang-1',
+          name: 'Ranger Combat Boomerang',
+          modId: 1,
+          reasons: ['TweakXL rejects its change to Items.Misoru_BoomerangWraithWeaponModAbility.'],
+          hasUpdate: false,
+        },
+        {
+          folder: 'NCPD-2',
+          name: 'NCPDPPE V2.7 ARCADE',
+          modId: 9863,
+          reasons: ['Its REDmod scripts stop REDmod’s script compile.'],
+          hasUpdate: true,
+        },
+      ],
+      removed: [{ folder: 'Old-3', name: 'Old Mod', files: 4, at: 0 }],
+      gameVersion: '2.50',
+      error: '',
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<ModsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /Find outdated mods/ }));
+    expect(await screen.findByText('Ranger Combat Boomerang')).toBeTruthy();
+    expect(screen.getByText(/TweakXL rejects its change/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Update instead' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove all' }));
+    expect(arc.mods.remove).toHaveBeenCalledWith(['Boomerang-1', 'NCPD-2']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Put back' }));
+    expect(arc.mods.restore).toHaveBeenCalledWith(['Old-3']);
+  });
+});

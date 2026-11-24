@@ -189,6 +189,15 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   non-framework mod DLL on the stack of the last two crashes → crashCulprit → planFixes ignores its RED4ext
   plugin (why 'crash'). Frameworks (Codeware, ArchiveXL, TweakXL, CET, input_loader, mod_settings, audioware…)
   are only reported. The watcher also wakes on a new crash report.
+  Outdated mods (0.66, Mods › Outdated mods; tool outdated / remove_outdated): `src/shared/cpoutdated.ts` —
+  evidence only (old RED4ext plugin DLL vs patch date, REDmod SCRIPTS mods in a failed compile, redscript
+  [ERROR] files, TweakXL [error] record ids → the r6\tweaks file defining them, plugins switched off for
+  crashes), each traced to its Vortex mod via the staging folder (same layout as the game folder). Remove =
+  move the deployed files (only when the game file is the same inode/size as the staging copy) to
+  <game>\_alton_removed_mods\<vortex folder>\…, recorded in userData/cpremoved.json; REDmods removed → REDmod
+  redeploy without them. Put back moves them back (and redeploys REDmod). Vortex may report the files as removed
+  outside it. Switched-off plugins are switched back on when their DLL changes (FixRecord.stamp; old fixes: a
+  DLL newer than the patch).
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

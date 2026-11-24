@@ -18,6 +18,8 @@ export interface FixRecord {
   /** What Alton said it did. */
   note: string;
   undone: boolean;
+  /** Switched-off plugin: its newest DLL's date then, to notice when it's updated. */
+  stamp?: number;
 }
 
 /** What to do, from the launch check. `updateFor` = the culprit plugin's Vortex mod, if Nexus

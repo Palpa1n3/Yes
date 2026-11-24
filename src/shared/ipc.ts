@@ -77,6 +77,9 @@ export const IPC = {
     autofix: 'mods:autofix',
     undoFix: 'mods:undo-fix',
     setAutoFix: 'mods:set-auto-fix',
+    outdated: 'mods:outdated',
+    remove: 'mods:remove',
+    restore: 'mods:restore',
   },
   smarthome: {
     status: 'smarthome:status',
@@ -348,6 +351,9 @@ export interface InvokeMap {
   [IPC.mods.autofix]: { args: []; result: { message: string; state: FixesState } };
   [IPC.mods.undoFix]: { args: [id: string]; result: { ok: boolean; message: string } };
   [IPC.mods.setAutoFix]: { args: [on: boolean]; result: FixesState };
+  [IPC.mods.outdated]: { args: []; result: OutdatedReport };
+  [IPC.mods.remove]: { args: [folders: string[]]; result: { ok: boolean; message: string } };
+  [IPC.mods.restore]: { args: [folders: string[]]; result: { ok: boolean; message: string } };
   [IPC.mods.list]: { args: []; result: import('./cpmods').CpMod[] };
   [IPC.mods.setKey]: { args: [key: string]; result: { ok: boolean; message: string } };
   [IPC.mods.clearKey]: { args: []; result: boolean };
@@ -607,6 +613,11 @@ export interface ArcAPI {
     autofix(): Promise<{ message: string; state: FixesState }>;
     undoFix(id: string): Promise<{ ok: boolean; message: string }>;
     setAutoFix(on: boolean): Promise<FixesState>;
+    /** Mods with evidence they don't work on this game version, and ones already removed. */
+    outdated(): Promise<OutdatedReport>;
+    /** Move these Vortex mods' files out of the game folder (kept, so they can be put back). */
+    remove(folders: string[]): Promise<{ ok: boolean; message: string }>;
+    restore(folders: string[]): Promise<{ ok: boolean; message: string }>;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */
@@ -961,4 +972,12 @@ export interface FixesState {
   auto: boolean;
   fixing: boolean;
   fixes: import('./cpfix').FixRecord[];
+}
+
+/** Mods tab › Outdated mods. */
+export interface OutdatedReport {
+  mods: import('./cpoutdated').OutdatedMod[];
+  removed: Array<{ folder: string; name: string; files: number; at: number }>;
+  gameVersion: string;
+  error: string;
 }

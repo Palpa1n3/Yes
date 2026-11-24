@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, FolderOpen, RefreshCw, Search, Download } from 'lucide-react';
 import type { CpMod, UpdateState } from '@shared/cpmods';
-import type { FixesState, LaunchCheck, LoadOrderReport, ModsStatus } from '@shared/ipc';
+import type {
+  FixesState,
+  LaunchCheck,
+  LoadOrderReport,
+  ModsStatus,
+  OutdatedReport,
+} from '@shared/ipc';
 import { Chip } from '@renderer/components/panels/Chip';
 import { Panel } from '@renderer/components/panels/Panel';
 import { Columns } from './Columns';
@@ -233,6 +239,144 @@ function LoadOrderPanel() {
             </ul>
           )}
         </>
+      )}
+    </Panel>
+  );
+}
+
+/** Outdated mods: ones with evidence they don't work on this game version; remove / put back. */
+function OutdatedPanel() {
+  const [r, setR] = useState<OutdatedReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [pick, setPick] = useState<Set<string>>(new Set());
+  const [msg, setMsg] = useState('');
+  const load = (): void => {
+    setBusy(true);
+    void window.arc.mods
+      .outdated()
+      .then((x) => {
+        setR(x);
+        setPick(new Set(x.mods.map((m) => m.folder)));
+      })
+      .finally(() => setBusy(false));
+  };
+  const run = (p: Promise<{ ok: boolean; message: string }>): void => {
+    setBusy(true);
+    void p.then((x) => {
+      setMsg(x.message);
+      load();
+    });
+  };
+  const toggle = (f: string): void =>
+    setPick((s) => {
+      const n = new Set(s);
+      if (n.has(f)) n.delete(f);
+      else n.add(f);
+      return n;
+    });
+  return (
+    <Panel
+      code="MOD.07"
+      title="Outdated mods"
+      chip={r ? <Chip>{r.mods.length} found</Chip> : undefined}
+      className="max-h-[45%] shrink-0"
+      bodyClassName="flex flex-col gap-2 overflow-y-auto"
+    >
+      <p className="text-[12px] text-text-muted">
+        Mods with proof they don’t work on this game version: old RED4ext plugins, broken REDmod
+        scripts, script errors and changes TweakXL rejects.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="hud-button" disabled={busy} onClick={load}>
+          <RefreshCw size={13} className={busy ? 'animate-spin' : ''} />
+          {busy ? 'Looking…' : r ? 'Check again' : 'Find outdated mods'}
+        </button>
+        {!!r?.mods.length && (
+          <button
+            type="button"
+            className="hud-button"
+            disabled={busy || !pick.size}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Remove ${pick.size} mod${pick.size === 1 ? '' : 's'} from the game? Their files are kept, and you can put them back here.`,
+                )
+              )
+                run(window.arc.mods.remove([...pick]));
+            }}
+          >
+            Remove {pick.size === r.mods.length ? 'all' : pick.size}
+          </button>
+        )}
+      </div>
+      {msg && <p className="text-[12.5px] text-accent">{msg}</p>}
+      {r?.error && <p className="text-[12.5px] text-alert">{r.error}</p>}
+      {r && !r.error && !r.mods.length && (
+        <p className="text-[12.5px] text-ok">No outdated mods found.</p>
+      )}
+      {!!r?.mods.length && (
+        <ul className="space-y-1">
+          {r.mods.map((m) => (
+            <li
+              key={m.folder}
+              className="flex items-start gap-2 border-b border-line/30 py-1 text-[12px]"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                aria-label={`Remove ${m.name}`}
+                checked={pick.has(m.folder)}
+                onChange={() => toggle(m.folder)}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-text-primary">{m.name}</span>
+                {m.reasons.map((x) => (
+                  <span key={x} className="micro-label block normal-case">
+                    {x}
+                  </span>
+                ))}
+              </span>
+              {m.hasUpdate && m.modId !== null && (
+                <button
+                  type="button"
+                  className="hud-button !px-1.5 text-[11px]"
+                  title="There’s a newer version: try updating instead"
+                  onClick={() => run(window.arc.mods.update(m.modId ?? 0))}
+                >
+                  Update instead
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {!!r?.removed.length && (
+        <div className="space-y-1">
+          <div className="micro-label">Removed by Alton</div>
+          {r.removed.map((m) => (
+            <div key={m.folder} className="flex items-center gap-2 text-[12px]">
+              <span className="min-w-0 flex-1 truncate text-text-muted">
+                {m.name} · {m.files} file{m.files === 1 ? '' : 's'}
+              </span>
+              <button
+                type="button"
+                className="hud-button !px-1.5 text-[11px]"
+                onClick={() => run(window.arc.mods.restore([m.folder]))}
+              >
+                Put back
+              </button>
+            </div>
+          ))}
+          {r.removed.length > 1 && (
+            <button
+              type="button"
+              className="hud-button"
+              onClick={() => run(window.arc.mods.restore(r.removed.map((m) => m.folder)))}
+            >
+              Put them all back
+            </button>
+          )}
+        </div>
       )}
     </Panel>
   );
@@ -682,66 +826,69 @@ export function ModsTab() {
         </>
       }
       right={
-        <Panel
-          code="MOD.04"
-          title="Installed"
-          chip={<Chip>{mods.length}</Chip>}
-          className="flex-1"
-          bodyClassName="flex flex-col gap-2 min-h-0"
-        >
-          <label className="flex h-8 shrink-0 items-center gap-2 border border-line bg-panel-raised/80 px-2 focus-within:border-accent">
-            <Search size={13} className="text-text-muted" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Find a mod…"
-              aria-label="Find a mod"
-              className="min-w-0 flex-1 bg-transparent font-mono text-[12px] focus:outline-none"
-            />
-          </label>
-          <ul className="min-h-0 flex-1 overflow-y-auto">
-            {shown.map((m) => (
-              <li
-                key={m.folder}
-                className="flex items-center gap-1.5 border-b border-line/30 py-1 text-[12px]"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{m.name}</span>
-                  <span className="micro-label block normal-case">
-                    {m.version || '—'}
-                    {m.installedAt ? ` · ${new Date(m.installedAt).toLocaleDateString()}` : ''}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  className="hud-button !px-1.5"
-                  aria-label={`Open ${m.name}'s folder`}
-                  title="Open its folder"
-                  onClick={() =>
-                    act(
-                      m.modId
-                        ? window.arc.mods.open('folder', m.modId)
-                        : window.arc.mods.open('vortex'),
-                    )
-                  }
+        <>
+          <OutdatedPanel />
+          <Panel
+            code="MOD.04"
+            title="Installed"
+            chip={<Chip>{mods.length}</Chip>}
+            className="min-h-0 flex-1"
+            bodyClassName="flex flex-col gap-2 min-h-0"
+          >
+            <label className="flex h-8 shrink-0 items-center gap-2 border border-line bg-panel-raised/80 px-2 focus-within:border-accent">
+              <Search size={13} className="text-text-muted" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Find a mod…"
+                aria-label="Find a mod"
+                className="min-w-0 flex-1 bg-transparent font-mono text-[12px] focus:outline-none"
+              />
+            </label>
+            <ul className="min-h-0 flex-1 overflow-y-auto">
+              {shown.map((m) => (
+                <li
+                  key={m.folder}
+                  className="flex items-center gap-1.5 border-b border-line/30 py-1 text-[12px]"
                 >
-                  <FolderOpen size={12} />
-                </button>
-                {m.modId !== null && (
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{m.name}</span>
+                    <span className="micro-label block normal-case">
+                      {m.version || '—'}
+                      {m.installedAt ? ` · ${new Date(m.installedAt).toLocaleDateString()}` : ''}
+                    </span>
+                  </span>
                   <button
                     type="button"
                     className="hud-button !px-1.5"
-                    aria-label={`Open ${m.name} on Nexus`}
-                    title="Open on Nexus"
-                    onClick={() => act(window.arc.mods.open('page', m.modId ?? undefined))}
+                    aria-label={`Open ${m.name}'s folder`}
+                    title="Open its folder"
+                    onClick={() =>
+                      act(
+                        m.modId
+                          ? window.arc.mods.open('folder', m.modId)
+                          : window.arc.mods.open('vortex'),
+                      )
+                    }
                   >
-                    <ExternalLink size={12} />
+                    <FolderOpen size={12} />
                   </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Panel>
+                  {m.modId !== null && (
+                    <button
+                      type="button"
+                      className="hud-button !px-1.5"
+                      aria-label={`Open ${m.name} on Nexus`}
+                      title="Open on Nexus"
+                      onClick={() => act(window.arc.mods.open('page', m.modId ?? undefined))}
+                    >
+                      <ExternalLink size={12} />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </>
       }
     />
   );

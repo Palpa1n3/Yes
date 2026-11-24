@@ -7,6 +7,7 @@ import { execFile, spawn } from 'node:child_process';
 import {
   closeSync,
   existsSync,
+  mkdirSync,
   openSync,
   readFileSync,
   readSync,
@@ -31,8 +32,16 @@ import {
   type ModUpdate,
   type NexusInfo,
 } from '@shared/cpmods';
-import type { LaunchCheck, LoadOrderReport, ModsStatus } from '@shared/ipc';
+import type { LaunchCheck, LoadOrderReport, ModsStatus, OutdatedReport } from '@shared/ipc';
 import { diagnoseLaunch, redmodReport, type PluginFile } from '@shared/cplaunch';
+import {
+  QUARANTINE,
+  collectOutdated,
+  definesRecord,
+  ownerIndex,
+  redscriptErrorFiles,
+  tweakRecordIds,
+} from '@shared/cpoutdated';
 import {
   parseCrashInfo,
   parseCrashProbe,
@@ -948,6 +957,9 @@ export class CyberpunkMods {
           action,
           note,
           undone: false,
+          ...(action.kind === 'ignore-plugin'
+            ? { stamp: this.pluginStamp(game, action.plugin) }
+            : {}),
         };
         this.fixState.fixes.push(rec);
         done.push(rec);
@@ -1021,6 +1033,12 @@ export class CyberpunkMods {
       if (!this.fixState.auto || this.fixing) return;
       const game = await this.findGame();
       if (!game) return;
+      // A plugin Alton switched off has been updated since: switch it back on.
+      for (const name of await this.reenableUpdated(game))
+        notify(
+          'Cyberpunk: plugin switched back on',
+          `${name} was updated, so it’s switched back on.`,
+        );
       let newest = '';
       try {
         newest =
@@ -1058,6 +1076,288 @@ export class CyberpunkMods {
     const t = setInterval(() => void check(), 60_000);
     t.unref?.();
     setTimeout(() => void check(), 20_000).unref?.();
+  }
+
+  /** The newest DLL date in a RED4ext plugin folder (0 = none). */
+  private pluginStamp(game: string, plugin: string): number {
+    let newest = 0;
+    try {
+      const dir = join(game, 'red4ext', 'plugins', plugin);
+      for (const n of readdirSync(dir))
+        if (n.toLowerCase().endsWith('.dll'))
+          newest = Math.max(newest, statSync(join(dir, n)).mtimeMs);
+    } catch {
+      /* not there */
+    }
+    return newest;
+  }
+
+  /** Plugins Alton switched off that have changed since (updated): un-ignore them. */
+  private async reenableUpdated(game: string): Promise<string[]> {
+    const back: string[] = [];
+    let patch: number | null = null;
+    for (const f of this.fixState.fixes) {
+      const a = f.action;
+      if (f.undone || a.kind !== 'ignore-plugin') continue;
+      const now = this.pluginStamp(game, a.plugin);
+      if (!now) continue;
+      // Older fixes have no stamp: then a DLL built after the game's update counts as updated.
+      if (f.stamp === undefined && patch === null) patch = (await this.diagnose()).patchSeen;
+      if (f.stamp !== undefined ? now !== f.stamp : !!patch && now > patch) {
+        const r = await this.undoFix(f.id);
+        if (r.ok) back.push(a.plugin);
+      }
+    }
+    return back;
+  }
+
+  /* ── Removing outdated mods (moving their files out of the game folder, with Put back) ── */
+  private removedFile = join(app.getPath('userData'), 'cpremoved.json');
+  private removed(): Array<{
+    folder: string;
+    name: string;
+    files: string[];
+    redmods: string[];
+    at: number;
+  }> {
+    try {
+      return JSON.parse(readFileSync(this.removedFile, 'utf8')) as Array<{
+        folder: string;
+        name: string;
+        files: string[];
+        redmods: string[];
+        at: number;
+      }>;
+    } catch {
+      return [];
+    }
+  }
+  private saveRemoved(r: ReturnType<CyberpunkMods['removed']>): void {
+    writeFileSync(this.removedFile, JSON.stringify(r));
+  }
+
+  /** Every file a Vortex mod installs, relative to the game folder. */
+  private modFiles(folder: string): string[] {
+    const v = this.vortexDir();
+    if (!v) return [];
+    const root = join(v, folder);
+    const out: string[] = [];
+    const walk = (dir: string, rel: string): void => {
+      let names: string[];
+      try {
+        names = readdirSync(dir);
+      } catch {
+        return;
+      }
+      for (const n of names) {
+        const full = join(dir, n);
+        const r = rel ? `${rel}/${n}` : n;
+        try {
+          if (statSync(full).isDirectory()) walk(full, r);
+          else if (!/__folder_managed_by_vortex$/i.test(n)) out.push(r);
+        } catch {
+          /* skip */
+        }
+      }
+    };
+    walk(root, '');
+    return out;
+  }
+
+  /** Mods with real evidence they don't work on this game version, plus ones already removed. */
+  async findOutdated(): Promise<OutdatedReport> {
+    const game = await this.findGame();
+    const v = this.vortexDir();
+    if (!game || !v)
+      return {
+        mods: [],
+        removed: [],
+        gameVersion: '',
+        error: 'I couldn’t find the game or Vortex’s mods.',
+      };
+    const list = this.list();
+    const index = ownerIndex(
+      list.map((m) => ({ folder: m.folder, files: this.modFiles(m.folder) })),
+    );
+    const d = await this.diagnose();
+    const read = (p: string): string => {
+      try {
+        return readFileSync(p, 'utf8');
+      } catch {
+        return '';
+      }
+    };
+    // TweakXL's rejected records → the tweak files that define them.
+    const tweakFiles: Array<{ file: string; record: string }> = [];
+    let tweakLog = '';
+    try {
+      const td = join(game, 'red4ext', 'plugins', 'TweakXL');
+      const t = readdirSync(td)
+        .filter((f) => /^TweakXL-.*\.log$/.test(f))
+        .sort()
+        .pop();
+      if (t) tweakLog = read(join(td, t));
+    } catch {
+      /* no TweakXL */
+    }
+    const ids = tweakRecordIds(tweakLog);
+    if (ids.length) {
+      const tweaks: Array<{ rel: string; text: string }> = [];
+      const walk = (dir: string, rel: string): void => {
+        let names: string[];
+        try {
+          names = readdirSync(dir);
+        } catch {
+          return;
+        }
+        for (const n of names) {
+          const full = join(dir, n);
+          const r = `${rel}/${n}`;
+          try {
+            if (statSync(full).isDirectory()) walk(full, r);
+            else if (/\.(ya?ml|tweak)$/i.test(n)) tweaks.push({ rel: r, text: read(full) });
+          } catch {
+            /* skip */
+          }
+        }
+      };
+      walk(join(game, 'r6', 'tweaks'), 'r6/tweaks');
+      for (const id of ids) {
+        const hit = tweaks.find((t) => t.text.includes(id) && definesRecord(t.text, id));
+        if (hit) tweakFiles.push({ file: hit.rel, record: id });
+      }
+    }
+    const crashPlugins = this.fixState.fixes
+      .filter((f) => !f.undone && f.action.kind === 'ignore-plugin' && f.action.why === 'crash')
+      .map((f) => (f.action.kind === 'ignore-plugin' ? f.action.plugin : ''));
+    const mods = collectOutdated(
+      {
+        oldPlugins: d.outdated,
+        crashPlugins,
+        redmodScripts: d.redmod?.failed ? d.redmod.scriptMods : [],
+        scriptErrors: redscriptErrorFiles(read(join(game, 'r6', 'logs', 'redscript_rCURRENT.log'))),
+        tweakFiles,
+        gameVersion: d.gameVersion,
+      },
+      index,
+      list,
+      new Set(this.updates().map((u) => u.latest.modId)),
+    );
+    const removed = this.removed();
+    const gone = new Set(removed.map((r) => r.folder));
+    return {
+      mods: mods.filter((m) => !gone.has(m.folder)),
+      removed: removed.map((r) => ({
+        folder: r.folder,
+        name: r.name,
+        files: r.files.length,
+        at: r.at,
+      })),
+      gameVersion: d.gameVersion,
+      error: '',
+    };
+  }
+
+  /** Move these mods' files out of the game folder (only files that really are theirs). */
+  async removeMods(folders: string[]): Promise<{ ok: boolean; message: string }> {
+    const game = await this.findGame();
+    const v = this.vortexDir();
+    if (!game || !v) return { ok: false, message: 'I couldn’t find the game or Vortex’s mods.' };
+    if (await this.gameRunning())
+      return { ok: false, message: 'Close Cyberpunk first, then I can remove them.' };
+    const removed = this.removed();
+    const done: string[] = [];
+    const redmodsOut: string[] = [];
+    for (const folder of folders) {
+      const m = this.list().find((x) => x.folder === folder);
+      if (!m || removed.some((r) => r.folder === folder)) continue;
+      const moved: string[] = [];
+      for (const rel of this.modFiles(folder)) {
+        const src = join(game, rel);
+        try {
+          const a = statSync(src, { bigint: true });
+          const b = statSync(join(v, folder, rel), { bigint: true });
+          // Only the copy this mod deployed (Vortex links it), never another mod's version.
+          if (a.ino !== b.ino || a.size !== b.size) continue;
+          const dest = join(game, QUARANTINE, folder, rel);
+          mkdirSync(join(dest, '..'), { recursive: true });
+          renameSync(src, dest);
+          moved.push(rel);
+        } catch {
+          /* not deployed, or in use */
+        }
+      }
+      const redmods = [
+        ...new Set(
+          moved
+            .filter((r) => /^mods\//i.test(r))
+            .map((r) => r.split('/')[1] ?? '')
+            .filter(Boolean),
+        ),
+      ];
+      redmodsOut.push(...redmods);
+      removed.push({ folder, name: m.name, files: moved, redmods, at: Date.now() });
+      done.push(m.name);
+    }
+    this.saveRemoved(removed);
+    if (redmodsOut.length) {
+      const all = this.redmodList(game).filter((x) => !redmodsOut.includes(x));
+      await this.redmodDeploy(game, all);
+    }
+    return {
+      ok: true,
+      message: done.length
+        ? `Removed ${done.length} mod${done.length === 1 ? '' : 's'} from the game (${done.join(', ')}). Their files are kept, so you can put them back. If Vortex later says files were removed outside it, choose to keep them removed, or disable these mods in Vortex.`
+        : 'Nothing was removed.',
+    };
+  }
+
+  /** Put removed mods' files back where they were. */
+  async restoreMods(folders: string[]): Promise<{ ok: boolean; message: string }> {
+    const game = await this.findGame();
+    if (!game) return { ok: false, message: 'I couldn’t find Cyberpunk 2077.' };
+    if (await this.gameRunning()) return { ok: false, message: 'Close Cyberpunk first.' };
+    const removed = this.removed();
+    const back: string[] = [];
+    let redmods = false;
+    for (const r of removed.filter((x) => folders.includes(x.folder))) {
+      for (const rel of r.files) {
+        const from = join(game, QUARANTINE, r.folder, rel);
+        const to = join(game, rel);
+        try {
+          if (existsSync(to)) continue;
+          mkdirSync(join(to, '..'), { recursive: true });
+          renameSync(from, to);
+        } catch {
+          /* leave it */
+        }
+      }
+      if (r.redmods.length) redmods = true;
+      try {
+        rmSync(join(game, QUARANTINE, r.folder), { recursive: true, force: true });
+      } catch {
+        /* leftovers stay */
+      }
+      back.push(r.name);
+    }
+    this.saveRemoved(removed.filter((x) => !folders.includes(x.folder)));
+    if (redmods) await this.redmodDeploy(game, this.redmodList(game));
+    return {
+      ok: true,
+      message: back.length ? `Put back: ${back.join(', ')}.` : 'Nothing to put back.',
+    };
+  }
+
+  /** The REDmods Vortex deploys (V2077\modlist.txt). */
+  private redmodList(game: string): string[] {
+    try {
+      return readFileSync(join(game, 'V2077', 'modlist.txt'), 'utf8')
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
   }
 
   find(q: string): CpMod[] {

@@ -130,6 +130,9 @@ const api: ArcAPI = {
     autofix: () => invoke(IPC.mods.autofix),
     undoFix: (id) => invoke(IPC.mods.undoFix, id),
     setAutoFix: (on) => invoke(IPC.mods.setAutoFix, on),
+    outdated: () => invoke(IPC.mods.outdated),
+    remove: (f) => invoke(IPC.mods.remove, f),
+    restore: (f) => invoke(IPC.mods.restore, f),
   },
   smarthome: {
     status: () => invoke(IPC.smarthome.status),
