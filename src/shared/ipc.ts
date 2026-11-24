@@ -939,6 +939,8 @@ export interface ModsStatus {
 export type LaunchCheck = import('./cplaunch').LaunchReport & {
   vortexMod: { name: string; modId: number | null; version: string } | null;
   redmod: import('./cplaunch').RedmodReport | null;
+  /** Crashes while playing (crash reports, quest/district, TweakXL rejections). */
+  crash: import('./cpcrash').CrashSummary | null;
 };
 
 /** Mods tab › Load order. */

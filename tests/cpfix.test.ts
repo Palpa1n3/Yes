@@ -80,3 +80,32 @@ describe('planning fixes', () => {
     ).toEqual([]);
   });
 });
+
+describe('crash fixes', () => {
+  it('switches off a plugin the game keeps crashing in while playing', () => {
+    const plan = planFixes({
+      report: { culprit: null, outdated: [] },
+      redmod: null,
+      culpritMod: null,
+      updateFor: null,
+      ignored: [],
+      redmodSkipped: [],
+      crashCulprit: { plugin: 'SomeMod', mod: 'Some Mod 1.2' },
+    });
+    expect(plan).toEqual([
+      { kind: 'ignore-plugin', plugin: 'SomeMod', mod: 'Some Mod 1.2', why: 'crash' },
+    ]);
+    expect(describeFix(plan[0]!)).toMatch(/kept crashing inside it while you played/);
+    expect(
+      planFixes({
+        report: { culprit: null, outdated: [] },
+        redmod: null,
+        culpritMod: null,
+        updateFor: null,
+        ignored: ['SomeMod'],
+        redmodSkipped: [],
+        crashCulprit: { plugin: 'SomeMod', mod: 'Some Mod' },
+      }),
+    ).toEqual([]);
+  });
+});

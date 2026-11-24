@@ -389,7 +389,7 @@ export function ModsTab() {
               </div>
             )}
           </Panel>
-          <Panel code="MOD.05" title="Won’t start?" className="shrink-0">
+          <Panel code="MOD.05" title="Crashes & won’t start" className="shrink-0">
             <div className="space-y-2 text-[12.5px]">
               <p className="text-text-muted">
                 Reads the game’s mod logs from your last launches and says what’s stopping it.
@@ -499,6 +499,30 @@ export function ModsTab() {
                       >
                         <FolderOpen size={13} /> Its files
                       </button>
+                    </div>
+                  )}
+                  {diag.crash && (
+                    <div className="space-y-1 text-[12px]">
+                      <p className="text-text-muted">
+                        Last crash: {diag.crash.recent[diag.crash.recent.length - 1]?.where}
+                        {diag.crash.recent[diag.crash.recent.length - 1]?.mods.length
+                          ? ` · mods on it: ${diag.crash.recent[diag.crash.recent.length - 1]?.mods.join(', ')}`
+                          : ''}
+                        {diag.crash.context?.quest ? ` · quest ${diag.crash.context.quest}` : ''}
+                      </p>
+                      {!!diag.crash.tweakErrors.count && (
+                        <details>
+                          <summary className="cursor-pointer text-text-muted">
+                            {diag.crash.tweakErrors.count} change
+                            {diag.crash.tweakErrors.count === 1 ? '' : 's'} TweakXL rejected
+                          </summary>
+                          <ul className="micro-label normal-case">
+                            {diag.crash.tweakErrors.examples.map((e) => (
+                              <li key={e}>{e}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
                     </div>
                   )}
                   {!!diag.scriptErrors.length && (

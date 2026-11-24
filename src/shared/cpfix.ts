@@ -7,7 +7,7 @@ export type FixAction =
   /** Nexus has a newer version: send it to Vortex (Premium) or open its page. */
   | { kind: 'update'; modId: number; name: string; plugin: string }
   /** No update: RED4ext skips the plugin (red4ext\config.ini [plugins] ignored). */
-  | { kind: 'ignore-plugin'; plugin: string; mod: string }
+  | { kind: 'ignore-plugin'; plugin: string; mod: string; why?: 'start' | 'crash' }
   /** REDmod's script compile fails: deploy again without the REDmods that change scripts. */
   | { kind: 'redmod-without'; mods: string[] };
 
@@ -30,8 +30,17 @@ export function planFixes(o: {
   ignored: string[];
   /** REDmods already left out by Alton. */
   redmodSkipped: string[];
+  /** A mod plugin the game keeps crashing in while playing (from the crash reports). */
+  crashCulprit?: { plugin: string; mod: string } | null;
 }): FixAction[] {
   const out: FixAction[] = [];
+  const cc = o.crashCulprit;
+  if (
+    cc &&
+    !o.ignored.some((i) => i.toLowerCase() === cc.plugin.toLowerCase()) &&
+    cc.plugin.toLowerCase() !== o.report.culprit?.plugin.toLowerCase()
+  )
+    out.push({ kind: 'ignore-plugin', plugin: cc.plugin, mod: cc.mod, why: 'crash' });
   const c = o.report.culprit;
   if (c && !o.ignored.some((i) => i.toLowerCase() === c.plugin.toLowerCase())) {
     if (o.updateFor)
@@ -95,6 +104,8 @@ export function setIgnored(ini: string, plugin: string, ignore: boolean): string
 export function describeFix(a: FixAction): string {
   if (a.kind === 'update')
     return `Sent the update for ${a.name} (the ${a.plugin} plugin that crashed the game).`;
+  if (a.kind === 'ignore-plugin' && a.why === 'crash')
+    return `Switched off the ${a.plugin} plugin (from ${a.mod}): the game kept crashing inside it while you played. Its mod stays installed; update it later and undo this.`;
   if (a.kind === 'ignore-plugin')
     return `Switched off the ${a.plugin} plugin (from ${a.mod}), which crashed the game on start-up. Its mod stays installed; update it later and undo this.`;
   return `Deployed REDmod again without ${a.mods.join(', ')}, whose scripts stopped the compile. Disable ${a.mods.length === 1 ? 'it' : 'them'} in Vortex too, or Vortex adds ${a.mods.length === 1 ? 'it' : 'them'} back on its next deploy.`;

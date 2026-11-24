@@ -137,6 +137,7 @@ describe('Mods tab fixes', () => {
       verdict: 'The last launch got past loading the mod plugins.',
       vortexMod: null,
       redmod: null,
+      crash: null,
     });
     const fix = {
       id: 'f1',

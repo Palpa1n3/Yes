@@ -183,6 +183,12 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   Vortex's list minus SCRIPTS mods (Vortex re-adds them on its next deploy unless disabled there). Records in
   userData/cpfix.json with Undo (un-ignore / redeploy with V2077\modlist.txt). Watcher: every minute while
   Cyberpunk2077.exe isn't running, a new red4ext log or REDmodLog change triggers autofix + holo notification.
+  In-game crashes (0.65): `src/shared/cpcrash.ts` reads AppearanceRuntimePlugin's crash-*.txt (CrashProbe: fault
+  address + modules on the stack), %LOCALAPPDATA%\CD Projekt Red\Cyberpunk 2077\CrashInfo.json (quest, district,
+  seconds played) and TweakXL's latest log ([error] lines = records from mods made for an older version). A
+  non-framework mod DLL on the stack of the last two crashes → crashCulprit → planFixes ignores its RED4ext
+  plugin (why 'crash'). Frameworks (Codeware, ArchiveXL, TweakXL, CET, input_loader, mod_settings, audioware…)
+  are only reported. The watcher also wakes on a new crash report.
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

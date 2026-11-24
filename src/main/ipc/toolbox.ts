@@ -371,6 +371,17 @@ export function registerToolbox(
           vortexMod: d.vortexMod,
           olderThanPatch: d.outdated,
           scriptErrors: d.scriptErrors,
+          crash: d.crash
+            ? {
+                where: d.crash.recent[d.crash.recent.length - 1]?.where,
+                modsOnStack: d.crash.recent[d.crash.recent.length - 1]?.mods,
+                culprit: d.crash.culprit,
+                quest: d.crash.context?.quest,
+                district: d.crash.context?.district,
+                minutesPlayed: d.crash.context ? Math.round(d.crash.context.session / 60) : null,
+                tweakXLRejected: d.crash.tweakErrors,
+              }
+            : null,
           recentLaunches: d.runs.slice(-6).map((r) => ({
             at: new Date(r.at).toISOString(),
             version: r.gameVersion,

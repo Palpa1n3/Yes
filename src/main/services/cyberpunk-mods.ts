@@ -34,6 +34,12 @@ import {
 import type { LaunchCheck, LoadOrderReport, ModsStatus } from '@shared/ipc';
 import { diagnoseLaunch, redmodReport, type PluginFile } from '@shared/cplaunch';
 import {
+  parseCrashInfo,
+  parseCrashProbe,
+  summarizeCrashes,
+  type CrashSummary,
+} from '@shared/cpcrash';
+import {
   describeFix,
   ignoredPlugins,
   planFixes,
@@ -502,6 +508,7 @@ export class CyberpunkMods {
         verdict: 'I couldn’t find Cyberpunk 2077.',
         vortexMod: null,
         redmod: null,
+        crash: null,
       };
     const logsDir = join(game, 'red4ext', 'logs');
     const read = (p: string): string => {
@@ -554,10 +561,76 @@ export class CyberpunkMods {
       if (folder) vortexMod = { name: folder.name, modId: folder.modId, version: folder.version };
     }
     const redmod = redmodReport(read(join(game, 'tools', 'redmod', 'bin', 'REDmodLog.txt')));
-    const verdict = [report.verdict, redmod?.failed ? redmod.verdict : '']
+    const crash = this.crashes(game, read);
+    // A crash after the last launch started = it got into the game and crashed while playing.
+    const lastRun = report.runs[report.runs.length - 1];
+    const crashedPlaying =
+      !!crash?.recent.length &&
+      !report.culprit &&
+      (crash.recent[crash.recent.length - 1]?.at ?? 0) >= (lastRun?.at ?? 0) - 60_000;
+    const verdict = [
+      crashedPlaying ? crash?.verdict : report.verdict,
+      redmod?.failed ? redmod.verdict : '',
+    ]
       .filter(Boolean)
       .join(' ');
-    return { ...report, verdict, vortexMod, redmod };
+    return { ...report, verdict, vortexMod, redmod, crash: crashedPlaying ? crash : null };
+  }
+
+  /** Crash reports (AppearanceRuntimePlugin's), the game's CrashInfo.json and TweakXL's log. */
+  private crashes(game: string, read: (p: string) => string): CrashSummary | null {
+    const dir = join(game, 'red4ext', 'plugins', 'AppearanceRuntimePlugin', 'Logs');
+    let files: string[];
+    try {
+      files = readdirSync(dir)
+        .filter((f) => /^crash-.*\.txt$/i.test(f))
+        .sort()
+        .slice(-8);
+    } catch {
+      return null;
+    }
+    const probes = files
+      .map((f) => parseCrashProbe(f, read(join(dir, f))))
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    if (!probes.length) return null;
+    // DLL name → its RED4ext plugin folder (including versioned builds like AudioXL_2_50).
+    const plugins = new Map<string, string>();
+    const pdir = join(game, 'red4ext', 'plugins');
+    try {
+      for (const p of readdirSync(pdir)) {
+        const walk = (d: string): void => {
+          try {
+            for (const f of readdirSync(d)) {
+              const full = join(d, f);
+              if (f.toLowerCase().endsWith('.dll')) plugins.set(f.slice(0, -4).toLowerCase(), p);
+              else if (statSync(full).isDirectory() && d === join(pdir, p)) walk(full);
+            }
+          } catch {
+            /* skip */
+          }
+        };
+        walk(join(pdir, p));
+      }
+    } catch {
+      /* no plugins */
+    }
+    const info = parseCrashInfo(
+      read(
+        join(process.env.LOCALAPPDATA ?? '', 'CD Projekt Red', 'Cyberpunk 2077', 'CrashInfo.json'),
+      ),
+    );
+    let tweak = '';
+    try {
+      const td = join(game, 'red4ext', 'plugins', 'TweakXL');
+      const t = readdirSync(td)
+        .filter((f) => /^TweakXL-.*\.log$/.test(f))
+        .sort()
+        .pop();
+      if (t) tweak = read(join(td, t));
+    } catch {
+      /* no TweakXL */
+    }
+    return summarizeCrashes(probes, plugins, info, tweak);
   }
 
   /* ── Archive load order (archive\pc\mod; first loaded wins) ── */
@@ -823,6 +896,21 @@ export class CyberpunkMods {
           upd && this.account?.premium ? { modId: upd.latest.modId, name: upd.mod.name } : null,
         ignored: ignoredPlugins(ini),
         redmodSkipped: skipped,
+        crashCulprit: d.crash?.culprit?.plugin
+          ? {
+              plugin: d.crash.culprit.plugin,
+              mod:
+                this.list().find((m) => {
+                  const v = this.vortexDir();
+                  return (
+                    !!v &&
+                    existsSync(
+                      join(v, m.folder, 'red4ext', 'plugins', d.crash?.culprit?.plugin ?? ''),
+                    )
+                  );
+                })?.name ?? d.crash.culprit.plugin,
+            }
+          : null,
       });
       for (const action of plan) {
         let ok = true;
@@ -870,9 +958,11 @@ export class CyberpunkMods {
         done,
         message: done.length
           ? `${done.map((f) => f.note).join(' ')} Try starting the game again.`
-          : d.culprit || d.redmod?.failed
-            ? 'I couldn’t fix this one by myself. The launch check above says what to do.'
-            : 'Nothing to fix: the last launch didn’t fail on a mod.',
+          : d.crash
+            ? `${d.crash.verdict} I can’t safely switch anything off for this one yet; if it happens again inside the same mod, I will.`
+            : d.culprit || d.redmod?.failed
+              ? 'I couldn’t fix this one by myself. The launch check above says what to do.'
+              : 'Nothing to fix: the last launch didn’t fail on a mod.',
       };
     } finally {
       this.fixing = false;
@@ -947,7 +1037,17 @@ export class CyberpunkMods {
       } catch {
         /* none */
       }
-      const key = `${newest}|${Math.round(redmodAt)}`;
+      let crash = '';
+      try {
+        crash =
+          readdirSync(join(game, 'red4ext', 'plugins', 'AppearanceRuntimePlugin', 'Logs'))
+            .filter((f) => /^crash-.*\.txt$/i.test(f))
+            .sort()
+            .pop() ?? '';
+      } catch {
+        /* no crash reports */
+      }
+      const key = `${newest}|${Math.round(redmodAt)}|${crash}`;
       if (key === this.fixState.seen) return;
       if (await this.gameRunning()) return;
       this.fixState.seen = key;
