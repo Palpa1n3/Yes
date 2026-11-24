@@ -16,6 +16,7 @@ export const TAB_IDS = [
 export type TabId = (typeof TAB_IDS)[number];
 
 export const SETTINGS_TABS = [
+  'sections',
   'general',
   'ai',
   'smart',

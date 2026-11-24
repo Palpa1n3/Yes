@@ -241,6 +241,11 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   deploy=true. Runs from a 60 s timer when due, or "Sync now". While updates run, a UI Automation PowerShell loop
   (20 min) presses Continue on Vortex's "Install options" / "is already installed" dialog (Replace is the
   default choice there; Vortex has no persistent "always replace" setting).
+  Navigation (0.71): no tab row any more (11 sections didn't fit the 960 px minimum window). TopBar shows
+  SectionButton (current section → Settings › Sections, SETTINGS_TABS[0] 'sections', settings/SectionsTab.tsx);
+  Ctrl+1…9 via useSectionShortcuts (TabBar.tsx). The compact view has an "All sections" button (leaves compact,
+  opens Settings › Sections). Columns stack into one scrolling column below the `hud` breakpoint (1180 px);
+  Settings' page list/search shrink on narrow windows.
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
   payday eve/morning (payInfo), end-of-shift summary (replaces shiftEndNotes). "Running late": leave-by

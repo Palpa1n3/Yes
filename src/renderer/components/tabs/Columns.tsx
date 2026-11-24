@@ -17,13 +17,15 @@ export function Columns({
       variants={staggerVariants}
       initial="hidden"
       animate="show"
-      className="grid h-full min-h-0 grid-cols-12 gap-4"
+      className="grid h-full min-h-0 grid-cols-1 gap-4 overflow-y-auto hud:grid-cols-12 hud:overflow-visible"
     >
-      <div className="col-span-3 -m-1 flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto p-1">
+      <div className="-m-1 flex min-h-0 min-w-0 flex-col gap-4 p-1 hud:col-span-3 hud:overflow-y-auto">
         {left}
       </div>
-      <div className="col-span-6 flex min-h-0 min-w-0 flex-col gap-4">{center}</div>
-      <div className="col-span-3 -m-1 flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto p-1">
+      <div className="flex min-h-[420px] min-w-0 flex-col gap-4 hud:col-span-6 hud:min-h-0">
+        {center}
+      </div>
+      <div className="-m-1 flex min-h-[320px] min-w-0 flex-col gap-4 p-1 hud:col-span-3 hud:min-h-0 hud:overflow-y-auto">
         {right}
       </div>
     </motion.div>

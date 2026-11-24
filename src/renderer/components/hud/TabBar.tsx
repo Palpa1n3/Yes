@@ -1,12 +1,11 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { TABS } from '@renderer/components/tabs/registry';
 import { useUiStore } from '@renderer/stores/uiStore';
 
-/** Top navigation. Arrow keys move between tabs; Ctrl/Cmd+1…7 jumps from anywhere. */
-export function TabBar() {
-  const { tab, setTab } = useUiStore();
-  const refs = useRef<Array<HTMLButtonElement | null>>([]);
-
+/** Ctrl/Cmd+1…9 jumps to a section from anywhere. */
+export function useSectionShortcuts(): void {
+  const setTab = useUiStore((s) => s.setTab);
   useEffect(() => {
     const onKey = (e: globalThis.KeyboardEvent): void => {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -19,56 +18,30 @@ export function TabBar() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [setTab]);
+}
 
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
-    const i = TABS.findIndex((t) => t.id === tab);
-    const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
-    if (!next) return;
-    setTab(next.id);
-    refs.current[TABS.indexOf(next)]?.focus();
-  };
-
+/** The section you're in; opens Settings › Sections, where every part of Alton is listed
+ *  (one place that fits any window size, instead of a row of tabs). */
+export function SectionButton() {
+  const tab = useUiStore((s) => s.tab);
+  useSectionShortcuts();
+  const t = TABS.find((x) => x.id === tab) ?? TABS[0];
+  if (!t) return null;
+  const Icon = t.icon;
   return (
-    <nav role="tablist" aria-label="Sections" className="no-drag flex h-full" onKeyDown={onKeyDown}>
-      {TABS.map((t, i) => {
-        const active = t.id === tab;
-        const Icon = t.icon;
-        return (
-          <button
-            key={t.id}
-            ref={(el) => {
-              refs.current[i] = el;
-            }}
-            type="button"
-            role="tab"
-            id={`tab-${t.id}`}
-            aria-selected={active}
-            aria-controls="tab-panel"
-            tabIndex={active ? 0 : -1}
-            title={`${t.label} (Ctrl+${i + 1})`}
-            onClick={() => setTab(t.id)}
-            className={`group relative flex h-full items-center gap-2 px-2.5 font-mono text-[11px] uppercase tracking-[0.18em] transition-colors duration-150 full:px-4 ${
-              active
-                ? 'bg-gradient-to-t from-accent/[0.14] to-transparent text-ice'
-                : 'text-text-muted hover:bg-accent/[0.04] hover:text-accent'
-            }`}
-          >
-            <Icon size={15} strokeWidth={1.5} className={active ? 'text-accent' : ''} />
-            {/* Names for every tab only on wide screens; otherwise just the open one. */}
-            <span className={`tab-label ${active ? 'hidden hud:inline' : 'hidden full:inline'}`}>
-              {t.label}
-            </span>
-            <span
-              className={`absolute inset-x-3 bottom-0 h-[2px] transition-opacity duration-150 ${
-                active
-                  ? 'bg-accent opacity-100 shadow-glow-sm'
-                  : 'bg-accent opacity-0 group-hover:opacity-40'
-              }`}
-            />
-          </button>
-        );
-      })}
-    </nav>
+    <button
+      type="button"
+      aria-label={`Section: ${t.label}. Open the list of sections`}
+      title="All sections (Settings › Sections)"
+      onClick={() => useUiStore.getState().openSettings('sections')}
+      className="no-drag group flex h-full items-center gap-2 px-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ice transition-colors hover:bg-accent/[0.06]"
+    >
+      <Icon size={15} strokeWidth={1.5} className="text-accent" />
+      <span className="max-w-[160px] truncate">{t.label}</span>
+      <ChevronDown
+        size={13}
+        className="text-text-muted transition-colors group-hover:text-accent"
+      />
+    </button>
   );
 }

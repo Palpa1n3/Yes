@@ -1,4 +1,4 @@
-import { Maximize2, X } from 'lucide-react';
+import { LayoutGrid, Maximize2, X } from 'lucide-react';
 import { useCallback, useEffect } from 'react';
 import type { AssistantState } from '@shared/types';
 import { CoreDisplay } from '@renderer/components/core/CoreDisplay';
@@ -8,6 +8,7 @@ import { readAudioLevel, useAssistantStore } from '@renderer/stores/assistantSto
 import { describeCommand, useConversationStore } from '@renderer/stores/conversationStore';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { useSystemStore } from '@renderer/stores/systemStore';
+import { useUiStore } from '@renderer/stores/uiStore';
 import { ControlButton } from './WindowControls';
 import { RingingBanner } from './RingingBanner';
 import { TimerChip } from './TimerChip';
@@ -137,6 +138,15 @@ export function CompactView() {
             <TimerChip />
           </div>
           <div className="no-drag -mr-2 flex">
+            <ControlButton
+              label="All sections"
+              onClick={() => {
+                window.arc.window.setCompact(false);
+                useUiStore.getState().openSettings('sections');
+              }}
+            >
+              <LayoutGrid size={12} strokeWidth={1.5} />
+            </ControlButton>
             <ControlButton
               label="Expand to full HUD"
               onClick={() => window.arc.window.setCompact(false)}

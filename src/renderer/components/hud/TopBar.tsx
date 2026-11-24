@@ -11,7 +11,7 @@ import { SpendChip } from './SpendChip';
 import { OpenMicChip } from './OpenMicChip';
 import { UpdateChip } from './UpdateChip';
 import { TimerChip } from './TimerChip';
-import { TabBar } from './TabBar';
+import { SectionButton } from './TabBar';
 import { WindowControls } from './WindowControls';
 
 interface Props {
@@ -56,7 +56,7 @@ export function TopBar({ assistantName, maximized }: Props) {
         </span>
       </div>
 
-      <TabBar />
+      <SectionButton />
 
       <div className="ml-auto flex items-center gap-5 pl-4">
         <UpdateChip />

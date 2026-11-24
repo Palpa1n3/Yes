@@ -32,16 +32,16 @@ describe('TopBar', () => {
     expect(screen.getByLabelText('Restore')).toBeTruthy();
   });
 
-  it('switches tabs by click, arrow keys and Ctrl+number', () => {
+  it('shows the current section, opens the sections list, and keeps Ctrl+number', () => {
     render(<TopBar assistantName="ARC" maximized={false} />);
-    fireEvent.click(screen.getByRole('tab', { name: /network/i }));
-    expect(useUiStore.getState().tab).toBe('network');
-    fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' });
-    expect(useUiStore.getState().tab).toBe('storage');
+    fireEvent.click(screen.getByLabelText(/Section: Overview/));
+    expect(useUiStore.getState().settingsOpen).toBe(true);
+    expect(useUiStore.getState().settingsTab).toBe('sections');
     fireEvent.keyDown(window, { key: '2', ctrlKey: true });
     expect(useUiStore.getState().tab).toBe('chat');
     fireEvent.keyDown(window, { key: '4', ctrlKey: true });
     expect(useUiStore.getState().tab).toBe('system');
-    expect(screen.getByRole('tab', { name: /system/i }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByLabelText(/Section: System/)).toBeTruthy();
+    expect(screen.queryByRole('tablist')).toBeNull();
   });
 });

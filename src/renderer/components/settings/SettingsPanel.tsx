@@ -15,11 +15,13 @@ import {
   Wrench,
   X,
   type LucideIcon,
+  LayoutGrid,
 } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 import { useReducedMotion } from '@renderer/hooks/useReducedMotion';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import { SETTINGS_TABS, useUiStore, type SettingsTab } from '@renderer/stores/uiStore';
+import { SectionsTab } from './SectionsTab';
 import { SettingsSearch } from './controls';
 import {
   AdvancedTab,
@@ -43,6 +45,12 @@ interface Page {
 }
 
 const PAGES: Record<SettingsTab, Page> = {
+  sections: {
+    label: 'Sections',
+    blurb: 'Every part of Alton',
+    Icon: LayoutGrid,
+    View: SectionsTab,
+  },
   general: {
     label: 'General',
     blurb: 'You, weather, window and chats',
@@ -180,7 +188,7 @@ export function SettingsPanel() {
             aria-modal="true"
             aria-label="Settings"
             onKeyDown={onKeyDown}
-            className="hud-panel no-drag absolute inset-x-0 bottom-8 top-[72px] z-40 mx-auto flex w-[min(1100px,calc(100%-48px))] flex-col overflow-hidden !rounded-[14px] !bg-panel/97"
+            className="hud-panel no-drag absolute inset-x-0 bottom-8 top-[72px] z-40 mx-auto flex w-[min(1100px,calc(100%-24px))] flex-col overflow-hidden !rounded-[14px] !bg-panel/97"
             initial={{ opacity: 0, y: 14, scale: 0.985 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.985 }}
@@ -195,7 +203,7 @@ export function SettingsPanel() {
               <span className="hidden font-mono text-[10px] uppercase tracking-[0.14em] text-text-muted md:inline">
                 · {name} · changes save automatically
               </span>
-              <label className="relative ml-auto flex w-72 items-center">
+              <label className="relative ml-auto flex w-44 items-center md:w-72">
                 <Search
                   size={13}
                   className="pointer-events-none absolute left-2.5 text-text-muted"
@@ -237,7 +245,7 @@ export function SettingsPanel() {
                 role="tablist"
                 aria-orientation="vertical"
                 aria-label="Settings sections"
-                className="flex w-60 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line/60 bg-void/30 p-2"
+                className="flex w-48 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-line/60 bg-void/30 p-2 hud:w-60"
                 onKeyDown={(e) => {
                   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
                   e.preventDefault();
@@ -306,7 +314,7 @@ export function SettingsPanel() {
                 ref={bodyRef}
                 role="tabpanel"
                 aria-labelledby={`stab-${settingsTab}`}
-                className="min-h-0 flex-1 overflow-y-auto px-7 py-5"
+                className="min-h-0 flex-1 overflow-y-auto px-4 py-5 hud:px-7"
               >
                 <div className="mx-auto max-w-[720px]">
                   {searching ? (
