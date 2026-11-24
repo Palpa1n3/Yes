@@ -82,10 +82,10 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Open / to verify on the owner's PC
 
-- **Vortex sync not yet confirmed on the real Vortex** (it was open during all testing). After the owner
-  closes Vortex: check `%APPDATA%\ARC\vortex-sync.json` `lastRun`, then in Vortex that the saved mods and
-  older copies show as disabled and the conflict warnings are gone after Deploy. If `--set` values don't
-  stick, look at how this Vortex version (DuckDB + level_pivot over LevelDB) stores keys.
+- **Vortex sync confirmed working** (24 Nov, read back with `Vortex.exe --get`): old copies disabled,
+  conflict rules saved, automation on. Still to confirm: the automatic "Deploy Mods" press when Vortex
+  opens (`%APPDATA%\ARC\vortex-sync.json` `needsDeploy` should turn false). 179 mods had an old and a new
+  copy installed side by side (updates installed as new mods rather than replacing).
 - Cyberpunk state on 24 Nov: game 2.50; RadioExt switched off via RED4ext ignore list (2.92 downloaded,
   not deployed; Alton re-enables a plugin automatically when its DLL changes); NCPD Prevention's REDmod
   scripts break REDmod's compile; 102 mods saved/removed (13 frameworks were put back); TweakXL rejects
