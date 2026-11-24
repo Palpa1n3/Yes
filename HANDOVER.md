@@ -160,7 +160,7 @@ result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' �
   Helpers `src/shared/cpmods.ts` (tests/cpmods.test.ts).
   Launch check (0.61, Mods tab › Won't start? and cyberpunk_mods action 'diagnose'): `src/shared/cplaunch.ts`
   reads red4ext\logs
-ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …" = crashed
+  ed4ext-_.log (one per launch; last 60): a log ending on "Loading plugin from …" = crashed
   loading that plugin; "plugin(s) loaded"/"scc invoked"/"shut down" = got further. Reports the plugin recent
   launches keep stopping on, the date the game version changed, plugins whose DLLs predate it, redscript
   [ERROR] lines, and the Vortex mod that ships the plugin. Read only.
@@ -183,7 +183,7 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   Vortex's list minus SCRIPTS mods (Vortex re-adds them on its next deploy unless disabled there). Records in
   userData/cpfix.json with Undo (un-ignore / redeploy with V2077\modlist.txt). Watcher: every minute while
   Cyberpunk2077.exe isn't running, a new red4ext log or REDmodLog change triggers autofix + holo notification.
-  In-game crashes (0.65): `src/shared/cpcrash.ts` reads AppearanceRuntimePlugin's crash-*.txt (CrashProbe: fault
+  In-game crashes (0.65): `src/shared/cpcrash.ts` reads AppearanceRuntimePlugin's crash-_.txt (CrashProbe: fault
   address + modules on the stack), %LOCALAPPDATA%\CD Projekt Red\Cyberpunk 2077\CrashInfo.json (quest, district,
   seconds played) and TweakXL's latest log ([error] lines = records from mods made for an older version). A
   non-framework mod DLL on the stack of the last two crashes → crashCulprit → planFixes ignores its RED4ext
@@ -226,7 +226,7 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   3 levels → provides). Problems: wrong MC version, missing deps (hidden for Lunar profiles never launched — no
   dependencies folder), duplicates (own mods only), breaks, crash-report suspects, loader log lines. Modrinth
   (no key, UA "Alton-desktop-assistant/<ver>"): version_files/update by sha1 for updates; project/<slug>/version
-  (+search) for missing mods (modrinthProjectFor maps fabric-*-vN → fabric-api, libjf-* → libjf). Downloads only
+  (+search) for missing mods (modrinthProjectFor maps fabric-_-vN → fabric-api, libjf-_ → libjf). Downloads only
   cdn.modrinth.com, sha1-checked; updated jars' old copies in mods\_alton_backup; off = .jar.disabled; history +
   Undo in userData/mcfix.json; refuses while javaw.exe runs.
   Vortex sync (0.70; main/services/vortex-sync.ts + shared/vortex.ts; Mods › Vortex): only while Vortex.exe and the
