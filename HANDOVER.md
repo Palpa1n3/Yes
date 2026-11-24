@@ -198,6 +198,13 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   redeploy without them. Put back moves them back (and redeploys REDmod). Vortex may report the files as removed
   outside it. Switched-off plugins are switched back on when their DLL changes (FixRecord.stamp; old fixes: a
   DLL newer than the patch).
+  Recommendations (0.67, Mods › Recommended; tool recommend / install): `src/shared/cprecommend.ts` — Nexus v1
+  mods/trending, latest_updated, latest_added + user/tracked_mods (not installed, ≤15 looked up), minus installed,
+  hidden ("Not interested", userData/cprec.json), adult (unless "Include adult mods") and unavailable. Score: log
+  endorsements, tracked +4, trending +2.5, the user's top-5 Nexus categories (+2; categories cached per mod by
+  check() as NexusInfo.category), updated since the game patch (+1.5, else −2), age. Pictures fetched in main
+  (nexusmods.com only) → 320 px JPEG data URLs. Install = update() path (Premium nxm → Vortex; free → Files
+  page). Cached an hour.
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),

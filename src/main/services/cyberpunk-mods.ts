@@ -18,7 +18,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { app, safeStorage, shell } from 'electron';
+import { app, nativeImage, safeStorage, shell } from 'electron';
 import {
   findUpdates,
   isVortexInternal,
@@ -32,8 +32,15 @@ import {
   type ModUpdate,
   type NexusInfo,
 } from '@shared/cpmods';
-import type { LaunchCheck, LoadOrderReport, ModsStatus, OutdatedReport } from '@shared/ipc';
+import type {
+  LaunchCheck,
+  LoadOrderReport,
+  ModsStatus,
+  OutdatedReport,
+  RecReport,
+} from '@shared/ipc';
 import { diagnoseLaunch, redmodReport, type PluginFile } from '@shared/cplaunch';
+import { fromNexus, rankRecommendations, type RecCandidate } from '@shared/cprecommend';
 import {
   QUARANTINE,
   collectOutdated,
@@ -325,6 +332,7 @@ export class CyberpunkMods {
               name?: string;
               version?: string;
               updated_timestamp?: number;
+              category_id?: number;
               available?: boolean;
               status?: string;
             };
@@ -339,6 +347,7 @@ export class CyberpunkMods {
                 j.available !== false &&
                 (j.status ?? 'published') === 'published',
               checkedAt: Date.now(),
+              category: typeof j.category_id === 'number' ? j.category_id : null,
             });
           } catch {
             /* skip this one; it's asked again next time */
@@ -1358,6 +1367,156 @@ export class CyberpunkMods {
     } catch {
       return [];
     }
+  }
+
+  /* ── Recommendations (Nexus trending / updated / new, and the user's tracked mods) ── */
+  private recFile = join(app.getPath('userData'), 'cprec.json');
+  private recPrefs(): { hidden: number[]; showAdult: boolean } {
+    try {
+      const j = JSON.parse(readFileSync(this.recFile, 'utf8')) as {
+        hidden?: number[];
+        showAdult?: boolean;
+      };
+      return { hidden: j.hidden ?? [], showAdult: j.showAdult === true };
+    } catch {
+      return { hidden: [], showAdult: false };
+    }
+  }
+  private recCache: { at: number; report: RecReport } | null = null;
+  private thumbs = new Map<string, string>();
+  private categories: Map<number, string> | null = null;
+
+  private async thumb(url: string): Promise<string> {
+    if (!/^https:\/\/[\w.-]*nexusmods\.com\//i.test(url)) return '';
+    const hit = this.thumbs.get(url);
+    if (hit !== undefined) return hit;
+    let out = '';
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (r.ok) {
+        const img = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer()));
+        if (!img.isEmpty())
+          out = `data:image/jpeg;base64,${img.resize({ width: 320 }).toJPEG(75).toString('base64')}`;
+      }
+    } catch {
+      /* no picture */
+    }
+    this.thumbs.set(url, out);
+    return out;
+  }
+
+  /** Recommended mods for this user (cached for an hour; `fresh` asks Nexus again). */
+  async recommend(fresh = false): Promise<RecReport> {
+    if (!fresh && this.recCache && Date.now() - this.recCache.at < 3_600_000)
+      return this.recCache.report;
+    if (!this.key.has())
+      return {
+        items: [],
+        error: 'Add your Nexus Mods key first (above) to get recommendations.',
+        showAdult: false,
+      };
+    const prefs = this.recPrefs();
+    const cands: RecCandidate[] = [];
+    try {
+      for (const [path, src] of [
+        ['trending', 'trending'],
+        ['latest_updated', 'updated'],
+        ['latest_added', 'added'],
+      ] as const) {
+        const r = await this.nexus(`/games/${GAME}/mods/${path}.json`);
+        if (r.status === 401) throw new Error('Nexus Mods refused your API key: add it again.');
+        if (Array.isArray(r.json))
+          for (const j of r.json) {
+            const c = fromNexus(j, src);
+            if (c) cands.push(c);
+          }
+      }
+      // Mods the user tracks on Nexus but hasn't installed.
+      const installed = new Set(
+        this.list()
+          .map((m) => m.modId)
+          .filter((x): x is number => x !== null),
+      );
+      const t = await this.nexus('/user/tracked_mods.json');
+      if (Array.isArray(t.json)) {
+        const ids = (t.json as Array<{ mod_id?: number; domain_name?: string }>)
+          .filter(
+            (x) =>
+              x.domain_name === GAME && typeof x.mod_id === 'number' && !installed.has(x.mod_id),
+          )
+          .map((x) => x.mod_id as number)
+          .slice(0, 15);
+        for (const id of ids) {
+          const r = await this.nexus(`/games/${GAME}/mods/${id}.json`);
+          const c = r.status === 200 ? fromNexus(r.json, 'tracked') : null;
+          if (c) cands.push(c);
+        }
+      }
+      if (!this.categories) {
+        const g = await this.nexus(`/games/${GAME}.json`);
+        const cats = ((g.json as { categories?: unknown[] } | null)?.categories ?? []) as Array<{
+          category_id?: number;
+          name?: string;
+        }>;
+        this.categories = new Map(
+          cats
+            .filter((c) => typeof c.category_id === 'number' && typeof c.name === 'string')
+            .map((c) => [c.category_id as number, c.name as string]),
+        );
+      }
+    } catch (e) {
+      return {
+        items: [],
+        error: e instanceof Error ? e.message : 'Couldn’t reach Nexus Mods.',
+        showAdult: prefs.showAdult,
+      };
+    }
+    const mine = new Map<number, number>();
+    for (const m of this.list()) {
+      const c = m.modId !== null ? this.cache.get(m.modId)?.category : null;
+      if (typeof c === 'number') mine.set(c, (mine.get(c) ?? 0) + 1);
+    }
+    const d = await this.diagnose();
+    const ranked = rankRecommendations(cands, {
+      installed: new Set(
+        this.list()
+          .map((m) => m.modId)
+          .filter((x): x is number => x !== null),
+      ),
+      hidden: new Set(prefs.hidden),
+      myCategories: mine,
+      categoryNames: this.categories ?? new Map(),
+      patchSeen: d.patchSeen,
+      gameVersion: d.gameVersion,
+      showAdult: prefs.showAdult,
+    }).slice(0, 24);
+    const items = [];
+    for (const r of ranked) items.push({ ...r, thumb: await this.thumb(r.picture) });
+    const report: RecReport = { items, error: '', showAdult: prefs.showAdult };
+    this.recCache = { at: Date.now(), report };
+    return report;
+  }
+
+  /** Not interested: never recommend this mod again. */
+  hideRecommendation(modId: number): void {
+    const p = this.recPrefs();
+    if (!p.hidden.includes(modId)) p.hidden.push(modId);
+    writeFileSync(this.recFile, JSON.stringify(p));
+    if (this.recCache)
+      this.recCache.report = {
+        ...this.recCache.report,
+        items: this.recCache.report.items.filter((i) => i.modId !== modId),
+      };
+  }
+
+  setShowAdult(on: boolean): void {
+    writeFileSync(this.recFile, JSON.stringify({ ...this.recPrefs(), showAdult: on }));
+    this.recCache = null;
+  }
+
+  /** Install a recommended mod: Premium → Vortex downloads it; free → its Files page. */
+  install(modId: number): Promise<{ ok: boolean; message: string }> {
+    return this.update(modId);
   }
 
   find(q: string): CpMod[] {

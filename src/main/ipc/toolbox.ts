@@ -107,6 +107,18 @@ export function registerToolbox(
   handle(IPC.mods.resetOrder, () => mods.resetOrder());
   handle(IPC.mods.fixes, () => mods.fixes());
   handle(IPC.mods.outdated, () => mods.findOutdated());
+  handle(IPC.mods.recommend, (fresh) => mods.recommend(fresh === true));
+  handle(IPC.mods.hideRec, (id) => {
+    if (typeof id === 'number') mods.hideRecommendation(id);
+    return true;
+  });
+  handle(IPC.mods.install, (id) =>
+    typeof id === 'number' ? mods.install(id) : { ok: false, message: 'Which mod?' },
+  );
+  handle(IPC.mods.setShowAdult, (on) => {
+    mods.setShowAdult(on === true);
+    return true;
+  });
   const folderList = (f: unknown): string[] =>
     Array.isArray(f) ? f.filter((x): x is string => typeof x === 'string').slice(0, 500) : [];
   handle(IPC.mods.remove, (f) => mods.removeMods(folderList(f)));
@@ -332,6 +344,35 @@ export function registerToolbox(
         const found = name ? mods.find(name) : [];
         return found[0] ?? null;
       };
+      if (action === 'recommend') {
+        const r = await mods.recommend();
+        if (r.error) return { error: r.error };
+        return {
+          recommendations: r.items.slice(0, 12).map((i) => ({
+            nexusId: i.modId,
+            name: i.name,
+            what: i.summary,
+            category: i.category,
+            endorsements: i.endorsements,
+            why: i.reasons,
+          })),
+          note: 'Pick a few that suit what the user likes and say why in a sentence each. To install one, use action install with its name (the user approves).',
+        };
+      }
+      if (action === 'install') {
+        const r = await mods.recommend();
+        const q = name.toLowerCase();
+        const hit =
+          r.items.find((i) => i.name.toLowerCase() === q) ??
+          r.items.find((i) => i.name.toLowerCase().includes(q));
+        if (!hit) return { error: `“${name}” isn’t in the recommendations.` };
+        const ok = await ctx.askApproval?.(
+          `Install ${hit.name}?`,
+          'Vortex downloads and installs it (Premium), or its Nexus Files page opens.',
+        );
+        if (!ok) return { result: 'Not installed: you said no.' };
+        return { result: (await mods.install(hit.modId)).message };
+      }
       if (action === 'outdated') {
         const r = await mods.findOutdated();
         return {

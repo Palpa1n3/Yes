@@ -80,6 +80,10 @@ export const IPC = {
     outdated: 'mods:outdated',
     remove: 'mods:remove',
     restore: 'mods:restore',
+    recommend: 'mods:recommend',
+    hideRec: 'mods:hide-rec',
+    install: 'mods:install',
+    setShowAdult: 'mods:show-adult',
   },
   smarthome: {
     status: 'smarthome:status',
@@ -354,6 +358,10 @@ export interface InvokeMap {
   [IPC.mods.outdated]: { args: []; result: OutdatedReport };
   [IPC.mods.remove]: { args: [folders: string[]]; result: { ok: boolean; message: string } };
   [IPC.mods.restore]: { args: [folders: string[]]; result: { ok: boolean; message: string } };
+  [IPC.mods.recommend]: { args: [fresh?: boolean]; result: RecReport };
+  [IPC.mods.hideRec]: { args: [modId: number]; result: boolean };
+  [IPC.mods.install]: { args: [modId: number]; result: { ok: boolean; message: string } };
+  [IPC.mods.setShowAdult]: { args: [on: boolean]; result: boolean };
   [IPC.mods.list]: { args: []; result: import('./cpmods').CpMod[] };
   [IPC.mods.setKey]: { args: [key: string]; result: { ok: boolean; message: string } };
   [IPC.mods.clearKey]: { args: []; result: boolean };
@@ -618,6 +626,13 @@ export interface ArcAPI {
     /** Move these Vortex mods' files out of the game folder (kept, so they can be put back). */
     remove(folders: string[]): Promise<{ ok: boolean; message: string }>;
     restore(folders: string[]): Promise<{ ok: boolean; message: string }>;
+    /** Recommended mods (Nexus trending / updated / new and your tracked mods, not installed). */
+    recommend(fresh?: boolean): Promise<RecReport>;
+    /** Not interested: never recommend it again. */
+    hideRec(modId: number): Promise<boolean>;
+    /** Premium: Vortex downloads and installs it; free: opens its Files page. */
+    install(modId: number): Promise<{ ok: boolean; message: string }>;
+    setShowAdult(on: boolean): Promise<boolean>;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */
@@ -980,4 +995,11 @@ export interface OutdatedReport {
   removed: Array<{ folder: string; name: string; files: number; at: number }>;
   gameVersion: string;
   error: string;
+}
+
+/** Mods tab › Recommended. */
+export interface RecReport {
+  items: Array<import('./cprecommend').Recommendation & { thumb: string }>;
+  error: string;
+  showAdult: boolean;
 }

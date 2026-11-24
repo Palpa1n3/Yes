@@ -201,3 +201,48 @@ describe('Mods tab outdated mods', () => {
     expect(arc.mods.restore).toHaveBeenCalledWith(['Old-3']);
   });
 });
+
+describe('Mods tab recommendations', () => {
+  it('shows recommendations with reasons, installs one and hides one', async () => {
+    vi.mocked(arc.mods.status).mockResolvedValue(status({}));
+    const rec = (id: number, name: string, reasons: string[]) => ({
+      modId: id,
+      name,
+      summary: 'Makes the city feel alive.',
+      author: 'Someone',
+      endorsements: 20000,
+      updatedAt: 0,
+      categoryId: 7,
+      adult: false,
+      available: true,
+      version: '1.2',
+      picture: '',
+      sources: ['trending' as const],
+      category: 'Gameplay',
+      reasons,
+      score: 5,
+      thumb: '',
+    });
+    vi.mocked(arc.mods.recommend).mockResolvedValue({
+      items: [
+        rec(1, 'Crowd Life', ['Trending now', 'You have 40 Gameplay mods']),
+        rec(2, 'Better Cars', ['Updated for 2.50']),
+      ],
+      error: '',
+      showAdult: false,
+    });
+    vi.mocked(arc.mods.install).mockResolvedValue({
+      ok: true,
+      message: 'Sent Crowd Life to Vortex.',
+    });
+    render(<ModsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /Recommend mods/ }));
+    expect(await screen.findByText('Crowd Life')).toBeTruthy();
+    expect(screen.getByText('Trending now · You have 40 Gameplay mods')).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Install' })[0]!);
+    expect(await screen.findByText('Sent Crowd Life to Vortex.')).toBeTruthy();
+    expect(arc.mods.install).toHaveBeenCalledWith(1);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Not interested' })[1]!);
+    expect(arc.mods.hideRec).toHaveBeenCalledWith(2);
+  });
+});

@@ -180,6 +180,10 @@ export function installArcMock(): ArcAPI {
       outdated: vi.fn(),
       remove: vi.fn(async () => ({ ok: true, message: '' })),
       restore: vi.fn(async () => ({ ok: true, message: '' })),
+      recommend: vi.fn(),
+      hideRec: vi.fn(async () => true),
+      install: vi.fn(async () => ({ ok: true, message: '' })),
+      setShowAdult: vi.fn(async () => true),
     },
     smarthome: {
       status: vi.fn(async () => false),

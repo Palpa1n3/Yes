@@ -25,6 +25,8 @@ export interface NexusInfo {
   available: boolean;
   /** When Alton last asked Nexus (ms). */
   checkedAt: number;
+  /** Nexus category id (for recommendations). */
+  category?: number | null;
 }
 
 export interface ModUpdate {

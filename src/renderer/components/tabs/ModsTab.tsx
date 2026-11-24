@@ -7,6 +7,7 @@ import type {
   LoadOrderReport,
   ModsStatus,
   OutdatedReport,
+  RecReport,
 } from '@shared/ipc';
 import { Chip } from '@renderer/components/panels/Chip';
 import { Panel } from '@renderer/components/panels/Panel';
@@ -378,6 +379,117 @@ function OutdatedPanel() {
           )}
         </div>
       )}
+    </Panel>
+  );
+}
+
+/** Recommended: Nexus trending / updated / new and your tracked mods, ranked for you. */
+function RecommendPanel() {
+  const [r, setR] = useState<RecReport | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const load = (fresh = false): void => {
+    setBusy(true);
+    void window.arc.mods
+      .recommend(fresh)
+      .then(setR)
+      .finally(() => setBusy(false));
+  };
+  return (
+    <Panel
+      code="MOD.08"
+      title="Recommended"
+      chip={r?.items.length ? <Chip>{r.items.length}</Chip> : undefined}
+      className="min-h-0 flex-1"
+      bodyClassName="flex flex-col gap-2 overflow-y-auto"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="hud-button" disabled={busy} onClick={() => load(!!r)}>
+          <RefreshCw size={13} className={busy ? 'animate-spin' : ''} />
+          {busy ? 'Asking Nexus…' : r ? 'Refresh' : 'Recommend mods'}
+        </button>
+        {r && (
+          <label className="flex items-center gap-1.5 text-[12px] text-text-muted">
+            <input
+              type="checkbox"
+              checked={r.showAdult}
+              onChange={(e) =>
+                void window.arc.mods.setShowAdult(e.target.checked).then(() => load(true))
+              }
+            />
+            Include adult mods
+          </label>
+        )}
+      </div>
+      {!r && (
+        <p className="text-[12px] text-text-muted">
+          Trending, freshly updated and new mods on Nexus, plus ones you track, that you don’t have
+          yet. Ranked by what you mod most and whether they’re updated for your game version.
+        </p>
+      )}
+      {msg && <p className="text-[12.5px] text-accent">{msg}</p>}
+      {r?.error && <p className="text-[12.5px] text-alert">{r.error}</p>}
+      {r && !r.error && !r.items.length && (
+        <p className="text-[12.5px] text-text-muted">Nothing new to recommend right now.</p>
+      )}
+      <ul className="grid grid-cols-1 gap-2 xl:grid-cols-2">
+        {r?.items.map((m) => (
+          <li key={m.modId} className="flex gap-2 border border-line/40 p-1.5 text-[12px]">
+            {m.thumb ? (
+              <img src={m.thumb} alt="" className="h-16 w-24 shrink-0 object-cover" />
+            ) : (
+              <span className="h-16 w-24 shrink-0 bg-panel-raised" />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium text-text-primary" title={m.name}>
+                {m.name}
+              </span>
+              <span className="micro-label block normal-case">
+                {[m.category, m.author && `by ${m.author}`, m.version && `v${m.version}`]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+              <span className="line-clamp-2 block text-text-muted">{m.summary}</span>
+              {!!m.reasons.length && (
+                <span className="block text-[11px] text-accent">{m.reasons.join(' · ')}</span>
+              )}
+              <span className="mt-1 flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  className="hud-button !px-1.5 text-[11px]"
+                  onClick={() =>
+                    void window.arc.mods.install(m.modId).then((x) => setMsg(x.message))
+                  }
+                >
+                  Install
+                </button>
+                <button
+                  type="button"
+                  className="hud-button !px-1.5 text-[11px]"
+                  onClick={() => void window.arc.mods.open('page', m.modId).then(setMsg)}
+                >
+                  Nexus page
+                </button>
+                <button
+                  type="button"
+                  className="hud-button !px-1.5 text-[11px]"
+                  onClick={() =>
+                    void window.arc.mods
+                      .hideRec(m.modId)
+                      .then(() =>
+                        setR((x) =>
+                          x ? { ...x, items: x.items.filter((i) => i.modId !== m.modId) } : x,
+                        ),
+                      )
+                  }
+                >
+                  Not interested
+                </button>
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
     </Panel>
   );
 }
@@ -822,6 +934,7 @@ export function ModsTab() {
               </ul>
             )}
           </Panel>
+          <RecommendPanel />
           <LoadOrderPanel />
         </>
       }

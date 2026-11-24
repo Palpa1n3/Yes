@@ -133,6 +133,10 @@ const api: ArcAPI = {
     outdated: () => invoke(IPC.mods.outdated),
     remove: (f) => invoke(IPC.mods.remove, f),
     restore: (f) => invoke(IPC.mods.restore, f),
+    recommend: (fresh) => invoke(IPC.mods.recommend, fresh),
+    hideRec: (id) => invoke(IPC.mods.hideRec, id),
+    install: (id) => invoke(IPC.mods.install, id),
+    setShowAdult: (on) => invoke(IPC.mods.setShowAdult, on),
   },
   smarthome: {
     status: () => invoke(IPC.smarthome.status),
