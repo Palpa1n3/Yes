@@ -69,6 +69,23 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
   },
   SMART_HOME_TOOL,
   {
+    name: 'minecraft_mods',
+    description:
+      "The user's Minecraft mods (Lunar Client profiles and .minecraft, Fabric). Actions: scan (problems: mods for another Minecraft version, missing required mods, the same mod twice, mods that break each other, what the last crash report and the loader blame), check_updates (Modrinth updates for the profile's Minecraft version), fix (fix what's safe after the user approves: duplicates off, missing mods added from Modrinth, wrong-version mods updated or switched off; undo in the Minecraft tab), update_all (the user approves), profiles. `profile` = part of a profile's name; default = the one selected in Lunar.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['scan', 'check_updates', 'fix', 'update_all', 'profiles'],
+        },
+        profile: { type: 'string' },
+      },
+      required: ['action'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'cyberpunk_mods',
     description:
       "The user's Cyberpunk 2077 mods (installed with Vortex) and their updates from Nexus Mods. Actions: recommend (mods to try: Nexus trending, newly updated and new mods plus ones the user tracks, not already installed, ranked by what they mod most; suggest a few with a reason each), install (`name` from the recommendations; the user approves; Vortex installs it), outdated (mods with evidence they don't work on this game version: old RED4ext plugins, broken REDmod scripts, script compile errors, tweaks TweakXL rejects), remove_outdated (remove them all after the user approves; reversible in the Mods tab). diagnose also reads crash reports when the game crashes while playing (where it crashed, mods on the stack, quest and district, TweakXL's rejected changes). fix (fix the last launch's problem: switch off a crashing RED4ext plugin, send its update to Vortex, or deploy REDmod again without broken script mods; the user approves; undo in the Mods tab), load_order (archive clashes — the first archive loaded wins — alternative versions installed together, suggested moves for patches, and whether the last REDmod deploy failed and why), apply_load_order (save the suggested order; the user approves), diagnose (why the game won't start or crashes on launch: reads its RED4ext and redscript logs, names the plugin it stops on and the Vortex mod behind it, and plugins older than the game's patch; explain the fix in plain words), summary (what's installed, what has updates since the last check), check (ask Nexus now; the first check takes about a minute), find (installed mods matching `name`, with installed and latest versions), open (`what`: folder = the mod's files, page = its Nexus page, game = the game folder, vortex = Vortex's mods folder), update (`name` = a mod or \"all\"; the user approves, then Vortex downloads and installs it on Premium, or its Nexus Files page opens). Alton never unpacks or runs mod files itself.",

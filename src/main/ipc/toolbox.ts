@@ -13,6 +13,7 @@ import type { MainContext } from '../context';
 import type { NotesStore } from '../services/notes-store';
 import { SecretStore } from '../services/secret-store';
 import { cyberpunkMods } from '../services/cyberpunk-mods';
+import { minecraftMods } from '../services/minecraft-mods';
 import { notifyUser } from '../holo';
 import { ps } from '../services/system-actions';
 import {
@@ -139,10 +140,38 @@ export function registerToolbox(
     return true;
   });
   handle(IPC.mods.open, (what, id) =>
-    ['folder', 'page', 'game', 'vortex'].includes(String(what))
+    ['folder', 'page', 'game', 'vortex', 'removed'].includes(String(what))
       ? mods.open(what, typeof id === 'number' ? id : undefined)
       : 'Open what?',
   );
+
+  // Minecraft tab: Lunar Client / .minecraft mods (Fabric) and Modrinth updates.
+  const mc = minecraftMods();
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  handle(IPC.minecraft.profiles, () =>
+    mc.profiles().map((p) => ({
+      id: p.id,
+      name: p.name,
+      launcher: p.launcher,
+      gameVersion: p.gameVersion,
+      loader: p.loader,
+      modsDir: p.modsDir,
+      mods: p.mods,
+      current: p.current,
+    })),
+  );
+  handle(IPC.minecraft.scan, (p) => mc.scan(str(p)));
+  handle(IPC.minecraft.checkUpdates, (p) => mc.checkUpdates(str(p)));
+  handle(IPC.minecraft.setEnabled, (p, f, on) => mc.setEnabled(str(p), str(f), on === true));
+  handle(IPC.minecraft.update, (p, f) => mc.update(str(p), str(f)));
+  handle(IPC.minecraft.updateAll, (p) => mc.updateAll(str(p)));
+  handle(IPC.minecraft.addMissing, (p, id) => mc.addMissing(str(p), str(id)));
+  handle(IPC.minecraft.fixAll, async (p) => {
+    const r = await mc.fixAll(str(p));
+    return { ok: r.ok, message: r.message };
+  });
+  handle(IPC.minecraft.history, () => mc.history().reverse().slice(0, 50));
+  handle(IPC.minecraft.undo, (id) => mc.undo(str(id)));
 
   // Settings › Connections › Smart home: SmartThings personal access token.
   handle(IPC.smarthome.status, () => smartToken.has());
@@ -525,6 +554,51 @@ export function registerToolbox(
         updates: s.updates
           .slice(0, 30)
           .map((u) => `${u.name}: ${u.installed || '?'} → ${u.latest || 'newer'}`),
+      };
+    },
+    minecraft_mods: async (raw) => {
+      const o = input(raw);
+      const action = String(o.action ?? 'scan');
+      const all = mc.profiles();
+      const want = typeof o.profile === 'string' ? o.profile.toLowerCase() : '';
+      const p =
+        all.find((x) => want && x.name.toLowerCase().includes(want)) ??
+        all.find((x) => x.current) ??
+        all[0];
+      if (!p)
+        return {
+          error: 'No Minecraft profiles with mods were found (Lunar Client or .minecraft).',
+        };
+      if (action === 'profiles')
+        return {
+          profiles: all.map(
+            (x) =>
+              `${x.name}: ${x.mods} mods, Minecraft ${x.gameVersion || '?'}${x.current ? ' (selected in Lunar)' : ''}`,
+          ),
+        };
+      if (action === 'fix') {
+        const ok = await ctx.askApproval?.(
+          `Fix the mods in ${p.name}?`,
+          'Alton switches off duplicate copies, adds missing required mods from Modrinth and updates (or switches off) mods made for another Minecraft version. Every change can be undone in the Minecraft tab.',
+        );
+        if (!ok) return { result: 'Not changed: you said no.' };
+        return { result: (await mc.fixAll(p.id)).message };
+      }
+      if (action === 'update_all') {
+        const ok = await ctx.askApproval?.(
+          `Update the mods in ${p.name} from Modrinth?`,
+          'Old versions are kept as backups.',
+        );
+        if (!ok) return { result: 'Not updated: you said no.' };
+        return { result: (await mc.updateAll(p.id)).message };
+      }
+      const r = action === 'check_updates' ? await mc.checkUpdates(p.id) : await mc.scan(p.id);
+      return {
+        profile: `${p.name} (Minecraft ${r.profile?.gameVersion || '?'}, ${r.mods.filter((m) => !m.library).length} mods)`,
+        problems: r.problems.slice(0, 30).map((x) => x.text),
+        lastCrash: r.crash ? { description: r.crash.description, blames: r.crash.suspects } : null,
+        updates: r.updates.map((u) => `${u.name} ${u.from} → ${u.to}`),
+        note: 'To fix, use action fix (the user approves). Changes can be undone in the Minecraft tab.',
       };
     },
     smart_home: async (raw) => {

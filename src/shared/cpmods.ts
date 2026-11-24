@@ -159,7 +159,8 @@ export const nexusPage = (modId: number, files = false): string =>
   `https://www.nexusmods.com/cyberpunk2077/mods/${modId}${files ? '?tab=files' : ''}`;
 
 /* ── Update progress ── */
-export type UpdateState = 'queued' | 'sending' | 'in-vortex' | 'opened' | 'installed' | 'failed';
+export type UpdateState =
+  'queued' | 'sending' | 'downloading' | 'in-vortex' | 'opened' | 'installed' | 'failed';
 
 export interface UpdateJob {
   modId: number;
@@ -168,6 +169,8 @@ export interface UpdateJob {
   /** When it last changed (ms). */
   at: number;
   error?: string;
+  /** Download progress, 0–100 (while downloading). */
+  progress?: number;
   /** Vortex's folders for this mod before the update, to spot the new one. */
   before: string[];
 }
@@ -192,6 +195,7 @@ export function jobCounts(jobs: UpdateJob[]): Record<UpdateState, number> {
   const c: Record<UpdateState, number> = {
     queued: 0,
     sending: 0,
+    downloading: 0,
     'in-vortex': 0,
     opened: 0,
     installed: 0,

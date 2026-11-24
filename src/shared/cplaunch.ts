@@ -87,16 +87,27 @@ export function diagnoseLaunch(
   logs: LaunchLog[],
   plugins: PluginFile[],
   redscriptLog = '',
+  /** The update date remembered from an earlier check (logs rotate away). */
+  knownPatch: { version: string; at: number } | null = null,
 ): LaunchReport {
   const runs = [...logs].sort((a, b) => a.name.localeCompare(b.name)).map(readRun);
   const latest = runs[runs.length - 1];
   const gameVersion = latest?.gameVersion ?? '';
-  // When the current version first appears after a different one.
+  // When the current version first appears after a different one. Only known when an older
+  // version's log is still there: RED4ext keeps just a few logs, and guessing "the oldest log we
+  // have" would make every plugin look older than the update.
   let patchSeen = 0;
+  let sawOlder = false;
+  let first = 0;
   for (const r of [...runs].reverse()) {
-    if (r.gameVersion !== gameVersion) break;
-    patchSeen = r.at;
+    if (r.gameVersion !== gameVersion) {
+      sawOlder = true;
+      break;
+    }
+    first = r.at;
   }
+  if (sawOlder) patchSeen = first;
+  if (!patchSeen && knownPatch && knownPatch.version === gameVersion) patchSeen = knownPatch.at;
   const good = (r: LaunchRun): boolean =>
     r.outcome !== 'stopped-loading' && r.outcome !== 'unknown';
   const lastGood = [...runs].reverse().find(good)?.at ?? 0;

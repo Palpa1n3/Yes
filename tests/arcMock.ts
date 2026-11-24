@@ -185,6 +185,18 @@ export function installArcMock(): ArcAPI {
       install: vi.fn(async () => ({ ok: true, message: '' })),
       setShowAdult: vi.fn(async () => true),
     },
+    minecraft: {
+      profiles: vi.fn(async () => []),
+      scan: vi.fn(),
+      checkUpdates: vi.fn(),
+      setEnabled: vi.fn(async () => ({ ok: true, message: '' })),
+      update: vi.fn(async () => ({ ok: true, message: '' })),
+      updateAll: vi.fn(async () => ({ ok: true, message: '' })),
+      addMissing: vi.fn(async () => ({ ok: true, message: '' })),
+      fixAll: vi.fn(async () => ({ ok: true, message: '' })),
+      history: vi.fn(async () => []),
+      undo: vi.fn(async () => ({ ok: true, message: '' })),
+    },
     smarthome: {
       status: vi.fn(async () => false),
       set: vi.fn(async () => ({ ok: true, message: 'Connected' })),

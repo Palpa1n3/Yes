@@ -81,6 +81,21 @@ export interface Evidence {
 }
 
 /** Turn the evidence into a list of Vortex mods with reasons (one entry per mod). */
+/** Frameworks and libraries other mods are built on: never "outdated" (removing one breaks
+ *  dozens of mods, and their own errors usually mean something else is missing). */
+export const FRAMEWORK_MOD =
+  /codeware|tweak ?xl|archive ?xl|red4ext|cyber ?engine ?tweaks|\bcet\b|redscript|mod[ _]?settings|input[ _]?loader|audioware|native ?settings|unified mod settings|red ?file ?system|red ?http ?client|red ?data|red ?functions|red ?logger|red ?require|red ?rcf ?input|red ?img ?retriever|red ?windows|config framework|perk addition framework|appearance runtime plugin|address library/i;
+
+/** Script errors that are a knock-on effect (a missing framework), not a broken mod. */
+export function scriptErrorsCascade(log: string, files: string[], owners: Set<string>): boolean {
+  return /UNRESOLVED_IMPORT|UNRESOLVED_TYPE|Codeware|depends on/i.test(log) && files.length > 3
+    ? true
+    : owners.size > 8;
+}
+
+/** At most this many mods are removed in one go (a bigger list means the evidence is wrong). */
+export const MAX_REMOVE = 12;
+
 export function collectOutdated(
   ev: Evidence,
   index: Map<string, string>,
@@ -90,6 +105,8 @@ export function collectOutdated(
   const byFolder = new Map<string, OutdatedMod>();
   const add = (folder: string | null, reason: string): void => {
     if (!folder) return;
+    const name = mods.find((x) => x.folder === folder)?.name ?? folder;
+    if (FRAMEWORK_MOD.test(name)) return;
     const m = mods.find((x) => x.folder === folder);
     const cur =
       byFolder.get(folder) ??

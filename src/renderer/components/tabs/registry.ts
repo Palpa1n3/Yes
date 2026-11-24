@@ -9,6 +9,7 @@ import {
   Network,
   Workflow,
   Puzzle,
+  Pickaxe,
   type LucideIcon,
 } from 'lucide-react';
 import type { TabId } from '@renderer/stores/uiStore';
@@ -31,4 +32,5 @@ export const TABS: TabDef[] = [
   { id: 'storage', label: 'Storage', code: 'SEC.05', icon: HardDrive },
   { id: 'routines', label: 'Routines', code: 'SEC.06', icon: Workflow },
   { id: 'mods', label: 'Mods', code: 'SEC.10', icon: Puzzle },
+  { id: 'minecraft', label: 'Minecraft', code: 'SEC.11', icon: Pickaxe },
 ];

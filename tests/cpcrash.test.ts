@@ -90,3 +90,27 @@ describe('Cyberpunk crash reports', () => {
     expect(s.verdict).toMatch(/TweakXL rejected 1 change/);
   });
 });
+
+describe('crashes without a crash report', () => {
+  it('uses the game’s own crash record and blames nobody', () => {
+    const old = parseCrashProbe(
+      'a',
+      probe('2026-11-24 00:54:57', 'Cyberpunk2077.exe+0x1', ['RadioExt.dll+0x1']),
+    );
+    const old2 = parseCrashProbe(
+      'b',
+      probe('2026-11-24 00:50:00', 'Cyberpunk2077.exe+0x1', ['RadioExt.dll+0x2']),
+    );
+    const s = summarizeCrashes([old!, old2!], plugins, {
+      quest: 'sq030_judy_romance',
+      district: 'RanchoCoronado',
+      session: 2183.58,
+      at: Date.parse('2026-11-24T02:07:30Z'),
+    });
+    expect(s.culprit).toBeNull();
+    expect(s.frameworks).toEqual([]);
+    expect(s.verdict).toMatch(
+      /^The game crashed after 36 minutes of play in RanchoCoronado\. No crash report says where/,
+    );
+  });
+});

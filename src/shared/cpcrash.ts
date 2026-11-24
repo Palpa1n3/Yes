@@ -106,8 +106,11 @@ export function summarizeCrashes(
   const last = recent[recent.length - 1];
   const prev = recent[recent.length - 2];
   const stem = (d: string): string => d.replace(/\.(dll|asi)$/i, '').toLowerCase();
+  // The game's own crash record is newer than any crash report: a crash the reporter missed
+  // (then older reports say nothing about it, so nobody is blamed).
+  const unreported = !!context?.at && context.at > (last?.at ?? 0) + 60_000;
   let culprit: CrashSummary['culprit'] = null;
-  if (last) {
+  if (last && !unreported) {
     for (const d of last.mods) {
       if (isFramework(d)) continue;
       const times = recent.filter((c) => c.mods.includes(d)).length;
@@ -118,14 +121,20 @@ export function summarizeCrashes(
       }
     }
   }
-  const frameworks = last ? last.mods.filter(isFramework) : [];
+  const frameworks = last && !unreported ? last.mods.filter(isFramework) : [];
   const errs = tweakLog.split(/\r?\n/).filter((l) => /\]\s*\[error\]/i.test(l));
   const tweakErrors = {
     count: errs.length,
     examples: errs.slice(0, 5).map((l) => l.replace(/^.*\[error\]\s*/i, '')),
   };
   const parts: string[] = [];
-  if (last) {
+  if (unreported && context) {
+    const mins = Math.max(1, Math.round(context.session / 60));
+    parts.push(
+      `The game crashed after ${mins} minute${mins === 1 ? '' : 's'} of play${context.district ? ` in ${context.district}` : ''}. No crash report says where, so no single mod can be blamed; the likeliest causes are mods made for an older game version (Outdated mods) or a missing framework.`,
+    );
+  }
+  if (last && !unreported) {
     const when = context?.session
       ? ` after ${Math.round(context.session / 60) || 1} minute${Math.round(context.session / 60) === 1 ? '' : 's'} of play${context.district ? ` in ${context.district}` : ''}`
       : '';

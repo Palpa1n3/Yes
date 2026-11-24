@@ -38,6 +38,7 @@ describe('Mods tab update progress', () => {
             latest: '2.3',
             updatedAt: 0,
             state: 'in-vortex',
+            progress: null,
             error: '',
           },
           {
@@ -47,6 +48,7 @@ describe('Mods tab update progress', () => {
             latest: '3.3',
             updatedAt: 0,
             state: 'queued',
+            progress: null,
             error: '',
           },
           {
@@ -56,6 +58,7 @@ describe('Mods tab update progress', () => {
             latest: '2',
             updatedAt: 0,
             state: 'failed',
+            progress: null,
             error: 'rate limit',
           },
         ],

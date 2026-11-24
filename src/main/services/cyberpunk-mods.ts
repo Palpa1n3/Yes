@@ -6,6 +6,7 @@
 import { execFile, spawn } from 'node:child_process';
 import {
   closeSync,
+  createWriteStream,
   existsSync,
   mkdirSync,
   openSync,
@@ -42,14 +43,18 @@ import type {
 import { diagnoseLaunch, redmodReport, type PluginFile } from '@shared/cplaunch';
 import { fromNexus, rankRecommendations, type RecCandidate } from '@shared/cprecommend';
 import {
+  MAX_REMOVE,
   QUARANTINE,
   collectOutdated,
+  ownerOf,
+  scriptErrorsCascade,
   definesRecord,
   ownerIndex,
   redscriptErrorFiles,
   tweakRecordIds,
 } from '@shared/cpoutdated';
 import {
+  isFramework,
   parseCrashInfo,
   parseCrashProbe,
   summarizeCrashes,
@@ -106,6 +111,8 @@ export class CyberpunkMods {
   private updatesNow: ModUpdate[] = [];
   /** Updates sent or opened, newest last (kept for an hour after they finish). */
   private jobs: UpdateJob[] = [];
+  /** When the current game version arrived, once a check has seen it (logs rotate away). */
+  private knownPatch: { version: string; at: number } | null = null;
   private run: { total: number; done: number; current: string; cancel: boolean } | null = null;
 
   constructor() {
@@ -114,8 +121,10 @@ export class CyberpunkMods {
         lastCheck?: number;
         info?: NexusInfo[];
         account?: ModsStatus['account'];
+        knownPatch?: { version: string; at: number } | null;
       };
       for (const i of j.info ?? []) this.cache.set(i.modId, i);
+      this.knownPatch = j.knownPatch ?? null;
       this.lastCheck = j.lastCheck ?? 0;
       this.account = j.account ?? null;
     } catch {
@@ -130,6 +139,7 @@ export class CyberpunkMods {
         JSON.stringify({
           lastCheck: this.lastCheck,
           account: this.account,
+          knownPatch: this.knownPatch,
           info: [...this.cache.values()],
         }),
       );
@@ -226,6 +236,7 @@ export class CyberpunkMods {
         latest: u.latest.version,
         updatedAt: u.latest.updatedAt,
         state: state.get(u.latest.modId)?.state ?? null,
+        progress: state.get(u.latest.modId)?.progress ?? null,
         error: state.get(u.latest.modId)?.error ?? '',
       })),
       updating: this.run
@@ -418,6 +429,7 @@ export class CyberpunkMods {
       if (r.status === 429) throw new Error('Nexus Mods’ rate limit: try again later.');
       const files = ((r.json as { files?: unknown[] } | null)?.files ?? []) as Array<{
         file_id?: number;
+        file_name?: string;
         category_name?: string | null;
         is_primary?: boolean;
         uploaded_timestamp?: number;
@@ -435,16 +447,92 @@ export class CyberpunkMods {
           message: `${name} has no single main file, so I opened its Files page.`,
         };
       }
-      await shell.openExternal(`nxm://${GAME}/mods/${modId}/files/${main.file_id}`);
       const c = this.cache.get(modId);
       if (c) this.cache.set(modId, { ...c, fileId: main.file_id });
-      this.job(modId, 'in-vortex');
-      return { ok: true, message: `Sent ${name} to Vortex to download and install.` };
+      // Premium: download the file ourselves (Vortex was given bare nxm:// links and never
+      // started them), then hand the archive to Vortex to install.
+      try {
+        const path = await this.downloadFile(modId, main.file_id, main.file_name ?? '');
+        await this.vortexInstall(path);
+        this.job(modId, 'in-vortex');
+        return {
+          ok: true,
+          message: `Downloaded ${name}; Vortex is installing it (if it asks, choose Replace).`,
+        };
+      } catch (e) {
+        await shell.openExternal(`nxm://${GAME}/mods/${modId}/files/${main.file_id}`);
+        this.job(modId, 'in-vortex');
+        return {
+          ok: true,
+          message: `Couldn’t download ${name} myself (${e instanceof Error ? e.message : 'error'}), so I sent it to Vortex instead: check Vortex’s Downloads.`,
+        };
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Couldn’t start the update.';
       this.job(modId, 'failed', msg);
       return { ok: false, message: msg };
     }
+  }
+
+  /** Download a mod file (Nexus Premium) into Vortex's downloads folder, with progress. */
+  private async downloadFile(modId: number, fileId: number, fileName: string): Promise<string> {
+    const r = await this.nexus(`/games/${GAME}/mods/${modId}/files/${fileId}/download_link.json`);
+    if (r.status === 403) throw new Error('Nexus only gives download links to Premium members');
+    const links = (Array.isArray(r.json) ? r.json : []) as Array<{ URI?: string }>;
+    const url = links.find((l) => typeof l.URI === 'string')?.URI ?? '';
+    if (!/^https:\/\/[\w.-]*nexus[\w.-]*\.(com|net)\//i.test(url))
+      throw new Error('no download link');
+    const dir = join(process.env.APPDATA ?? '', 'Vortex', 'downloads', GAME);
+    mkdirSync(dir, { recursive: true });
+    const safe = (fileName || `${modId}-${fileId}.zip`).replace(/[<>:"/\\|?*]+/g, '_');
+    const dest = join(dir, safe);
+    const res = await fetch(url, { signal: AbortSignal.timeout(30 * 60_000) });
+    if (!res.ok || !res.body) throw new Error(`download failed (${res.status})`);
+    const total = Number(res.headers.get('content-length')) || 0;
+    const job = this.jobs.find((j) => j.modId === modId);
+    if (job) {
+      job.state = 'downloading';
+      job.progress = 0;
+    }
+    const out = createWriteStream(`${dest}.part`);
+    let got = 0;
+    try {
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        got += value.length;
+        if (!out.write(value)) await new Promise<void>((ok) => out.once('drain', () => ok()));
+        if (job && total) job.progress = Math.round((got / total) * 100);
+      }
+      await new Promise<void>((ok, bad) => out.end((e?: Error | null) => (e ? bad(e) : ok())));
+    } catch (e) {
+      out.destroy();
+      rmSync(`${dest}.part`, { force: true });
+      throw e;
+    }
+    renameSync(`${dest}.part`, dest);
+    return dest;
+  }
+
+  /** Vortex.exe (from its nxm:// registration, else the usual place). */
+  private async vortexExe(): Promise<string> {
+    const out = await run('reg', ['query', 'HKCR\\nxm\\shell\\open\\command', '/ve']);
+    const m = /"([^"]*Vortex\.exe)"/i.exec(out);
+    const exe = m?.[1] ?? 'C:\\Program Files\\Vortex\\Vortex.exe';
+    if (!existsSync(exe)) throw new Error('Vortex isn’t installed where expected');
+    return exe;
+  }
+
+  /** Ask Vortex to install a downloaded archive (Vortex's own --install-archive option). */
+  private async vortexInstall(path: string): Promise<void> {
+    const exe = await this.vortexExe();
+    const p = spawn(exe, ['--install-archive', path], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false,
+    });
+    p.unref();
   }
 
   /** Every update, in the background (Premium: all of them, a couple of seconds apart so
@@ -497,7 +585,17 @@ export class CyberpunkMods {
   }
 
   /** Open a mod's folder, its Nexus page, the game folder or the Vortex mods folder. */
-  async open(what: 'folder' | 'page' | 'game' | 'vortex', modId?: number): Promise<string> {
+  async open(
+    what: 'folder' | 'page' | 'game' | 'vortex' | 'removed',
+    modId?: number,
+  ): Promise<string> {
+    if (what === 'removed') {
+      const g = await this.findGame();
+      const dir = g ? join(g, QUARANTINE) : '';
+      if (!dir || !existsSync(dir)) return 'No mods have been saved yet.';
+      await shell.openPath(dir);
+      return 'Opened the folder with your saved mods.';
+    }
     if (what === 'page' && modId) {
       await shell.openExternal(nexusPage(modId));
       return 'Opened its Nexus page.';
@@ -548,6 +646,8 @@ export class CyberpunkMods {
     const logs = names.map((name) => ({ name, text: read(join(logsDir, name)) }));
     const pluginsDir = join(game, 'red4ext', 'plugins');
     const plugins: PluginFile[] = [];
+    /** Plugin folders with no DLL in them (removed or not deployed). */
+    const empty: string[] = [];
     try {
       for (const p of readdirSync(pluginsDir)) {
         const dir = join(pluginsDir, p);
@@ -557,6 +657,7 @@ export class CyberpunkMods {
             .filter((f) => f.toLowerCase().endsWith('.dll'))
             .map((f) => statSync(join(dir, f)).mtimeMs);
           if (dlls.length) plugins.push({ plugin: p, modified: Math.max(...dlls) });
+          else empty.push(p);
         } catch {
           /* skip */
         }
@@ -568,7 +669,13 @@ export class CyberpunkMods {
       logs,
       plugins,
       read(join(game, 'r6', 'logs', 'redscript_rCURRENT.log')),
+      this.knownPatch,
     );
+    // Remember the update date while the older version's log is still around.
+    if (report.patchSeen && report.gameVersion && this.knownPatch?.version !== report.gameVersion) {
+      this.knownPatch = { version: report.gameVersion, at: report.patchSeen };
+      this.saveCache();
+    }
     // Which Vortex mod installed that plugin?
     let vortexMod: LaunchCheck['vortexMod'] = null;
     const v = this.vortexDir();
@@ -582,11 +689,18 @@ export class CyberpunkMods {
     const crash = this.crashes(game, read);
     // A crash after the last launch started = it got into the game and crashed while playing.
     const lastRun = report.runs[report.runs.length - 1];
-    const crashedPlaying =
-      !!crash?.recent.length &&
-      !report.culprit &&
-      (crash.recent[crash.recent.length - 1]?.at ?? 0) >= (lastRun?.at ?? 0) - 60_000;
+    const crashAt = Math.max(
+      crash?.recent[crash.recent.length - 1]?.at ?? 0,
+      crash?.context?.at ?? 0,
+    );
+    const crashedPlaying = !!crash && !report.culprit && crashAt >= (lastRun?.at ?? 0) - 60_000;
+    // Frameworks with no files: almost everything else fails without them.
+    const missingCore = empty.filter((p) => isFramework(p));
+    const missingNote = missingCore.length
+      ? `${missingCore.join(', ')} ${missingCore.length === 1 ? 'has' : 'have'} no files in the game folder (removed, or Vortex didn’t deploy ${missingCore.length === 1 ? 'it' : 'them'}). Most other mods need ${missingCore.length === 1 ? 'it' : 'them'}: put ${missingCore.length === 1 ? 'it' : 'them'} back first.`
+      : '';
     const verdict = [
+      missingNote,
       crashedPlaying ? crash?.verdict : report.verdict,
       redmod?.failed ? redmod.verdict : '',
     ]
@@ -598,19 +712,22 @@ export class CyberpunkMods {
   /** Crash reports (AppearanceRuntimePlugin's), the game's CrashInfo.json and TweakXL's log. */
   private crashes(game: string, read: (p: string) => string): CrashSummary | null {
     const dir = join(game, 'red4ext', 'plugins', 'AppearanceRuntimePlugin', 'Logs');
-    let files: string[];
+    let files: string[] = [];
     try {
       files = readdirSync(dir)
         .filter((f) => /^crash-.*\.txt$/i.test(f))
         .sort()
         .slice(-8);
     } catch {
-      return null;
+      /* no crash reporter: the game's own CrashInfo.json still says when and where */
     }
     const probes = files
       .map((f) => parseCrashProbe(f, read(join(dir, f))))
       .filter((x): x is NonNullable<typeof x> => x !== null);
-    if (!probes.length) return null;
+    const crashInfo = read(
+      join(process.env.LOCALAPPDATA ?? '', 'CD Projekt Red', 'Cyberpunk 2077', 'CrashInfo.json'),
+    );
+    if (!probes.length && !crashInfo) return null;
     // DLL name → its RED4ext plugin folder (including versioned builds like AudioXL_2_50).
     const plugins = new Map<string, string>();
     const pdir = join(game, 'red4ext', 'plugins');
@@ -1113,7 +1230,22 @@ export class CyberpunkMods {
       } catch {
         /* no archive mods */
       }
-      const key = `${newest}|${Math.round(redmodAt)}|${crash}|${Math.round(archives)}`;
+      let crashInfoAt = 0;
+      try {
+        crashInfoAt = statSync(
+          join(
+            process.env.LOCALAPPDATA ?? '',
+            'CD Projekt Red',
+            'Cyberpunk 2077',
+            'CrashInfo.json',
+          ),
+        ).mtimeMs;
+      } catch {
+        /* never crashed */
+      }
+      const newCrash =
+        this.fixState.seen !== '' && !this.fixState.seen.endsWith(`|${Math.round(crashInfoAt)}`);
+      const key = `${newest}|${Math.round(redmodAt)}|${crash}|${Math.round(archives)}|${Math.round(crashInfoAt)}`;
       if (key === this.fixState.seen) return;
       if (await this.gameRunning()) return;
       this.fixState.seen = key;
@@ -1126,6 +1258,12 @@ export class CyberpunkMods {
             : 'Cyberpunk: fixed a launch problem',
           r.message,
         );
+      else if (newCrash && crashInfoAt) {
+        // A crash with nothing safe to fix by itself: still say what happened and where to look.
+        const d = await this.diagnose();
+        if (d.crash)
+          notify('Cyberpunk crashed', `${d.crash.verdict} See Mods › Crashes & won’t start.`);
+      }
     };
     const t = setInterval(() => void check(), 60_000);
     t.unref?.();
@@ -1173,6 +1311,7 @@ export class CyberpunkMods {
     files: string[];
     redmods: string[];
     at: number;
+    reasons?: string[];
   }> {
     try {
       return JSON.parse(readFileSync(this.removedFile, 'utf8')) as Array<{
@@ -1181,6 +1320,7 @@ export class CyberpunkMods {
         files: string[];
         redmods: string[];
         at: number;
+        reasons?: string[];
       }>;
     } catch {
       return [];
@@ -1188,7 +1328,40 @@ export class CyberpunkMods {
   }
   private saveRemoved(r: ReturnType<CyberpunkMods['removed']>): void {
     writeFileSync(this.removedFile, JSON.stringify(r));
+    void this.writeRemovedNote(r);
   }
+
+  /** A plain list of the saved (removed) mods, next to their files. */
+  private async writeRemovedNote(r: ReturnType<CyberpunkMods['removed']>): Promise<void> {
+    const game = await this.findGame();
+    if (!game) return;
+    const dir = join(game, QUARANTINE);
+    try {
+      if (!r.length) {
+        rmSync(join(dir, 'Removed mods (Alton).txt'), { force: true });
+        return;
+      }
+      mkdirSync(dir, { recursive: true });
+      const lines = [
+        'Mods Alton took out of Cyberpunk 2077. Nothing was deleted: each folder here holds that mod’s files.',
+        'Put any back from Alton’s Mods tab (Outdated mods › Saved mods › Put back).',
+        '',
+        ...[...r]
+          .sort((a, b) => a.at - b.at || a.name.localeCompare(b.name))
+          .map(
+            (m) =>
+              `${new Date(m.at).toLocaleString('en-GB')} · ${m.name} (${m.files.length} files)${m.reasons?.length ? ` · ${m.reasons.join(' ')}` : ' · no reason recorded'}`,
+          ),
+        '',
+      ];
+      writeFileSync(join(dir, 'Removed mods (Alton).txt'), lines.join('\r\n'));
+    } catch {
+      /* not fatal */
+    }
+  }
+
+  /** Reasons from the last outdated check, kept with each removed mod. */
+  private lastReasons = new Map<string, string[]>();
 
   /** Every file a Vortex mod installs, relative to the game folder. */
   private modFiles(folder: string): string[] {
@@ -1284,12 +1457,24 @@ export class CyberpunkMods {
     const crashPlugins = this.fixState.fixes
       .filter((f) => !f.undone && f.action.kind === 'ignore-plugin' && f.action.why === 'crash')
       .map((f) => (f.action.kind === 'ignore-plugin' ? f.action.plugin : ''));
+    // Script errors only count when they're a mod's own fault, not a missing framework's knock-on.
+    const rsLog = read(join(game, 'r6', 'logs', 'redscript_rCURRENT.log'));
+    let scriptErrors = redscriptErrorFiles(rsLog);
+    const scriptOwners = new Set(
+      scriptErrors.map((f) => ownerOf(index, f)).filter((x): x is string => !!x),
+    );
+    let warning = '';
+    if (scriptErrors.length && scriptErrorsCascade(rsLog, scriptErrors, scriptOwners)) {
+      scriptErrors = [];
+      warning =
+        'The script compiler failed for lots of mods at once. That happens when something they all need (usually Codeware) is missing, so those errors aren’t counted here. Put back any removed frameworks first.';
+    }
     const mods = collectOutdated(
       {
         oldPlugins: d.outdated,
         crashPlugins,
         redmodScripts: d.redmod?.failed ? d.redmod.scriptMods : [],
-        scriptErrors: redscriptErrorFiles(read(join(game, 'r6', 'logs', 'redscript_rCURRENT.log'))),
+        scriptErrors,
         tweakFiles,
         gameVersion: d.gameVersion,
       },
@@ -1299,8 +1484,14 @@ export class CyberpunkMods {
     );
     const removed = this.removed();
     const gone = new Set(removed.map((r) => r.folder));
+    const left = mods.filter((m) => !gone.has(m.folder));
+    for (const m of mods) this.lastReasons.set(m.folder, m.reasons);
+    void this.writeRemovedNote(removed);
+    if (left.length > MAX_REMOVE && !warning)
+      warning = `${left.length} mods look outdated, which is more than usually goes wrong at once, so check the reasons before removing any. Alton removes at most ${MAX_REMOVE} at a time.`;
     return {
-      mods: mods.filter((m) => !gone.has(m.folder)),
+      warning,
+      mods: left,
       removed: removed.map((r) => ({
         folder: r.folder,
         name: r.name,
@@ -1319,6 +1510,11 @@ export class CyberpunkMods {
     if (!game || !v) return { ok: false, message: 'I couldn’t find the game or Vortex’s mods.' };
     if (await this.gameRunning())
       return { ok: false, message: 'Close Cyberpunk first, then I can remove them.' };
+    if (folders.length > MAX_REMOVE)
+      return {
+        ok: false,
+        message: `That’s ${folders.length} mods: Alton removes at most ${MAX_REMOVE} at a time, so a wrong check can’t take out half your mods. Untick some and try again.`,
+      };
     const removed = this.removed();
     const done: string[] = [];
     const redmodsOut: string[] = [];
@@ -1350,7 +1546,14 @@ export class CyberpunkMods {
         ),
       ];
       redmodsOut.push(...redmods);
-      removed.push({ folder, name: m.name, files: moved, redmods, at: Date.now() });
+      removed.push({
+        folder,
+        name: m.name,
+        files: moved,
+        redmods,
+        at: Date.now(),
+        reasons: this.lastReasons.get(folder) ?? [],
+      });
       done.push(m.name);
     }
     this.saveRemoved(removed);

@@ -24,7 +24,8 @@ const ago = (t: number): string => {
 
 const STATE_LABEL: Record<UpdateState, string> = {
   queued: 'Waiting its turn',
-  sending: 'Sending to Vortex…',
+  sending: 'Getting the download…',
+  downloading: 'Downloading…',
   'in-vortex': 'In Vortex: downloading and installing…',
   opened: 'Opened on Nexus: press “Mod manager download”',
   installed: 'Installed ✓',
@@ -36,6 +37,7 @@ function UpdateProgress({ st, premium }: { st: ModsStatus; premium: boolean }) {
   const c: Record<UpdateState, number> = {
     queued: 0,
     sending: 0,
+    downloading: 0,
     'in-vortex': 0,
     opened: 0,
     installed: 0,
@@ -82,6 +84,7 @@ function UpdateProgress({ st, premium }: { st: ModsStatus; premium: boolean }) {
       <p className="text-text-muted">
         {[
           c.queued && `${c.queued} waiting`,
+          c.downloading && `${c.downloading} downloading`,
           c['in-vortex'] && `${c['in-vortex']} in Vortex`,
           c.opened && `${c.opened} opened on Nexus`,
           c.installed && `${c.installed} installed ✓`,
@@ -257,7 +260,8 @@ function OutdatedPanel() {
       .outdated()
       .then((x) => {
         setR(x);
-        setPick(new Set(x.mods.map((m) => m.folder)));
+        // Tick them all only when the list is small enough to be believable.
+        setPick(new Set(x.mods.length <= 12 && !x.warning ? x.mods.map((m) => m.folder) : []));
       })
       .finally(() => setBusy(false));
   };
@@ -312,6 +316,9 @@ function OutdatedPanel() {
       </div>
       {msg && <p className="text-[12.5px] text-accent">{msg}</p>}
       {r?.error && <p className="text-[12.5px] text-alert">{r.error}</p>}
+      {r?.warning && (
+        <p className="border border-alert/50 p-2 text-[12.5px] text-alert">{r.warning}</p>
+      )}
       {r && !r.error && !r.mods.length && (
         <p className="text-[12.5px] text-ok">No outdated mods found.</p>
       )}
@@ -353,7 +360,18 @@ function OutdatedPanel() {
       )}
       {!!r?.removed.length && (
         <div className="space-y-1">
-          <div className="micro-label">Removed by Alton</div>
+          <div className="flex items-center gap-2">
+            <span className="micro-label flex-1">
+              Saved mods ({r.removed.length}): taken out, files kept
+            </span>
+            <button
+              type="button"
+              className="hud-button !px-1.5 text-[11px]"
+              onClick={() => void window.arc.mods.open('removed').then(setMsg)}
+            >
+              Open folder
+            </button>
+          </div>
           {r.removed.map((m) => (
             <div key={m.folder} className="flex items-center gap-2 text-[12px]">
               <span className="min-w-0 flex-1 truncate text-text-muted">
@@ -902,6 +920,7 @@ export function ModsTab() {
                           className={`block text-[11.5px] ${u.state === 'failed' ? 'text-alert' : u.state === 'installed' ? 'text-ok' : 'text-accent'}`}
                         >
                           {STATE_LABEL[u.state]}
+                          {u.state === 'downloading' && u.progress != null ? ` ${u.progress}%` : ''}
                           {u.state === 'failed' && u.error ? `: ${u.error}` : ''}
                         </span>
                       )}

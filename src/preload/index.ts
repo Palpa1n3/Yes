@@ -138,6 +138,18 @@ const api: ArcAPI = {
     install: (id) => invoke(IPC.mods.install, id),
     setShowAdult: (on) => invoke(IPC.mods.setShowAdult, on),
   },
+  minecraft: {
+    profiles: () => invoke(IPC.minecraft.profiles),
+    scan: (p) => invoke(IPC.minecraft.scan, p),
+    checkUpdates: (p) => invoke(IPC.minecraft.checkUpdates, p),
+    setEnabled: (p, f, on) => invoke(IPC.minecraft.setEnabled, p, f, on),
+    update: (p, f) => invoke(IPC.minecraft.update, p, f),
+    updateAll: (p) => invoke(IPC.minecraft.updateAll, p),
+    addMissing: (p, id) => invoke(IPC.minecraft.addMissing, p, id),
+    fixAll: (p) => invoke(IPC.minecraft.fixAll, p),
+    history: () => invoke(IPC.minecraft.history),
+    undo: (id) => invoke(IPC.minecraft.undo, id),
+  },
   smarthome: {
     status: () => invoke(IPC.smarthome.status),
     set: (t) => invoke(IPC.smarthome.set, t),

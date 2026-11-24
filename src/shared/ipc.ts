@@ -85,6 +85,18 @@ export const IPC = {
     install: 'mods:install',
     setShowAdult: 'mods:show-adult',
   },
+  minecraft: {
+    profiles: 'minecraft:profiles',
+    scan: 'minecraft:scan',
+    checkUpdates: 'minecraft:check-updates',
+    setEnabled: 'minecraft:set-enabled',
+    update: 'minecraft:update',
+    updateAll: 'minecraft:update-all',
+    addMissing: 'minecraft:add-missing',
+    fixAll: 'minecraft:fix-all',
+    history: 'minecraft:history',
+    undo: 'minecraft:undo',
+  },
   smarthome: {
     status: 'smarthome:status',
     set: 'smarthome:set',
@@ -370,9 +382,28 @@ export interface InvokeMap {
   [IPC.mods.update]: { args: [modId: number]; result: { ok: boolean; message: string } };
   [IPC.mods.updateAll]: { args: []; result: { ok: boolean; message: string } };
   [IPC.mods.open]: {
-    args: [what: 'folder' | 'page' | 'game' | 'vortex', modId?: number];
+    args: [what: 'folder' | 'page' | 'game' | 'vortex' | 'removed', modId?: number];
     result: string;
   };
+  [IPC.minecraft.profiles]: { args: []; result: McProfile[] };
+  [IPC.minecraft.scan]: { args: [profile: string]; result: McReport };
+  [IPC.minecraft.checkUpdates]: { args: [profile: string]; result: McReport };
+  [IPC.minecraft.setEnabled]: {
+    args: [profile: string, file: string, on: boolean];
+    result: { ok: boolean; message: string };
+  };
+  [IPC.minecraft.update]: {
+    args: [profile: string, file: string];
+    result: { ok: boolean; message: string };
+  };
+  [IPC.minecraft.updateAll]: { args: [profile: string]; result: { ok: boolean; message: string } };
+  [IPC.minecraft.addMissing]: {
+    args: [profile: string, modId: string];
+    result: { ok: boolean; message: string };
+  };
+  [IPC.minecraft.fixAll]: { args: [profile: string]; result: { ok: boolean; message: string } };
+  [IPC.minecraft.history]: { args: []; result: McChange[] };
+  [IPC.minecraft.undo]: { args: [id: string]; result: { ok: boolean; message: string } };
   [IPC.smarthome.status]: { args: []; result: boolean };
   [IPC.smarthome.set]: { args: [token: string]; result: { ok: boolean; message: string } };
   [IPC.smarthome.clear]: { args: []; result: boolean };
@@ -603,7 +634,7 @@ export interface ArcAPI {
     /** Premium: Vortex downloads and installs it; free: opens the mod's Files page. */
     update(modId: number): Promise<{ ok: boolean; message: string }>;
     updateAll(): Promise<{ ok: boolean; message: string }>;
-    open(what: 'folder' | 'page' | 'game' | 'vortex', modId?: number): Promise<string>;
+    open(what: 'folder' | 'page' | 'game' | 'vortex' | 'removed', modId?: number): Promise<string>;
     /** Why won't the game start? (reads its launch logs) */
     diagnose(): Promise<LaunchCheck>;
     /** Stop "Update all" (ones already sent carry on in Vortex). */
@@ -633,6 +664,28 @@ export interface ArcAPI {
     /** Premium: Vortex downloads and installs it; free: opens its Files page. */
     install(modId: number): Promise<{ ok: boolean; message: string }>;
     setShowAdult(on: boolean): Promise<boolean>;
+  };
+  minecraft: {
+    /** Minecraft profiles with mods (Lunar Client and .minecraft). */
+    profiles(): Promise<McProfile[]>;
+    /** A profile's mods and problems (wrong version, missing, duplicates, crashes…). */
+    scan(profile: string): Promise<McReport>;
+    /** The same, plus Modrinth updates for its Minecraft version. */
+    checkUpdates(profile: string): Promise<McReport>;
+    /** Switch a mod off/on (".jar.disabled"). Refused while Minecraft runs. */
+    setEnabled(
+      profile: string,
+      file: string,
+      on: boolean,
+    ): Promise<{ ok: boolean; message: string }>;
+    update(profile: string, file: string): Promise<{ ok: boolean; message: string }>;
+    updateAll(profile: string): Promise<{ ok: boolean; message: string }>;
+    /** Add a mod another one needs, from Modrinth. */
+    addMissing(profile: string, modId: string): Promise<{ ok: boolean; message: string }>;
+    /** Fix what's safe: duplicates off, missing mods added, wrong-version mods updated or off. */
+    fixAll(profile: string): Promise<{ ok: boolean; message: string }>;
+    history(): Promise<McChange[]>;
+    undo(id: string): Promise<{ ok: boolean; message: string }>;
   };
   smarthome: {
     /** Is a SmartThings token saved (the token itself never comes back)? */
@@ -945,6 +998,8 @@ export interface ModsStatus {
     updatedAt: number;
     /** Where its update is up to (null = not started). */
     state: import('./cpmods').UpdateState | null;
+    /** Download progress 0–100 while downloading. */
+    progress: number | null;
     error: string;
   }>;
   /** "Update all" running in the background. */
@@ -991,6 +1046,8 @@ export interface FixesState {
 
 /** Mods tab › Outdated mods. */
 export interface OutdatedReport {
+  /** Shown above the list when the evidence looks unreliable. */
+  warning?: string;
   mods: import('./cpoutdated').OutdatedMod[];
   removed: Array<{ folder: string; name: string; files: number; at: number }>;
   gameVersion: string;
@@ -1002,4 +1059,46 @@ export interface RecReport {
   items: Array<import('./cprecommend').Recommendation & { thumb: string }>;
   error: string;
   showAdult: boolean;
+}
+
+/** Minecraft tab. */
+export interface McProfile {
+  id: string;
+  name: string;
+  launcher: 'Lunar Client' | 'Minecraft Launcher';
+  gameVersion: string;
+  loader: string;
+  modsDir: string;
+  mods: number;
+  /** The profile Lunar has selected. */
+  current: boolean;
+}
+export interface McUpdate {
+  file: string;
+  modId: string;
+  name: string;
+  from: string;
+  to: string;
+  url: string;
+  filename: string;
+  sha1: string;
+}
+export interface McReport {
+  profile: McProfile | null;
+  mods: import('./mcmods').McMod[];
+  problems: import('./mcmods').McProblem[];
+  log: string[];
+  crash: { at: number; file: string; description: string; suspects: string[] } | null;
+  updates: McUpdate[];
+  error: string;
+}
+export interface McChange {
+  id: string;
+  at: number;
+  profile: string;
+  kind: 'disable' | 'enable' | 'update' | 'add';
+  file: string;
+  newFile?: string;
+  note: string;
+  undone: boolean;
 }

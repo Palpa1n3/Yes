@@ -209,6 +209,26 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   modlist isn't another tool's (saves the suggested order; `previous` modlist text kept for Undo). The watcher
   also wakes when archive\pc\mod changes (new/removed archives).
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
+  0.69 fixes after a bad removal (115 mods incl. Codeware were taken out on 24 Nov 2026 01:27/02:10, kept in
+  <game>\_alton_removed_mods, list + note "Removed mods (Alton).txt"): (1) RED4ext keeps only max_files=5 logs,
+  so diagnoseLaunch now sets patchSeen only when an older version's log is still there (else the remembered
+  knownPatch in cpmods-cache.json, else 0) — guessing "oldest log" flagged every plugin as older than the update;
+  (2) FRAMEWORK_MOD names are never outdated; (3) redscript errors are ignored when they're a cascade
+  (UNRESOLVED_IMPORT / >8 mods); (4) at most MAX_REMOVE=12 removed per go, none pre-ticked over that. Launch
+  check reports framework plugin folders with no DLL. Crashes: CrashInfo.json alone now counts (the crash
+  reporter misses some); a crash newer than the last report blames nobody; the watcher notifies "Cyberpunk
+  crashed" even with nothing to fix. Updates: Vortex never started bare nxm:// links, so Premium updates now use
+  Nexus download_link.json → download (progress) into %APPDATA%\Vortex\downloads\cyberpunk2077\<Nexus file
+  name> → Vortex.exe --install-archive <path> (exe from HKCR\nxm); falls back to nxm on error.
+  Minecraft tab (0.69; tool minecraft_mods): main/services/minecraft-mods.ts + zip.ts (read-only zip reader) +
+  shared/mcmods.ts. Profiles: ~/.lunarclient/profiles/<p>/mods/<loader>-<ver> (+dependencies = Lunar-managed
+  libraries), versions/<mcver>-<pack>/mods, %APPDATA%\.minecraft\mods. Reads fabric.mod.json (nested jars up to
+  3 levels → provides). Problems: wrong MC version, missing deps (hidden for Lunar profiles never launched — no
+  dependencies folder), duplicates (own mods only), breaks, crash-report suspects, loader log lines. Modrinth
+  (no key, UA "Alton-desktop-assistant/<ver>"): version_files/update by sha1 for updates; project/<slug>/version
+  (+search) for missing mods (modrinthProjectFor maps fabric-*-vN → fabric-api, libjf-* → libjf). Downloads only
+  cdn.modrinth.com, sha1-checked; updated jars' old copies in mods\_alton_backup; off = .jar.disabled; history +
+  Undo in userData/mcfix.json; refuses while javaw.exe runs.
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
   payday eve/morning (payInfo), end-of-shift summary (replaces shiftEndNotes). "Running late": leave-by

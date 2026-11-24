@@ -20,6 +20,7 @@ const TAB_NAMES: Record<ArcTab, string> = {
   storage: 'Storage',
   routines: 'your routines',
   mods: 'your Cyberpunk mods',
+  minecraft: 'your Minecraft mods',
 };
 
 export interface ArcResult {

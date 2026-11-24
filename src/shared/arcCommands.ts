@@ -39,6 +39,7 @@ export const ARC_TABS = [
   'storage',
   'routines',
   'mods',
+  'minecraft',
 ] as const;
 export type ArcTab = (typeof ARC_TABS)[number];
 
@@ -53,6 +54,7 @@ const TAB_WORDS: Array<[RegExp, ArcTab]> = [
   [/^(storage|drives?|disks?|disk space|space)$/, 'storage'],
   [/^(routines?|automations?)$/, 'routines'],
   [/^(mods?|cyberpunk( mods)?|game mods)$/, 'mods'],
+  [/^(minecraft( mods)?|lunar( client)?|mc mods)$/, 'minecraft'],
 ];
 
 const SETTINGS_WORDS: Array<[RegExp, string]> = [

@@ -11,6 +11,7 @@ import { AppsTab } from '@renderer/components/tabs/AppsTab';
 import { NetworkTab } from '@renderer/components/tabs/NetworkTab';
 import { OverviewTab } from '@renderer/components/tabs/OverviewTab';
 import { ModsTab } from '@renderer/components/tabs/ModsTab';
+import { MinecraftTab } from '@renderer/components/tabs/MinecraftTab';
 import { RoutinesTab } from '@renderer/components/tabs/RoutinesTab';
 import { StorageTab } from '@renderer/components/tabs/StorageTab';
 import { SystemTab } from '@renderer/components/tabs/SystemTab';
@@ -71,6 +72,7 @@ const VIEWS: Record<TabId, ComponentType> = {
   storage: StorageTab,
   routines: RoutinesTab,
   mods: ModsTab,
+  minecraft: MinecraftTab,
 };
 
 export function App() {
