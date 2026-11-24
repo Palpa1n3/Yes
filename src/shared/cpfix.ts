@@ -5,14 +5,20 @@ import type { LaunchReport, RedmodReport } from './cplaunch';
 
 export type FixAction =
   /** Nexus has a newer version: send it to Vortex (Premium) or open its page. */
-  | { kind: 'update'; modId: number; name: string; plugin: string }
+  | { kind: 'update'; modId: number; name: string; plugin: string; why?: string }
+  /** A mod the scripts need is installed but off (or saved by Alton): switch it back on. */
+  | { kind: 'switch-on'; folder: string; name: string; for: string; saved: boolean }
   /** No update: RED4ext skips the plugin (red4ext\config.ini [plugins] ignored). */
   | { kind: 'ignore-plugin'; plugin: string; mod: string; why?: 'start' | 'crash' }
   /** REDmod's script compile fails: deploy again without the REDmods that change scripts. */
   | { kind: 'redmod-without'; mods: string[] }
   /** Patches loading after the mods they patch: save the fixed archive load order
    *  (`previous` = the modlist.txt before, null = none, for Undo). */
-  | { kind: 'load-order'; moves: Array<{ archive: string; before: string }>; previous: string | null };
+  | {
+      kind: 'load-order';
+      moves: Array<{ archive: string; before: string }>;
+      previous: string | null;
+    };
 
 export interface FixRecord {
   id: string;
@@ -115,6 +121,9 @@ export function describeFix(a: FixAction): string {
       .join(', ');
     return `Fixed the load order so patches win: ${first}${a.moves.length > 3 ? ` and ${a.moves.length - 3} more` : ''}.`;
   }
+  if (a.kind === 'switch-on')
+    return `Switching ${a.name} back on: ${a.for} needs it and its scripts didn’t compile without it${a.saved ? ' (Alton had saved it away earlier)' : ''}. Vortex does it as soon as it’s closed.`;
+  if (a.kind === 'update' && a.why) return `Sent ${a.name} from Nexus to Vortex: ${a.why}`;
   if (a.kind === 'update')
     return `Sent the update for ${a.name} (the ${a.plugin} plugin that crashed the game).`;
   if (a.kind === 'ignore-plugin' && a.why === 'crash')

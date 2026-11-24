@@ -141,6 +141,7 @@ describe('Mods tab fixes', () => {
       vortexMod: null,
       redmod: null,
       crash: null,
+      scriptNeeds: [],
     });
     const fix = {
       id: 'f1',

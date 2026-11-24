@@ -35,7 +35,12 @@ import {
 } from '@shared/cpmods';
 import {
   REQUIREMENTS_QUERY,
+  definesSymbol,
   missingDeps,
+  parseRedRequire,
+  providesName,
+  mainFiles,
+  type ScriptNeed,
   parseRequirements,
   type ModRequirements,
 } from '@shared/cpdeps';
@@ -442,11 +447,20 @@ export class CyberpunkMods {
         is_primary?: boolean;
         uploaded_timestamp?: number;
       }>;
-      const main = files
-        .filter(
-          (f) => typeof f.file_id === 'number' && (f.category_name === 'MAIN' || f.is_primary),
-        )
-        .sort((a, b) => (b.uploaded_timestamp ?? 0) - (a.uploaded_timestamp ?? 0))[0];
+      // The primary main file, then any newer hotfix/patch main files on top (a hotfix
+      // alone is only part of the mod).
+      const picks = mainFiles(
+        files.map((f) => ({
+          id: f.file_id ?? 0,
+          name: f.file_name ?? '',
+          category: f.category_name ?? '',
+          primary: f.is_primary === true,
+          at: f.uploaded_timestamp ?? 0,
+        })),
+      )
+        .map((p) => files.find((f) => f.file_id === p.id))
+        .filter((f): f is (typeof files)[number] => !!f);
+      const main = picks[0];
       if (!main?.file_id) {
         await shell.openExternal(nexusPage(modId, true));
         this.job(modId, 'opened');
@@ -462,10 +476,18 @@ export class CyberpunkMods {
       try {
         const path = await this.downloadFile(modId, main.file_id, main.file_name ?? '');
         await this.vortexInstall(path);
+        for (const extra of picks.slice(1)) {
+          if (!extra.file_id) continue;
+          // Let Vortex start the main file first so the hotfix lands on top of it.
+          await new Promise((res) => setTimeout(res, 8000));
+          await this.vortexInstall(
+            await this.downloadFile(modId, extra.file_id, extra.file_name ?? ''),
+          );
+        }
         this.job(modId, 'in-vortex');
         return {
           ok: true,
-          message: `Downloaded ${name}; Vortex is installing it (if it asks, choose Replace).`,
+          message: `Downloaded ${name}${picks.length > 1 ? ` (main file and ${picks.length - 1} hotfix${picks.length > 2 ? 'es' : ''})` : ''}; Vortex is installing it (if it asks, choose Replace).`,
         };
       } catch (e) {
         await shell.openExternal(`nxm://${GAME}/mods/${modId}/files/${main.file_id}`);
@@ -633,6 +655,7 @@ export class CyberpunkMods {
         vortexMod: null,
         redmod: null,
         crash: null,
+        scriptNeeds: [],
       };
     const logsDir = join(game, 'red4ext', 'logs');
     const read = (p: string): string => {
@@ -707,14 +730,153 @@ export class CyberpunkMods {
     const missingNote = missingCore.length
       ? `${missingCore.join(', ')} ${missingCore.length === 1 ? 'has' : 'have'} no files in the game folder (removed, or Vortex didn’t deploy ${missingCore.length === 1 ? 'it' : 'them'}). Most other mods need ${missingCore.length === 1 ? 'it' : 'them'}: put ${missingCore.length === 1 ? 'it' : 'them'} back first.`
       : '';
+    const scriptNeeds = this.scriptNeeds(game);
+    const needsNote = scriptNeeds.length
+      ? `The scripts didn’t compile, so the game starts without any script mods: ${scriptNeeds
+          .map((n) =>
+            n.newer
+              ? `${n.mod} needs a newer ${n.needs}`
+              : `${n.mod} needs ${n.needs}, which isn’t on`,
+          )
+          .join('; ')}.`
+      : '';
     const verdict = [
       missingNote,
+      needsNote,
       crashedPlaying ? crash?.verdict : report.verdict,
       redmod?.failed ? redmod.verdict : '',
     ]
       .filter(Boolean)
       .join(' ');
-    return { ...report, verdict, vortexMod, redmod, crash: crashedPlaying ? crash : null };
+    return {
+      ...report,
+      verdict,
+      vortexMod,
+      redmod,
+      crash: crashedPlaying ? crash : null,
+      scriptNeeds,
+    };
+  }
+
+  /** RedRequire's report on the last failed script compile, if no compile has run since. */
+  private scriptNeeds(game: string): ScriptNeed[] {
+    const file = join(game, 'red4ext', 'plugins', 'RedRequire', 'report.txt');
+    try {
+      const at = statSync(file).mtimeMs;
+      let newestLog = 0;
+      const logs = join(game, 'r6', 'logs');
+      for (const n of readdirSync(logs))
+        if (/^redscript_r.*\.log$/i.test(n))
+          newestLog = Math.max(newestLog, statSync(join(logs, n)).mtimeMs);
+      // A later compile (which may have worked) makes the report stale.
+      if (newestLog && at < newestLog - 5 * 60_000) return [];
+      return parseRedRequire(readFileSync(file, 'utf8'));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Is this Vortex mod deployed (its files are in the game folder)? */
+  private deployed(game: string, folder: string, files = this.modFiles(folder)): boolean {
+    const v = this.vortexDir();
+    if (!v) return false;
+    const sample = files.filter((f) => !/\.(txt|md|jpg|png|ini|json)$/i.test(f)).slice(0, 6);
+    if (!sample.length) return false;
+    let hits = 0;
+    for (const f of sample)
+      try {
+        if (statSync(join(game, f)).size === statSync(join(v, folder, f)).size) hits++;
+      } catch {
+        /* not there */
+      }
+    return hits * 2 > sample.length;
+  }
+
+  /** Fixes for a failed script compile (RedRequire): switch on the mod that defines what's
+   *  missing (if it's off or saved), or get a mod again from Nexus when only an older copy of
+   *  itself has the missing parts (its main file is missing, e.g. only a hotfix installed). */
+  private scriptFixes(game: string, needs: ScriptNeed[]): { plan: FixAction[]; notes: string[] } {
+    const plan: FixAction[] = [];
+    const notes: string[] = [];
+    if (!needs.length) return { plan, notes };
+    const v = this.vortexDir();
+    if (!v) return { plan, notes };
+    const mods = this.list();
+    const files = new Map<string, string[]>();
+    const filesOf = (folder: string): string[] => {
+      let f = files.get(folder);
+      if (!f) {
+        f = this.modFiles(folder);
+        files.set(folder, f);
+      }
+      return f;
+    };
+    const saved = new Set(this.removed().map((r) => r.folder));
+    const recent = this.fixState.fixes.filter(
+      (f) => !f.undone && Date.now() - f.at < 2 * 3_600_000,
+    );
+    const isOn = (folder: string): boolean =>
+      !saved.has(folder) && this.deployed(game, folder, filesOf(folder));
+    for (const n of needs) {
+      // The installed mod that failed (its scripts folder is deployed).
+      const owner = mods.find((m) => providesName(filesOf(m.folder), n.mod) && isOn(m.folder));
+      // Mods that define what's missing, or are named like it.
+      const providers = mods
+        .filter((m) => {
+          const fl = filesOf(m.folder);
+          if (providesName(fl, n.needs) && !n.newer) return true;
+          return fl.some((f) => {
+            if (!/\.reds$/i.test(f)) return false;
+            try {
+              const src = readFileSync(join(v, m.folder, f), 'utf8');
+              return n.symbols.some((s) => definesSymbol(src, s));
+            } catch {
+              return false;
+            }
+          });
+        })
+        .sort(
+          (a, b) =>
+            Number(providesName(filesOf(b.folder), n.needs)) -
+              Number(providesName(filesOf(a.folder), n.needs)) || b.installedAt - a.installedAt,
+        );
+      if (providers.some((p) => isOn(p.folder))) continue;
+      const sameMod = providers.find((p) => owner?.modId && p.modId === owner.modId);
+      if (owner?.modId && (sameMod || !providers.length)) {
+        // Only an older copy of the failing mod has the missing parts: get it again.
+        if (recent.some((f) => f.action.kind === 'update' && f.action.modId === owner.modId))
+          continue;
+        if (!this.account?.premium) {
+          notes.push(
+            `${owner.name} is missing part of itself (its main file): download its main file from Nexus with “Mod manager download”.`,
+          );
+          continue;
+        }
+        plan.push({
+          kind: 'update',
+          modId: owner.modId,
+          name: owner.name,
+          plugin: '',
+          why: `its scripts need parts that are only in its main file, which isn’t installed (getting the main file and any hotfix).`,
+        });
+        continue;
+      }
+      const p = providers[0];
+      if (!p) {
+        notes.push(`${n.mod} needs ${n.needs}, which isn’t installed: install it from Nexus.`);
+        continue;
+      }
+      if (recent.some((f) => f.action.kind === 'switch-on' && f.action.folder === p.folder))
+        continue;
+      plan.push({
+        kind: 'switch-on',
+        folder: p.folder,
+        name: p.name,
+        for: owner?.name ?? n.mod,
+        saved: saved.has(p.folder),
+      });
+    }
+    return { plan, notes };
   }
 
   /** Crash reports (AppearanceRuntimePlugin's), the game's CrashInfo.json and TweakXL's log. */
@@ -1055,6 +1217,9 @@ export class CyberpunkMods {
             }
           : null,
       });
+      // Scripts didn't compile (RedRequire): switch on what they need / get missing main files.
+      const sf = this.scriptFixes(game, d.scriptNeeds);
+      plan.push(...sf.plan);
       // Patches loading after the mods they patch: fix the archive load order too (never over
       // an order another tool wrote).
       const lo = await this.loadOrder();
@@ -1096,6 +1261,13 @@ export class CyberpunkMods {
           const r = await this.setOrder({ kind: 'suggested' });
           ok = r.ok;
           if (!ok) note = r.message;
+        } else if (action.kind === 'switch-on') {
+          if (action.saved) {
+            const r = await this.restoreMods([action.folder]);
+            ok = r.ok;
+            if (!ok) note = r.message;
+          } else if (this.onVortexEnable) this.onVortexEnable([action.folder]);
+          else ok = false;
         } else {
           const mods = (d.redmod?.mods ?? []).filter((m) => !action.mods.includes(m));
           ok = await this.redmodDeploy(game, mods);
@@ -1121,15 +1293,18 @@ export class CyberpunkMods {
       }
       this.fixState.fixes = this.fixState.fixes.slice(-50);
       this.saveFixes();
+      const extra = sf.notes.length ? ` ${sf.notes.join(' ')}` : '';
       return {
         done,
         message: done.length
-          ? `${done.map((f) => f.note).join(' ')}${done.some((f) => f.action.kind !== 'load-order') ? ' Try starting the game again.' : ''}`
+          ? `${done.map((f) => f.note).join(' ')}${extra}${done.some((f) => f.action.kind !== 'load-order') ? ' Try starting the game again.' : ''}`
           : d.crash
             ? `${d.crash.verdict} I can’t safely switch anything off for this one yet; if it happens again inside the same mod, I will.`
-            : d.culprit || d.redmod?.failed
-              ? 'I couldn’t fix this one by myself. The launch check above says what to do.'
-              : 'Nothing to fix: the last launch didn’t fail on a mod.',
+            : sf.notes.length
+              ? sf.notes.join(' ')
+              : d.culprit || d.redmod?.failed || d.scriptNeeds.length
+                ? 'I couldn’t fix this one by myself. The launch check above says what to do.'
+                : 'Nothing to fix: the last launch didn’t fail on a mod.',
       };
     } finally {
       this.fixing = false;
@@ -1179,6 +1354,9 @@ export class CyberpunkMods {
       } catch (e) {
         return { ok: false, message: e instanceof Error ? e.message : 'Couldn’t put it back.' };
       }
+    } else if (a.kind === 'switch-on') {
+      const r = await this.removeMods([a.folder]);
+      if (!r.ok) return r;
     } else return { ok: false, message: 'Updates can’t be undone here: use Vortex.' };
     f.undone = true;
     this.saveFixes();
@@ -1189,7 +1367,9 @@ export class CyberpunkMods {
           ? 'The load order is back to how it was.'
           : a.kind === 'ignore-plugin'
             ? `${a.plugin} is switched back on.`
-            : 'REDmod deployed again with every mod.',
+            : a.kind === 'switch-on'
+              ? `${a.name} is saved away again.`
+              : 'REDmod deployed again with every mod.',
     };
   }
 
@@ -1799,10 +1979,14 @@ export class CyberpunkMods {
     if (!fresh && this.depsCache && Date.now() - this.depsCache.at < 6 * 3_600_000)
       return this.depsReport(this.depsCache.report);
     const list = this.list();
-    const installed = new Set(list.map((m) => m.modId).filter((id): id is number => id !== null && id > 0));
+    const installed = new Set(
+      list.map((m) => m.modId).filter((id): id is number => id !== null && id > 0),
+    );
     const removed = this.removed();
     const saved = new Set(
-      removed.map((r) => parseModFolder(r.folder).modId).filter((id): id is number => id !== null && id > 0),
+      removed
+        .map((r) => parseModFolder(r.folder).modId)
+        .filter((id): id is number => id !== null && id > 0),
     );
     // Saved mods' folders are kept by Vortex too, so they count as installed but saved.
     for (const id of saved) installed.add(id);

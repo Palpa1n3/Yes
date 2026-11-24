@@ -270,6 +270,16 @@ result`). PC: `services/phone-messages.ts` (read aloud via AppCommand 'speak' �
   install_dependencies. On 24 Nov 3 were missing: ME Armor System (Cyber Enemies), Romanced Enhanced
   Showers Feature (Really Want To Stay At Your House – River/Panam), Virtual Atelier Delivery.
   Minecraft already adds missing dependencies in fixAll (addMissing, Modrinth).
+  0.75: RedRequire (a RED4ext plugin the owner has) writes `red4ext/plugins/RedRequire/report.txt` when the
+  script compile fails ("* A requires B, which you do not have." / "requires a newer B than yours", then
+  "missing: symbols"). `parseRedRequire`, `definesSymbol`, `providesName`, `mainFiles` in shared/cpdeps.ts.
+  diagnose() adds `scriptNeeds` (report ignored if a redscript log is >5 min newer); autofix plans
+  `switch-on` (a mod defining the missing names is off or saved → restoreMods / Vortex enable; undo = save
+  it again) or `update` with `why` (only an older copy of the failing mod defines them → its main file is
+  missing → download again). RedRequire's "newer mod_settings" guess was wrong on the owner's PC: RPO had
+  only "RPO 3.0 HOTFIX" installed (a MAIN-category file), because update() took the newest MAIN file. Now
+  `mainFiles` = the primary file, then newer hotfix/patch MAIN files installed on top. Also: AudioXL was one
+  of the mods wrongly saved away by the old outdated check, so Immersive V Dialogue Expanded failed.
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
   payday eve/morning (payInfo), end-of-shift summary (replaces shiftEndNotes). "Running late": leave-by

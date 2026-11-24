@@ -82,3 +82,82 @@ export function parseRequirements(json: unknown): ModRequirements[] {
   }
   return out;
 }
+
+export interface NexusFile {
+  id: number;
+  name: string;
+  category: string;
+  primary: boolean;
+  at: number;
+}
+
+const HOTFIX = /hot ?fix|patch|fix\b|crash/i;
+
+/** Which files make up the mod: the primary main file (else the newest main file that isn't a
+ *  hotfix, else the newest main file), then any newer hotfix/patch main files to go on top. */
+export function mainFiles(files: NexusFile[]): NexusFile[] {
+  const main = files
+    .filter((f) => f.id > 0 && (f.category.toUpperCase() === 'MAIN' || f.primary))
+    .sort((a, b) => b.at - a.at);
+  const base =
+    main.find((f) => f.primary) ?? main.find((f) => !HOTFIX.test(f.name)) ?? main[0] ?? null;
+  if (!base) return [];
+  const extras = main.filter((f) => f !== base && f.at > base.at && HOTFIX.test(f.name)).reverse();
+  return [base, ...extras];
+}
+
+/* ── RedRequire(red4ext\plugins\RedRequire\report.txt): why the scripts didn't compile ── */
+
+export interface ScriptNeed {
+  /** The script folder (mod) that failed, e.g. "ImmersiveVDialogueExpanded". */
+  mod: string;
+  /** What it needs, as RedRequire names it (a script module or plugin, e.g. "AudioXL"). */
+  needs: string;
+  /** "requires a newer X than yours" (otherwise X is missing). */
+  newer: boolean;
+  /** Names the compiler couldn't find (functions, classes, modules). */
+  symbols: string[];
+}
+
+/** Read RedRequire's report. */
+export function parseRedRequire(text: string): ScriptNeed[] {
+  const out: ScriptNeed[] = [];
+  let cur: ScriptNeed | null = null;
+  for (const line of text.split(/\r?\n/)) {
+    const head =
+      /^\*\s+(\S+)\s+requires\s+(a newer\s+)?(\S+?)(?:,\s*which you do not have|\s+than yours)?\.?\s*$/i.exec(
+        line,
+      );
+    if (head?.[1] && head[3]) {
+      cur = { mod: head[1], needs: head[3], newer: !!head[2], symbols: [] };
+      out.push(cur);
+      continue;
+    }
+    const miss = /^\s+missing:\s*(.+)$/i.exec(line);
+    if (miss?.[1] && cur)
+      cur.symbols = miss[1]
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => /^[\w.]+$/.test(s));
+  }
+  return out;
+}
+
+/** Does this redscript source define `symbol` (a module, function, class, struct or enum)? */
+export function definesSymbol(src: string, symbol: string): boolean {
+  if (!/^[\w.]+$/.test(symbol)) return false;
+  const esc = symbol.split('.').join('[.]');
+  return new RegExp(
+    `^[ \\t]*(?:module[ \\t]+${esc}(?![\\w.])|(?:[@\\w()"]+[ \\t]+)*(?:func|class|struct|enum)[ \\t]+${esc}\\b)`,
+    'm',
+  ).test(src);
+}
+
+/** Does a mod (its game-relative files) provide `name` (a script folder or RED4ext plugin)? */
+export function providesName(files: string[], name: string): boolean {
+  const n = name.toLowerCase();
+  return files.some((f) => {
+    const p = f.replace(/\\/g, '/').toLowerCase();
+    return p.startsWith(`r6/scripts/${n}/`) || p.startsWith(`red4ext/plugins/${n}/`);
+  });
+}

@@ -1038,6 +1038,8 @@ export type LaunchCheck = import('./cplaunch').LaunchReport & {
   redmod: import('./cplaunch').RedmodReport | null;
   /** Crashes while playing (crash reports, quest/district, TweakXL rejections). */
   crash: import('./cpcrash').CrashSummary | null;
+  /** The last script compile failed: what each mod needs (RedRequire's report). */
+  scriptNeeds: import('./cpdeps').ScriptNeed[];
 };
 
 /** Mods tab › Load order. */

@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.74.0, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.75.0, 24 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,9 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.75** Script compile failures fixed by themselves from RedRequire's report: mods that define what's
+  missing are switched back on (or put back from Alton's saved list); a mod whose main file is missing is
+  downloaded again. Updates now install the primary main file (+ newer hotfixes), not just a hotfix.
 - **0.74** Missing Cyberpunk dependencies (Nexus "Requirements", read from Nexus' public GraphQL, no key)
   install by themselves (Premium + auto-fix, every 6 h) or from Mods › Dependencies; Vortex's "Potential
   Duplicate Mods" entries (old copies that are off) are taken out during the sync, folders kept in
@@ -92,6 +95,8 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
   copy installed side by side (updates installed as new mods rather than replacing).
 - 0.74 on the owner's PC: the next sync (Vortex closed) should take out 22 duplicate entries; 3 dependencies
   should install (ME Armor System, Romanced Enhanced Showers Feature, Virtual Atelier Delivery).
+- 0.75: after the next failed launch (or "Fix it for me"): AudioXL switched back on, Ragdoll Physics
+  Overhaul 3.0 main file + hotfix downloaded.
 - Cyberpunk state on 24 Nov: game 2.50; RadioExt switched off via RED4ext ignore list (2.92 downloaded,
   not deployed; Alton re-enables a plugin automatically when its DLL changes); NCPD Prevention's REDmod
   scripts break REDmod's compile; 102 mods saved/removed (13 frameworks were put back); TweakXL rejects
