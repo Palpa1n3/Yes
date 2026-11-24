@@ -111,7 +111,20 @@ export function registerToolbox(
   handle(IPC.mods.outdated, () => mods.findOutdated());
   // Vortex in step: saved mods switched off in Vortex, conflicts settled, replace answered.
   const vortex = new VortexSync(mods);
-  mods.onVortexEnable = (ids) => vortex.queueEnable(ids);
+  // Mods to switch back on: apply straight away (closing and reopening Vortex if it's open),
+  // a few seconds later so several queued together go in one go.
+  let applyTimer: ReturnType<typeof setTimeout> | null = null;
+  mods.onVortexEnable = (ids) => {
+    vortex.queueEnable(ids);
+    if (applyTimer) clearTimeout(applyTimer);
+    applyTimer = setTimeout(() => {
+      applyTimer = null;
+      void vortex.applyNow().then((r) => {
+        if (!/^Nothing|^Already/.test(r.message))
+          notifyUser(r.ok ? 'Vortex updated' : 'Vortex', r.message, r.ok ? 'info' : 'warn');
+      });
+    }, 4000);
+  };
   mods.onUpdating = () => vortex.autoReplace();
   handle(IPC.mods.vortexState, async () => {
     const st = vortex.state();
@@ -122,11 +135,15 @@ export function registerToolbox(
       rulesAdded: [...st.rulesAdded].reverse().slice(0, 50),
     };
   });
-  handle(IPC.mods.vortexSync, () => vortex.sync(true));
+  handle(IPC.mods.vortexSync, async () =>
+    (await vortex.vortexRunning()) && vortex.due() ? vortex.applyNow() : vortex.sync(true),
+  );
   // Every minute: when Vortex and the game are closed and something's waiting, do it.
   let vortexWasOpen = false;
+  let lastApply = 0;
   const vt = setInterval(async () => {
     // Also every time Vortex is closed (new installs may have brought new conflicts).
+    if (vortex.isApplying()) return;
     const open = await vortex.vortexRunning();
     const justClosed = vortexWasOpen && !open;
     const justOpened = !vortexWasOpen && open;
@@ -136,7 +153,16 @@ export function registerToolbox(
       void vortex.deployWhenOpen().then((ok) => {
         if (ok) notifyUser('Vortex', 'Deployed your mods so Alton’s changes take effect.', 'info');
       });
-    if (justClosed || vortex.due())
+    // Changes waiting while Vortex stays open (e.g. from before an update): apply them, at most
+    // every 10 minutes (closes and reopens Vortex).
+    // (Only for mods to switch back on, which the sync always clears, so this can't loop.)
+    if (open && vortex.state().enable.length > 0 && Date.now() - lastApply > 10 * 60_000) {
+      lastApply = Date.now();
+      void vortex.applyNow().then((r) => {
+        if (!/^Nothing|^Already/.test(r.message))
+          notifyUser(r.ok ? 'Vortex updated' : 'Vortex', r.message, r.ok ? 'info' : 'warn');
+      });
+    } else if (justClosed || (!open && vortex.due()))
       void vortex.sync(justClosed).then((r) => {
         if (r.ok && !/^Nothing/.test(r.message)) notifyUser('Vortex updated', r.message, 'info');
       });

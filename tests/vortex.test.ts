@@ -39,6 +39,36 @@ describe('Vortex command line helpers', () => {
 });
 
 describe('older copies of the same mod', () => {
+  it('never switches off a main file because of its own hotfix', () => {
+    const many = (p: string): string[] =>
+      Array.from({ length: 130 }, (_, i) => `r6/scripts/RPO/${p}${i}.reds`);
+    const main3 = {
+      id: 'Ragdoll Physics Overhaul 3.0 BETA 3858',
+      name: 'Ragdoll Physics Overhaul 3.0 BETA',
+      nexusId: 3858,
+      files: ['r6/scripts/RPO/RPO_DeathRagdoll.reds', ...many('a')],
+      installedAt: 5,
+    };
+    const hotfix = {
+      id: 'RPO 3.0 HOTFIX 3858',
+      name: 'RPO 3.0 HOTFIX - SlowMo-Related Crash',
+      nexusId: 3858,
+      files: ['r6/scripts/RPO/RPO_DeathRagdoll.reds'],
+      installedAt: 9,
+    };
+    const old2 = {
+      id: 'RPO 2.0',
+      name: 'Ragdoll Physics Overhaul 2.0 BETA - Main File',
+      nexusId: 3858,
+      files: ['r6/scripts/RPO/RPO_DeathRagdoll.reds', ...many('b')],
+      installedAt: 1,
+    };
+    expect(olderDuplicates([main3, hotfix])).toEqual([]);
+    // The old 2.0 main file still goes; the 3.0 main file and its hotfix stay.
+    expect(olderDuplicates([old2, main3, hotfix])).toEqual([
+      { id: 'RPO 2.0', name: 'Ragdoll Physics Overhaul 2.0 BETA - Main File', newer: main3.id },
+    ]);
+  });
   it('switches off the older version when both deploy the same files', () => {
     expect(
       olderDuplicates([

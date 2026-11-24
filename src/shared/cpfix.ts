@@ -122,7 +122,7 @@ export function describeFix(a: FixAction): string {
     return `Fixed the load order so patches win: ${first}${a.moves.length > 3 ? ` and ${a.moves.length - 3} more` : ''}.`;
   }
   if (a.kind === 'switch-on')
-    return `Switching ${a.name} back on: ${a.for} needs it and its scripts didn’t compile without it${a.saved ? ' (Alton had saved it away earlier)' : ''}. Vortex does it as soon as it’s closed.`;
+    return `Switching ${a.name} back on: ${a.for} needs it and its scripts didn’t compile without it${a.saved ? ' (Alton had saved it away earlier)' : ''}. Alton closes Vortex for a moment to do it, then opens it again and deploys.`;
   if (a.kind === 'update' && a.why) return `Sent ${a.name} from Nexus to Vortex: ${a.why}`;
   if (a.kind === 'update')
     return `Sent the update for ${a.name} (the ${a.plugin} plugin that crashed the game).`;

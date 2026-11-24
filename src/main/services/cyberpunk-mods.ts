@@ -1765,6 +1765,20 @@ export class CyberpunkMods {
   /** Put removed mods' files back where they were. */
   /** Set by the Vortex sync: mods switched off in Vortex are switched back on through it. */
   onVortexEnable: ((ids: string[]) => void) | null = null;
+
+  /** Is Alton sending updates through Vortex right now? */
+  updatingNow(): boolean {
+    this.settle();
+    return (
+      !!this.run ||
+      this.jobs.some(
+        (j) =>
+          ['queued', 'sending', 'downloading'].includes(j.state) ||
+          // Just handed to Vortex: give it a few minutes to install.
+          (j.state === 'in-vortex' && Date.now() - j.at < 4 * 60_000),
+      )
+    );
+  }
   /** Set by the Vortex sync: answer Vortex's "already installed" question while updating. */
   onUpdating: (() => void) | null = null;
 
@@ -1780,7 +1794,7 @@ export class CyberpunkMods {
       if (!folders.length)
         return {
           ok: true,
-          message: `${inVortex.map((r) => r.name).join(', ')} will be switched back on in Vortex as soon as Vortex is closed.`,
+          message: `${inVortex.map((r) => r.name).join(', ')} will be switched back on in Vortex in a moment (Alton closes and reopens Vortex if it’s open).`,
         };
     }
     const removed = this.removed();

@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.75.1, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.75.2, 24 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,12 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.75.2** Changes for Vortex no longer wait for the owner to close it: `VortexSync.applyNow()` closes
+  Vortex politely (`taskkill /IM Vortex.exe`, no /F; it exits in ~1 s), syncs, reopens it and presses
+  Deploy. Used for mods to switch back on (auto-fix, Put back), the Sync button, and every 10 min while
+  some wait (never while Alton's updates are installing). `olderDuplicates` no longer switches off a
+  main file because of its own hotfix (it had switched off RPO 3.0 BETA; switched back on by hand on
+  24 Nov with `--set`).
 - **0.75.1** `providesName` only counts real code (`.reds` in r6\scripts\<name>, `.dll` in
   red4ext\plugins\<name>): Immersive V Dialogue Expanded ships sounds into AudioXL's folder, so AudioXL looked
   "on" and wasn't switched back on. 0.75 fixed Ragdoll Physics Overhaul on the owner's PC (main file + hotfix).

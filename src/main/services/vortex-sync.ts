@@ -94,6 +94,55 @@ export class VortexSync {
     return /Vortex\.exe/i.test(out);
   }
 
+  private applying = false;
+  isApplying(): boolean {
+    return this.applying;
+  }
+
+  /** Apply waiting changes now: if Vortex is open, close it politely (like its X button; never
+   *  while Alton is updating mods through it), make the changes, open it again and deploy. */
+  async applyNow(): Promise<{ ok: boolean; message: string }> {
+    if (this.applying) return { ok: true, message: 'Already applying.' };
+    if (!this.due()) return { ok: true, message: 'Nothing waiting for Vortex.' };
+    if (await this.mods.gameRunning())
+      return { ok: false, message: 'Waiting for Cyberpunk to be closed.' };
+    if (this.mods.updatingNow())
+      return { ok: false, message: 'Waiting for the updates to finish installing in Vortex.' };
+    this.applying = true;
+    try {
+      const wasOpen = await this.vortexRunning();
+      if (wasOpen) {
+        await run('taskkill', ['/IM', 'Vortex.exe'], 15_000);
+        for (let i = 0; i < 30 && (await this.vortexRunning()); i++)
+          await new Promise((res) => setTimeout(res, 1000));
+        if (await this.vortexRunning())
+          return {
+            ok: false,
+            message:
+              'Vortex didn’t close (it may be asking something or busy): close it and Alton applies the changes.',
+          };
+      }
+      const r = await this.sync(true);
+      if (wasOpen) {
+        try {
+          const exe = await this.mods.vortexExe();
+          spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
+          void this.deployWhenOpen();
+        } catch {
+          /* reopen by hand */
+        }
+      }
+      return {
+        ok: r.ok,
+        message: wasOpen
+          ? `${r.message} Vortex was closed for this and is opening again.`
+          : r.message,
+      };
+    } finally {
+      this.applying = false;
+    }
+  }
+
   /** Put back a mod that was switched off in Vortex: switched on again at the next sync. */
   queueEnable(ids: string[]): void {
     const p = this.state();

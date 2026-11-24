@@ -55,6 +55,8 @@ export interface FileConflict {
 }
 
 const PATCH = /patch|fix|compat|addon|add-on|tweak|override|hotfix|update/i;
+/** A hotfix file name (a part that goes on top of a mod's main file). */
+const HOTFIX_FILE = /hot ?fix|\bpatch\b/i;
 
 /** Mods deploying the same files, with who should win: a patch/fix over the mod it patches,
  *  otherwise the more recently installed (usually the newer) version. */
@@ -103,11 +105,19 @@ export function olderDuplicates(
   const out: Array<{ id: string; name: string; newer: string }> = [];
   for (const group of byNexus.values()) {
     if (group.length < 2) continue;
-    const sorted = [...group].sort((a, b) => b.installedAt - a.installedAt);
-    const newest = sorted[0] as ConflictMod;
+    // A hotfix/patch file of the same mod (newer, but only a few of its files) goes on top of
+    // the main file: it's not a newer version of it. The newest full copy is the one to keep.
+    const full = group.filter(
+      (m) => !HOTFIX_FILE.test(m.name) || group.every((o) => o.files.length <= m.files.length),
+    );
+    const sorted = [...full].sort((a, b) => b.installedAt - a.installedAt);
+    const newest = sorted[0];
+    if (!newest) continue;
     const norm = (f: string): string => f.split('\\').join('/').toLowerCase();
     const newestFiles = new Set(newest.files.map(norm));
     for (const old of sorted.slice(1)) {
+      // Much smaller than the copy it overlaps: a part of the mod, not an older version.
+      if (newest.files.length * 2 < old.files.length && old.files.length > 3) continue;
       const overlap = old.files.some((f) => newestFiles.has(norm(f)));
       if (overlap) out.push({ id: old.id, name: old.name, newer: newest.id });
     }
