@@ -91,3 +91,26 @@ export function fileConflicts(mods: ConflictMod[]): FileConflict[] {
   }
   return [...pairs.values()].sort((x, y) => y.files - x.files);
 }
+
+/** Two versions of the same Nexus mod both switched on and deploying the same files: the older
+ *  copies should be switched off (a "which wins" rule would only hide the clash). */
+export function olderDuplicates(
+  mods: Array<ConflictMod & { nexusId: number | null }>,
+): Array<{ id: string; name: string; newer: string }> {
+  const byNexus = new Map<number, Array<ConflictMod & { nexusId: number | null }>>();
+  for (const m of mods)
+    if (m.nexusId !== null) byNexus.set(m.nexusId, [...(byNexus.get(m.nexusId) ?? []), m]);
+  const out: Array<{ id: string; name: string; newer: string }> = [];
+  for (const group of byNexus.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => b.installedAt - a.installedAt);
+    const newest = sorted[0] as ConflictMod;
+    const norm = (f: string): string => f.split('\\').join('/').toLowerCase();
+    const newestFiles = new Set(newest.files.map(norm));
+    for (const old of sorted.slice(1)) {
+      const overlap = old.files.some((f) => newestFiles.has(norm(f)));
+      if (overlap) out.push({ id: old.id, name: old.name, newer: newest.id });
+    }
+  }
+  return out;
+}

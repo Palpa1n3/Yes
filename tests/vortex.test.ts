@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escPath, fileConflicts, hasRule, parseGet } from '@shared/vortex';
+import { escPath, fileConflicts, hasRule, olderDuplicates, parseGet } from '@shared/vortex';
 
 describe('Vortex command line helpers', () => {
   it('escapes dots in mod ids and reads --get output', () => {
@@ -34,6 +34,43 @@ describe('Vortex command line helpers', () => {
     expect(c).toEqual([
       { winner: 'catsfix', loser: 'cats', files: 1, reason: 'Apartment Cats Fix is a patch/fix' },
       { winner: 'new', loser: 'old', files: 1, reason: 'Better Lights is newer' },
+    ]);
+  });
+});
+
+describe('older copies of the same mod', () => {
+  it('switches off the older version when both deploy the same files', () => {
+    expect(
+      olderDuplicates([
+        {
+          id: 'Shift-22340-1-11-1-1772169176',
+          name: 'Shift',
+          nexusId: 22340,
+          files: ['bin/a.lua'],
+          installedAt: 1,
+        },
+        {
+          id: 'Shift 22340 1.14.0 2026-10-26T18-15Z x',
+          name: 'Shift',
+          nexusId: 22340,
+          files: ['bin/A.lua'],
+          installedAt: 9,
+        },
+        {
+          id: 'Optional-22340',
+          name: 'Shift extras',
+          nexusId: 22340,
+          files: ['bin/extra.lua'],
+          installedAt: 5,
+        },
+        { id: 'Other', name: 'Other', nexusId: 7, files: ['bin/a.lua'], installedAt: 3 },
+      ]),
+    ).toEqual([
+      {
+        id: 'Shift-22340-1-11-1-1772169176',
+        name: 'Shift',
+        newer: 'Shift 22340 1.14.0 2026-10-26T18-15Z x',
+      },
     ]);
   });
 });

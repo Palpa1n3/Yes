@@ -20,7 +20,14 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
-import { escPath, fileConflicts, hasRule, parseGet, type VortexRule } from '@shared/vortex';
+import {
+  escPath,
+  fileConflicts,
+  hasRule,
+  olderDuplicates,
+  parseGet,
+  type VortexRule,
+} from '@shared/vortex';
 import { QUARANTINE } from '@shared/cpoutdated';
 import type { CyberpunkMods } from './cyberpunk-mods';
 
@@ -166,7 +173,19 @@ export class VortexSync {
           enabled.add(k.slice(pre.length, -'.enabled'.length));
       for (const r of toOff) enabled.delete(r.folder);
       for (const id of p.enable) enabled.add(id);
-      const list = this.mods.list().filter((m) => enabled.has(m.folder));
+      let list = this.mods.list().filter((m) => enabled.has(m.folder));
+      // Two versions of the same mod both on: switch the older copy off (not a rule).
+      const dups = olderDuplicates(
+        list.map((m) => ({
+          id: m.folder,
+          name: m.name,
+          nexusId: m.modId,
+          files: this.mods.modFiles(m.folder),
+          installedAt: m.installedAt,
+        })),
+      );
+      for (const d of dups) pairs.push([enabledKey(d.id), 'false']);
+      list = list.filter((m) => !dups.some((d) => d.id === m.folder));
       const conflicts = fileConflicts(
         list.map((m) => ({
           id: m.folder,
@@ -200,11 +219,25 @@ export class VortexSync {
       for (const k of ['install', 'enable', 'deploy'])
         pairs.push([`settings.automation.${k}`, 'true']);
 
-      await set(pairs.filter(([, v]) => !v.includes('=')));
-      // Check it took (the mod switches are what matter most).
-      const check = await get(toOff.map((r) => enabledKey(r.folder)));
-      const notOff = toOff.filter(
-        (r) => check.get(enabledKey(r.folder).replace(/\\\./g, '.')) === true,
+      const toWrite = pairs.filter(([, v]) => !v.includes('='));
+      await set(toWrite);
+      // Read every change back: only what Vortex actually kept counts.
+      // Vortex prints keys unescaped ("a\.b" → "a.b").
+      const plain = (k: string): string => k.replace(/\\(.)/g, '$1');
+      const back = await get(toWrite.map(([k]) => k));
+      const kept = (k: string, v: string): boolean => {
+        const got = back.get(plain(k));
+        return got !== undefined && JSON.stringify(got) === JSON.stringify(JSON.parse(v));
+      };
+      const failed = toWrite.filter(([k, v]) => !kept(k, v));
+      if (toWrite.length && failed.length === toWrite.length)
+        throw new Error(
+          'Vortex accepted the changes but didn’t keep any of them, so nothing was changed. Your Vortex may store its settings differently',
+        );
+      const notOff = toOff.filter((r) => !kept(enabledKey(r.folder), 'false'));
+      const dupsOff = dups.filter((d) => kept(enabledKey(d.id), 'false'));
+      const rulesKept = added.filter((a) =>
+        kept(rulesKey(a.winner), JSON.stringify(rulesOf.get(a.winner) ?? [])),
       );
       const saved = this.mods
         .removed()
@@ -219,18 +252,28 @@ export class VortexSync {
           ? `Switched off ${toOff.length - notOff.length} saved mod${toOff.length === 1 ? '' : 's'} in Vortex.`
           : '',
         p.enable.length ? `Switched ${p.enable.length} back on.` : '',
-        added.length
-          ? `Settled ${added.length} file conflict${added.length === 1 ? '' : 's'}.`
+        dupsOff.length
+          ? `Switched off ${dupsOff.length} older cop${dupsOff.length === 1 ? 'y' : 'ies'} of mods you have a newer version of (${dupsOff
+              .slice(0, 6)
+              .map((d) => d.name)
+              .join(', ')}${dupsOff.length > 6 ? '…' : ''}).`
           : '',
-        notOff.length ? `${notOff.length} couldn’t be switched off: they stay saved by Alton.` : '',
-        'Vortex will tidy up on its next deploy.',
+        rulesKept.length
+          ? `Settled ${rulesKept.length} file conflict${rulesKept.length === 1 ? '' : 's'}.`
+          : '',
+        failed.length
+          ? `${failed.length} change${failed.length === 1 ? '' : 's'} didn’t stick in Vortex.`
+          : '',
+        toWrite.length
+          ? 'Open Vortex and press Deploy (or it deploys by itself after its next change) to apply it.'
+          : 'Vortex is already in step.',
       ]
         .filter(Boolean)
         .join(' ');
       const next: Pending = {
         enable: [],
         lastRun: { at: Date.now(), message: msg, ok: true },
-        rulesAdded: [...p.rulesAdded, ...added].slice(-300),
+        rulesAdded: [...p.rulesAdded, ...rulesKept].slice(-300),
       };
       this.save(next);
       return { ok: true, message: msg };

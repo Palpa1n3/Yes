@@ -124,9 +124,14 @@ export function registerToolbox(
   });
   handle(IPC.mods.vortexSync, () => vortex.sync(true));
   // Every minute: when Vortex and the game are closed and something's waiting, do it.
-  const vt = setInterval(() => {
-    if (vortex.due())
-      void vortex.sync().then((r) => {
+  let vortexWasOpen = false;
+  const vt = setInterval(async () => {
+    // Also every time Vortex is closed (new installs may have brought new conflicts).
+    const open = await vortex.vortexRunning();
+    const justClosed = vortexWasOpen && !open;
+    vortexWasOpen = open;
+    if (justClosed || vortex.due())
+      void vortex.sync(justClosed).then((r) => {
         if (r.ok && !/^Nothing/.test(r.message)) notifyUser('Vortex updated', r.message, 'info');
       });
   }, 60_000);

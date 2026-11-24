@@ -246,6 +246,10 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   Ctrl+1…9 via useSectionShortcuts (TabBar.tsx). The compact view has an "All sections" button (leaves compact,
   opens Settings › Sections). Columns stack into one scrolling column below the `hud` breakpoint (1180 px);
   Settings' page list/search shrink on narrow windows.
+  Vortex sync (0.72): older copies of the same Nexus mod that deploy the same files as a newer copy are switched
+  off (olderDuplicates) instead of getting a rule; every --set is read back with --get and only kept values count
+  (all-missing → error, nothing claimed); the sync also runs every time Vortex is closed. NOTE: a second
+  Vortex.exe (--get/--set, even with --user-data) does nothing while Vortex is open.
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
   payday eve/morning (payInfo), end-of-shift summary (replaces shiftEndNotes). "Running late": leave-by
