@@ -80,6 +80,8 @@ export const IPC = {
     outdated: 'mods:outdated',
     remove: 'mods:remove',
     restore: 'mods:restore',
+    vortexState: 'mods:vortex-state',
+    vortexSync: 'mods:vortex-sync',
     recommend: 'mods:recommend',
     hideRec: 'mods:hide-rec',
     install: 'mods:install',
@@ -370,6 +372,8 @@ export interface InvokeMap {
   [IPC.mods.outdated]: { args: []; result: OutdatedReport };
   [IPC.mods.remove]: { args: [folders: string[]]; result: { ok: boolean; message: string } };
   [IPC.mods.restore]: { args: [folders: string[]]; result: { ok: boolean; message: string } };
+  [IPC.mods.vortexState]: { args: []; result: VortexSyncState };
+  [IPC.mods.vortexSync]: { args: []; result: { ok: boolean; message: string } };
   [IPC.mods.recommend]: { args: [fresh?: boolean]; result: RecReport };
   [IPC.mods.hideRec]: { args: [modId: number]; result: boolean };
   [IPC.mods.install]: { args: [modId: number]; result: { ok: boolean; message: string } };
@@ -657,6 +661,10 @@ export interface ArcAPI {
     /** Move these Vortex mods' files out of the game folder (kept, so they can be put back). */
     remove(folders: string[]): Promise<{ ok: boolean; message: string }>;
     restore(folders: string[]): Promise<{ ok: boolean; message: string }>;
+    /** What Alton last changed in Vortex (mods switched off/on, conflicts settled). */
+    vortexState(): Promise<VortexSyncState>;
+    /** Bring Vortex in step now (only while Vortex and the game are closed). */
+    vortexSync(): Promise<{ ok: boolean; message: string }>;
     /** Recommended mods (Nexus trending / updated / new and your tracked mods, not installed). */
     recommend(fresh?: boolean): Promise<RecReport>;
     /** Not interested: never recommend it again. */
@@ -1101,4 +1109,12 @@ export interface McChange {
   newFile?: string;
   note: string;
   undone: boolean;
+}
+
+/** Mods tab › Vortex. */
+export interface VortexSyncState {
+  vortexRunning: boolean;
+  waiting: number;
+  lastRun: { at: number; message: string; ok: boolean } | null;
+  rulesAdded: Array<{ winner: string; loser: string; reason: string; at: number }>;
 }

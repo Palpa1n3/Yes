@@ -14,6 +14,7 @@ import type { NotesStore } from '../services/notes-store';
 import { SecretStore } from '../services/secret-store';
 import { cyberpunkMods } from '../services/cyberpunk-mods';
 import { minecraftMods } from '../services/minecraft-mods';
+import { VortexSync } from '../services/vortex-sync';
 import { notifyUser } from '../holo';
 import { ps } from '../services/system-actions';
 import {
@@ -108,6 +109,28 @@ export function registerToolbox(
   handle(IPC.mods.resetOrder, () => mods.resetOrder());
   handle(IPC.mods.fixes, () => mods.fixes());
   handle(IPC.mods.outdated, () => mods.findOutdated());
+  // Vortex in step: saved mods switched off in Vortex, conflicts settled, replace answered.
+  const vortex = new VortexSync(mods);
+  mods.onVortexEnable = (ids) => vortex.queueEnable(ids);
+  mods.onUpdating = () => vortex.autoReplace();
+  handle(IPC.mods.vortexState, async () => {
+    const st = vortex.state();
+    return {
+      vortexRunning: await vortex.vortexRunning(),
+      waiting: st.enable.length + mods.removed().filter((r) => !r.vortexOff).length,
+      lastRun: st.lastRun,
+      rulesAdded: [...st.rulesAdded].reverse().slice(0, 50),
+    };
+  });
+  handle(IPC.mods.vortexSync, () => vortex.sync(true));
+  // Every minute: when Vortex and the game are closed and something's waiting, do it.
+  const vt = setInterval(() => {
+    if (vortex.due())
+      void vortex.sync().then((r) => {
+        if (r.ok && !/^Nothing/.test(r.message)) notifyUser('Vortex updated', r.message, 'info');
+      });
+  }, 60_000);
+  vt.unref?.();
   handle(IPC.mods.recommend, (fresh) => mods.recommend(fresh === true));
   handle(IPC.mods.hideRec, (id) => {
     if (typeof id === 'number') mods.hideRecommendation(id);

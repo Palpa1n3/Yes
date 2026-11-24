@@ -8,6 +8,7 @@ import type {
   ModsStatus,
   OutdatedReport,
   RecReport,
+  VortexSyncState,
 } from '@shared/ipc';
 import { Chip } from '@renderer/components/panels/Chip';
 import { Panel } from '@renderer/components/panels/Panel';
@@ -243,6 +244,78 @@ function LoadOrderPanel() {
             </ul>
           )}
         </>
+      )}
+    </Panel>
+  );
+}
+
+/** Vortex: what Alton changed in it (saved mods off, conflicts settled), and Sync now. */
+function VortexPanel() {
+  const [v, setV] = useState<VortexSyncState | null>(null);
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = (): void => {
+    void window.arc.mods.vortexState().then(setV);
+  };
+  useEffect(load, []);
+  return (
+    <Panel
+      code="MOD.09"
+      title="Vortex"
+      className="shrink-0"
+      bodyClassName="space-y-1.5 text-[12px]"
+    >
+      <p className="text-text-muted">
+        Alton keeps Vortex in step by itself whenever Vortex is closed: saved mods are switched off
+        in Vortex (no more “external changes”), file conflicts get a winner (patches, then the newer
+        mod), and Vortex installs and deploys updates by itself. While updating, Alton presses
+        Continue on “already installed” (Replace).
+      </p>
+      {v && (
+        <p>
+          {v.vortexRunning ? 'Vortex is open' : 'Vortex is closed'}
+          {v.waiting
+            ? ` · ${v.waiting} change${v.waiting === 1 ? '' : 's'} waiting`
+            : ' · nothing waiting'}
+        </p>
+      )}
+      {v?.lastRun && (
+        <p className={v.lastRun.ok ? 'text-ok' : 'text-alert'}>
+          {new Date(v.lastRun.at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}:{' '}
+          {v.lastRun.message}
+        </p>
+      )}
+      <button
+        type="button"
+        className="hud-button"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void window.arc.mods
+            .vortexSync()
+            .then((r) => setMsg(r.message))
+            .finally(() => {
+              setBusy(false);
+              load();
+            });
+        }}
+      >
+        {busy ? 'Updating Vortex…' : 'Sync now'}
+      </button>
+      {msg && <p className="text-accent">{msg}</p>}
+      {!!v?.rulesAdded.length && (
+        <details>
+          <summary className="cursor-pointer text-text-muted">
+            {v.rulesAdded.length} conflict rule{v.rulesAdded.length === 1 ? '' : 's'} added
+          </summary>
+          <ul className="micro-label normal-case">
+            {v.rulesAdded.map((r) => (
+              <li key={`${r.winner}|${r.loser}`}>
+                {r.reason} → wins over {r.loser}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </Panel>
   );
@@ -960,6 +1033,7 @@ export function ModsTab() {
       }
       right={
         <>
+          <VortexPanel />
           <OutdatedPanel />
           <Panel
             code="MOD.04"

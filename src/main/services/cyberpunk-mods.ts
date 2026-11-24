@@ -409,6 +409,7 @@ export class CyberpunkMods {
 
   /** Send one mod's update to Vortex (Premium) or open its Files page (free). */
   async update(modId: number): Promise<{ ok: boolean; message: string }> {
+    this.onUpdating?.();
     const j = this.job(modId, 'sending');
     const name = j.name;
     // A fresh "before" snapshot, so an earlier install doesn't count as this one.
@@ -516,7 +517,7 @@ export class CyberpunkMods {
   }
 
   /** Vortex.exe (from its nxm:// registration, else the usual place). */
-  private async vortexExe(): Promise<string> {
+  async vortexExe(): Promise<string> {
     const out = await run('reg', ['query', 'HKCR\\nxm\\shell\\open\\command', '/ve']);
     const m = /"([^"]*Vortex\.exe)"/i.exec(out);
     const exe = m?.[1] ?? 'C:\\Program Files\\Vortex\\Vortex.exe';
@@ -958,7 +959,7 @@ export class CyberpunkMods {
     this.saveFixes();
   }
 
-  private async gameRunning(): Promise<boolean> {
+  async gameRunning(): Promise<boolean> {
     const out = await run('tasklist', ['/FI', 'IMAGENAME eq Cyberpunk2077.exe', '/NH']);
     return /Cyberpunk2077\.exe/i.test(out);
   }
@@ -1305,13 +1306,14 @@ export class CyberpunkMods {
 
   /* ── Removing outdated mods (moving their files out of the game folder, with Put back) ── */
   private removedFile = join(app.getPath('userData'), 'cpremoved.json');
-  private removed(): Array<{
+  removed(): Array<{
     folder: string;
     name: string;
     files: string[];
     redmods: string[];
     at: number;
     reasons?: string[];
+    vortexOff?: boolean;
   }> {
     try {
       return JSON.parse(readFileSync(this.removedFile, 'utf8')) as Array<{
@@ -1321,12 +1323,13 @@ export class CyberpunkMods {
         redmods: string[];
         at: number;
         reasons?: string[];
+        vortexOff?: boolean;
       }>;
     } catch {
       return [];
     }
   }
-  private saveRemoved(r: ReturnType<CyberpunkMods['removed']>): void {
+  saveRemoved(r: ReturnType<CyberpunkMods['removed']>): void {
     writeFileSync(this.removedFile, JSON.stringify(r));
     void this.writeRemovedNote(r);
   }
@@ -1364,7 +1367,7 @@ export class CyberpunkMods {
   private lastReasons = new Map<string, string[]>();
 
   /** Every file a Vortex mod installs, relative to the game folder. */
-  private modFiles(folder: string): string[] {
+  modFiles(folder: string): string[] {
     const v = this.vortexDir();
     if (!v) return [];
     const root = join(v, folder);
@@ -1570,10 +1573,26 @@ export class CyberpunkMods {
   }
 
   /** Put removed mods' files back where they were. */
+  /** Set by the Vortex sync: mods switched off in Vortex are switched back on through it. */
+  onVortexEnable: ((ids: string[]) => void) | null = null;
+  /** Set by the Vortex sync: answer Vortex's "already installed" question while updating. */
+  onUpdating: (() => void) | null = null;
+
   async restoreMods(folders: string[]): Promise<{ ok: boolean; message: string }> {
     const game = await this.findGame();
     if (!game) return { ok: false, message: 'I couldn’t find Cyberpunk 2077.' };
     if (await this.gameRunning()) return { ok: false, message: 'Close Cyberpunk first.' };
+    // Mods switched off in Vortex come back through Vortex (next time it's closed).
+    const inVortex = this.removed().filter((r) => r.vortexOff && folders.includes(r.folder));
+    if (inVortex.length && this.onVortexEnable) {
+      this.onVortexEnable(inVortex.map((r) => r.folder));
+      folders = folders.filter((f) => !inVortex.some((r) => r.folder === f));
+      if (!folders.length)
+        return {
+          ok: true,
+          message: `${inVortex.map((r) => r.name).join(', ')} will be switched back on in Vortex as soon as Vortex is closed.`,
+        };
+    }
     const removed = this.removed();
     const back: string[] = [];
     let redmods = false;

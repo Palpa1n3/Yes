@@ -229,6 +229,18 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   (+search) for missing mods (modrinthProjectFor maps fabric-*-vN → fabric-api, libjf-* → libjf). Downloads only
   cdn.modrinth.com, sha1-checked; updated jars' old copies in mods\_alton_backup; off = .jar.disabled; history +
   Undo in userData/mcfix.json; refuses while javaw.exe runs.
+  Vortex sync (0.70; main/services/vortex-sync.ts + shared/vortex.ts; Mods › Vortex): only while Vortex.exe and the
+  game are closed, after copying %APPDATA%\Vortex\state.v2 to userData/vortex-backups (last 3), Alton runs Vortex's
+  own `Vortex.exe --get/--set` (paths split on unescaped dots → escPath; values are JSON text; arrays are stored as
+  ONE value — Vortex's computeStateDiff treats arrays as leaves). It switches saved (removed) mods off
+  (persistent.profiles.<lastActiveProfile.cyberpunk2077>.modState.<modId>.enabled=false) after moving their files
+  back from _alton_removed_mods, so Vortex's next deploy purges them without the "External Changes" dialog (that
+  check compares Vortex's last deployment with disk regardless of enabled state); Put back on such mods queues
+  enabled=true. File conflicts between enabled mods (same deployed file) get an "after" rule on the winner (patch/
+  fix name, else newer install) unless a before/after/conflicts rule exists. settings.automation.install/enable/
+  deploy=true. Runs from a 60 s timer when due, or "Sync now". While updates run, a UI Automation PowerShell loop
+  (20 min) presses Continue on Vortex's "Install options" / "is already installed" dialog (Replace is the
+  default choice there; Vortex has no persistent "always replace" setting).
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
   payday eve/morning (payInfo), end-of-shift summary (replaces shiftEndNotes). "Running late": leave-by
