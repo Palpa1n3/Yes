@@ -129,7 +129,13 @@ export function registerToolbox(
     // Also every time Vortex is closed (new installs may have brought new conflicts).
     const open = await vortex.vortexRunning();
     const justClosed = vortexWasOpen && !open;
+    const justOpened = !vortexWasOpen && open;
     vortexWasOpen = open;
+    // Vortex just opened after Alton changed it while it was closed: deploy.
+    if (justOpened)
+      void vortex.deployWhenOpen().then((ok) => {
+        if (ok) notifyUser('Vortex', 'Deployed your mods so Alton’s changes take effect.', 'info');
+      });
     if (justClosed || vortex.due())
       void vortex.sync(justClosed).then((r) => {
         if (r.ok && !/^Nothing/.test(r.message)) notifyUser('Vortex updated', r.message, 'info');

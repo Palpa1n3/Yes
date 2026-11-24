@@ -250,6 +250,10 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   off (olderDuplicates) instead of getting a rule; every --set is read back with --get and only kept values count
   (all-missing → error, nothing claimed); the sync also runs every time Vortex is closed. NOTE: a second
   Vortex.exe (--get/--set, even with --user-data) does nothing while Vortex is open.
+  Deploy (0.73): verified on the owner's PC that the --set values DO persist (old copies enabled=false, rules
+  saved, automation on) — Vortex just never deploys after outside changes. The sync now also sets
+  persistent.deployment.needToDeploy.cyberpunk2077=true and, the next time Vortex opens, presses its
+  "Deploy Mods" toolbar button via UI Automation (deployWhenOpen; vortex-sync.json needsDeploy).
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
   payday eve/morning (payInfo), end-of-shift summary (replaces shiftEndNotes). "Running late": leave-by

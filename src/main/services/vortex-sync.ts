@@ -39,6 +39,8 @@ interface Pending {
   lastRun: { at: number; message: string; ok: boolean } | null;
   /** Rules Alton added: winner id → loser ids (so they can be listed). */
   rulesAdded: Array<{ winner: string; loser: string; reason: string; at: number }>;
+  /** Alton changed Vortex while it was closed: deploy the next time it opens. */
+  needsDeploy?: boolean;
 }
 
 const run = (
@@ -65,7 +67,12 @@ export class VortexSync {
   state(): Pending {
     try {
       const j = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<Pending>;
-      return { enable: j.enable ?? [], lastRun: j.lastRun ?? null, rulesAdded: j.rulesAdded ?? [] };
+      return {
+        enable: j.enable ?? [],
+        lastRun: j.lastRun ?? null,
+        rulesAdded: j.rulesAdded ?? [],
+        needsDeploy: j.needsDeploy === true,
+      };
     } catch {
       return { enable: [], lastRun: null, rulesAdded: [] };
     }
@@ -220,6 +227,9 @@ export class VortexSync {
         pairs.push([`settings.automation.${k}`, 'true']);
 
       const toWrite = pairs.filter(([, v]) => !v.includes('='));
+      // Vortex only deploys by itself after changes made inside it: flag one as needed.
+      if (toWrite.some(([k]) => !k.startsWith('settings.')))
+        toWrite.push([`persistent.deployment.needToDeploy.${GAME}`, 'true']);
       await set(toWrite);
       // Read every change back: only what Vortex actually kept counts.
       // Vortex prints keys unescaped ("a\.b" → "a.b").
@@ -274,6 +284,7 @@ export class VortexSync {
         enable: [],
         lastRun: { at: Date.now(), message: msg, ok: true },
         rulesAdded: [...p.rulesAdded, ...rulesKept].slice(-300),
+        needsDeploy: p.needsDeploy === true || toWrite.length > 3,
       };
       this.save(next);
       return { ok: true, message: msg };
@@ -288,6 +299,56 @@ export class VortexSync {
 
   /** While updates install: press Continue on Vortex's "already installed" question (Replace is
    *  the selected answer) for the next `minutes`. */
+  /** Vortex just opened after Alton changed it: press its "Deploy Mods" button once (Vortex
+   *  only deploys by itself after changes made inside it). */
+  async deployWhenOpen(): Promise<boolean> {
+    if (!this.state().needsDeploy || this.deploying) return false;
+    this.deploying = true;
+    const ps = `
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
+$A = [System.Windows.Automation.AutomationElement]
+$T = [System.Windows.Automation.TreeScope]::Descendants
+Add-Type -AssemblyName System.Windows.Forms
+$stop = (Get-Date).AddMinutes(4)
+Start-Sleep -Seconds 8
+while ((Get-Date) -lt $stop) {
+  foreach ($p in Get-Process Vortex -ErrorAction SilentlyContinue) {
+    if ($p.MainWindowHandle -eq 0) { continue }
+    try {
+      $root = $A::FromHandle($p.MainWindowHandle)
+      $b = $root.FindFirst($T, (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, 'Deploy Mods')))
+      if ($b -and $b.Current.IsEnabled) {
+        try { $b.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
+        catch { $b.SetFocus(); [System.Windows.Forms.SendKeys]::SendWait('{ENTER}') }
+        'clicked'; exit 0
+      }
+    } catch {}
+  }
+  Start-Sleep -Seconds 2
+}
+'not found'`;
+    try {
+      const { out } = await run(
+        'powershell',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-EncodedCommand',
+          Buffer.from(ps, 'utf16le').toString('base64'),
+        ],
+        5 * 60_000,
+      );
+      const ok = /clicked/.test(out);
+      if (ok) this.save({ ...this.state(), needsDeploy: false });
+      return ok;
+    } finally {
+      this.deploying = false;
+    }
+  }
+  private deploying = false;
+
   autoReplace(minutes = 20): void {
     if (this.clicker && this.clicker.exitCode === null) return;
     const ps = `

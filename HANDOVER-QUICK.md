@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.72.0, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.73.0, 24 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,8 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.73** Vortex changes were being saved but never deployed: Alton now flags a deploy and presses
+  Vortex's "Deploy Mods" button the next time Vortex opens.
 - **0.72** Vortex conflicts: older copies of the same Nexus mod that deploy the same files as a newer copy
   are switched off; every `--set` is read back with `--get` and only kept values count; sync runs each time
   Vortex is closed.
