@@ -691,8 +691,9 @@ export function ModsTab() {
               </div>
               <p className="text-[11.5px] text-text-muted">
                 After a failed start Alton switches off the plugin that crashed it (or sends its
-                update to Vortex on Premium) and deploys REDmod again without broken script mods,
-                then tells you. Nothing is deleted, and each fix can be undone.
+                update to Vortex on Premium), deploys REDmod again without broken script mods and
+                puts patches ahead of the mods they patch in the load order, then tells you. Nothing
+                is deleted, and each fix can be undone.
               </p>
               {fxMsg && <p className="text-[12.5px] text-accent">{fxMsg}</p>}
               {!!fx?.fixes.length && (

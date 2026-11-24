@@ -930,6 +930,23 @@ export class CyberpunkMods {
             }
           : null,
       });
+      // Patches loading after the mods they patch: fix the archive load order too (never over
+      // an order another tool wrote).
+      const lo = await this.loadOrder();
+      const loDir = await this.archiveDir();
+      if (lo.moves.length && lo.modlist !== 'other' && loDir) {
+        let previous: string | null = null;
+        try {
+          previous = readFileSync(join(loDir, 'modlist.txt'), 'utf8');
+        } catch {
+          /* none */
+        }
+        plan.push({
+          kind: 'load-order',
+          moves: lo.moves.map((m) => ({ archive: m.archive, before: m.before })),
+          previous,
+        });
+      }
       for (const action of plan) {
         let ok = true;
         let note = describeFix(action);
@@ -950,6 +967,10 @@ export class CyberpunkMods {
             ok = false;
             note = `Couldn’t change RED4ext’s settings: ${e instanceof Error ? e.message : 'no access'}.`;
           }
+        } else if (action.kind === 'load-order') {
+          const r = await this.setOrder({ kind: 'suggested' });
+          ok = r.ok;
+          if (!ok) note = r.message;
         } else {
           const mods = (d.redmod?.mods ?? []).filter((m) => !action.mods.includes(m));
           ok = await this.redmodDeploy(game, mods);
@@ -978,7 +999,7 @@ export class CyberpunkMods {
       return {
         done,
         message: done.length
-          ? `${done.map((f) => f.note).join(' ')} Try starting the game again.`
+          ? `${done.map((f) => f.note).join(' ')}${done.some((f) => f.action.kind !== 'load-order') ? ' Try starting the game again.' : ''}`
           : d.crash
             ? `${d.crash.verdict} I can’t safely switch anything off for this one yet; if it happens again inside the same mod, I will.`
             : d.culprit || d.redmod?.failed
@@ -1023,15 +1044,27 @@ export class CyberpunkMods {
           ok: false,
           message: 'REDmod failed again with every mod: the fix is still needed.',
         };
+    } else if (a.kind === 'load-order') {
+      const dir = await this.archiveDir();
+      if (!dir) return { ok: false, message: 'I couldn’t find the game’s mod folder.' };
+      try {
+        const file = join(dir, 'modlist.txt');
+        if (a.previous === null) rmSync(file, { force: true });
+        else writeFileSync(file, a.previous);
+      } catch (e) {
+        return { ok: false, message: e instanceof Error ? e.message : 'Couldn’t put it back.' };
+      }
     } else return { ok: false, message: 'Updates can’t be undone here: use Vortex.' };
     f.undone = true;
     this.saveFixes();
     return {
       ok: true,
       message:
-        a.kind === 'ignore-plugin'
-          ? `${a.plugin} is switched back on.`
-          : 'REDmod deployed again with every mod.',
+        a.kind === 'load-order'
+          ? 'The load order is back to how it was.'
+          : a.kind === 'ignore-plugin'
+            ? `${a.plugin} is switched back on.`
+            : 'REDmod deployed again with every mod.',
     };
   }
 
@@ -1074,13 +1107,25 @@ export class CyberpunkMods {
       } catch {
         /* no crash reports */
       }
-      const key = `${newest}|${Math.round(redmodAt)}|${crash}`;
+      let archives = 0;
+      try {
+        archives = statSync(join(game, 'archive', 'pc', 'mod')).mtimeMs;
+      } catch {
+        /* no archive mods */
+      }
+      const key = `${newest}|${Math.round(redmodAt)}|${crash}|${Math.round(archives)}`;
       if (key === this.fixState.seen) return;
       if (await this.gameRunning()) return;
       this.fixState.seen = key;
       this.saveFixes();
       const r = await this.autofix();
-      if (r.done.length) notify('Cyberpunk: fixed a launch problem', r.message);
+      if (r.done.length)
+        notify(
+          r.done.every((f) => f.action.kind === 'load-order')
+            ? 'Cyberpunk: fixed the load order'
+            : 'Cyberpunk: fixed a launch problem',
+          r.message,
+        );
     };
     const t = setInterval(() => void check(), 60_000);
     t.unref?.();

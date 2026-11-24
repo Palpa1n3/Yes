@@ -109,3 +109,15 @@ describe('crash fixes', () => {
     ).toEqual([]);
   });
 });
+
+describe('load order fixes', () => {
+  it('describes the moves', () => {
+    expect(
+      describeFix({
+        kind: 'load-order',
+        moves: [{ archive: 'Cats Patch.archive', before: 'Apartment Cats.archive' }],
+        previous: null,
+      }),
+    ).toBe('Fixed the load order so patches win: Cats Patch ahead of Apartment Cats.');
+  });
+});

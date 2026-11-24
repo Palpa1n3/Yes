@@ -205,6 +205,9 @@ ed4ext-*.log (one per launch; last 60): a log ending on "Loading plugin from …
   check() as NexusInfo.category), updated since the game patch (+1.5, else −2), age. Pictures fetched in main
   (nexusmods.com only) → 320 px JPEG data URLs. Install = update() path (Premium nxm → Vortex; free → Files
   page). Cached an hour.
+  Load order auto-fix (0.68): autofix also appends FixAction 'load-order' when loadOrder() has moves and the
+  modlist isn't another tool's (saves the suggested order; `previous` modlist text kept for Undo). The watcher
+  also wakes when archive\pc\mod changes (new/removed archives).
   Watch heads-ups (0.54, Settings › Phone › Watch & notifications, all on by default): rota changes
   (`rotaChangeNotes(rotaChanges())` → `notifyNow`, from add_shifts and the calendar read), 30 min left +
   usual break (`breakAfter`), leave-by with trip weather (`tripWeather`, hourly forecast in morningExtras),
