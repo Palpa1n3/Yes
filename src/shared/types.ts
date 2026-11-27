@@ -230,6 +230,10 @@ export interface Settings {
   /** 'anthropic' needs an API key (stored encrypted in main, never in settings). */
   provider: AiProvider;
   model: AiModel;
+  /** Pick the model per message: the fast one for everyday requests, up to `autoModelTop` when a
+   *  message needs more thought. Off: always `model`. */
+  autoModel: boolean;
+  autoModelTop: AiModel;
   /** Model for chats in research mode (web search, fuller answers). */
   researchModel: AiModel;
   /** Agent Mode ("handle this for me"): Alton uses the mouse and keyboard. */
@@ -408,6 +412,8 @@ export const DEFAULT_SETTINGS: Settings = {
   gamingGames: [],
   provider: 'mock',
   model: 'claude-haiku-5-5',
+  autoModel: true,
+  autoModelTop: 'claude-sonnet-5-5',
   researchModel: 'claude-sonnet-5-5',
   agentMode: true,
   agentModel: 'claude-sonnet-5-5',

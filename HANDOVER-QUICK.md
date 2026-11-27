@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.95.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.96.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.96** Model choice: `shared/model-pick.ts` (`complexity`, `NEEDS_MORE`=3, `pickModel`); settings
+  `autoModel` (default true) and `autoModelTop` (default Sonnet); anthropic-provider `deps.pickModel`
+  used for non-research sends; Settings › AI toggle + top-model select (the single-model select shows
+  when automatic choice is off). Next: confidence checks, predictive help, then finishing the
+  central engine.
 - **0.95** Knowledge graph: `shared/knowledge.ts` (`parseGraph`, `memoriesKey`, `factsAbout`,
   `findMentions`, `whosWho`), `services/knowledge.ts` (`KnowledgeService.rebuild`, Haiku + forced
   `save_graph` tool, userData/knowledge.json); ipc/assistant.ts builds it 3 min after start and every

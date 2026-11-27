@@ -813,6 +813,8 @@ export function statsForModel(s: SystemStats): Record<string, unknown> {
 export interface AnthropicDeps {
   getKey(): Promise<string | null>;
   model(): AiModel;
+  /** The model for this message (automatic choice); falls back to model(). */
+  pickModel?(text: string, attachments: Array<{ kind: string }>): AiModel;
   /** Model for research-mode chats. */
   researchModel?(): AiModel;
   /** Saver mode: fewer web searches per answer. */
@@ -956,10 +958,10 @@ export class AnthropicProvider implements AIProvider {
     if (!key) throw new Error('No API key saved. Add one in Settings › AI.');
     const client = this.client(key);
     const research = opts.research === true;
+    const userText = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
     const model = research
       ? (this.deps.researchModel?.() ?? 'claude-sonnet-5-5')
-      : this.deps.model();
-    const userText = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+      : (this.deps.pickModel?.(userText, opts.attachments ?? []) ?? this.deps.model());
 
     if (this.transcript.length > MAX_TRANSCRIPT) {
       this.reset();

@@ -103,7 +103,11 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
   who", and a `look_up` tool gives everything known about a name (other names work: "Fives" →
   Will).
 - ⬜ Predictive assistance.
-- ⬜ Automatic AI model selection.
+- ✅ Automatic AI model selection. **0.96:** `shared/model-pick.ts`: each chat message gets a
+  complexity score (length, code/error logs, planning/comparing/explaining/writing words, PDFs and
+  pictures; everyday requests score low). Below 3 → Haiku; 3 or more → the "strongest model it may
+  use" (Sonnet by default). Settings › AI › "Choose the model for each message" (on by default);
+  Saver mode still forces Haiku; research chats keep their own model; spending limits apply.
 - ⬜ Confidence assessment and information verification.
 
 ## Safety gate (must be done and tested before Phase 3 or Phase 4 starts)

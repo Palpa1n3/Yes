@@ -3,6 +3,26 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.96.0: the right model for each message
+
+Phase 2, item 6.
+
+- **Alton now picks the Claude model per message.**
+  - **Everyday requests** (timers, music, quick questions, lists) use the fast, cheap model
+    (Haiku), as before.
+  - **Messages that need more thought** use a stronger one (Sonnet by default): planning,
+    comparing, "why does…", code or error logs, writing a letter or report, long messages and PDFs.
+- **Your choice:** Settings › AI › **Choose the model for each message** (on), and **Strongest
+  model it may use** (Sonnet). Switch it off to always use one model, as before.
+- **Cost:** most messages stay on the cheapest model. The occasional harder one costs a few pence
+  more, and your monthly limit and Saver mode still apply.
+
+**What to test**
+
+1. Ask something quick ("what's the time?") and something harder ("compare these two laptops and
+   tell me the pros and cons"). Settings › AI › Spending should show both being counted.
+2. If you'd rather keep costs flat, switch the option off.
+
 ## 0.95.0: Alton knows who's who
 
 Phase 2, item 5.

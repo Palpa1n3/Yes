@@ -194,6 +194,10 @@ export function sanitizeSettings(raw: unknown): Settings {
     model: (AI_MODELS as readonly string[]).includes(r['model'] as string)
       ? (r['model'] as AiModel)
       : d.model,
+    autoModel: typeof r['autoModel'] === 'boolean' ? r['autoModel'] : d.autoModel,
+    autoModelTop: (AI_MODELS as readonly string[]).includes(r['autoModelTop'] as string)
+      ? (r['autoModelTop'] as AiModel)
+      : d.autoModelTop,
     researchModel: (AI_MODELS as readonly string[]).includes(r['researchModel'] as string)
       ? (r['researchModel'] as AiModel)
       : d.researchModel,

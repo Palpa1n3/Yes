@@ -2,7 +2,7 @@ import { CheckCircle2, KeyRound, Trash2, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { AiModel, AiProvider, AiStatus, AiTestResult } from '@shared/types';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
-import { Field, Segmented, Select } from './controls';
+import { Field, Segmented, Select, Toggle } from './controls';
 
 const MODELS: Array<{ value: AiModel; label: string; hint: string }> = [
   {
@@ -95,6 +95,28 @@ export function AiSection() {
       <LocalModelField />
 
       {s.provider === 'anthropic' && (
+        <Field
+          label="Choose the model for each message"
+          hint="On: everyday requests (timers, music, quick questions) use the fast, cheap model, and messages that need more thought (planning, comparing, code or error logs, long writing, PDFs) use a stronger one, up to the model you pick here. Saver mode and your spending limits still apply."
+        >
+          <Toggle
+            label="Choose the model automatically"
+            checked={s.autoModel}
+            onChange={(v) => void update({ autoModel: v })}
+          />
+        </Field>
+      )}
+      {s.provider === 'anthropic' && s.autoModel && (
+        <Field label="Strongest model it may use" stacked>
+          <Select<AiModel>
+            label="Strongest model for automatic choice"
+            value={s.autoModelTop}
+            onChange={(v) => void update({ autoModelTop: v })}
+            options={MODELS}
+          />
+        </Field>
+      )}
+      {s.provider === 'anthropic' && !s.autoModel && (
         <Field label="Model" hint={model?.hint} stacked>
           <Select<AiModel>
             label="Claude model"
