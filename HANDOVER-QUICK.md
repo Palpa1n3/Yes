@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.86.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.87.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.87** Unintended changes: `shared/drift.ts` (`footprintDrift`, `describeDrift`);
+  `CyberpunkMods.footprint()/watchDrift()/expectChange()` (counts in userData/cpfootprint.json, checked
+  every 60 s); expectChange from removeMods/restoreMods/updateAll and VortexSync sync/deployWhenOpen.
+  toolbox timer warns once when `vortex-sync.json` `wrongProfile` is fresh. Next: conflicting
+  automated tasks.
 - **0.86** Change checks (`shared/verify.ts`: `volumeMismatch`, `movesLanded`): `closeApp` polls
   tasklist for 8 s after taskkill; command-executor set_volume compares; toolbox organize_folder
   reports `notMoved`; cyberpunk-mods reads config.ini back after ignoring a plugin; minecraft-mods

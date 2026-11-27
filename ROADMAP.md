@@ -43,7 +43,11 @@ hidden instructions → encrypted sync.
   volume compares what Windows reports with what was asked; folder tidy checks every file landed
   and lists those that couldn't move; RED4ext's ignore list is read back after editing; Minecraft
   mods switched on/off are checked. (Vortex changes were already read back since 0.72.)
-- ⬜ Detection of unintended changes.
+- ✅ Detection of unintended changes. **0.87:** Alton counts the game's mods by kind (archive,
+  script, tweak, RED4ext plugin, CET mod) every minute and keeps the counts on disk; a sudden big
+  change (≥15 items and ≥25%) that Alton didn't make warns you (Alton's own syncs, saves, restores,
+  updates and deploys mark themselves as expected). If Vortex opens on another game or a different
+  Cyberpunk profile, Alton says so instead of quietly not deploying.
 - ⬜ Protection against conflicting automated tasks.
 - ⬜ Protection against malicious instructions embedded in websites and documents.
 - ⬜ Encrypted cross-device synchronization.

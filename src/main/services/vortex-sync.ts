@@ -308,6 +308,8 @@ export class VortexSync {
       return { ok: false, message: 'Waiting for Cyberpunk to be closed.' };
     if (!force && !this.due()) return { ok: true, message: 'Nothing to change in Vortex.' };
     this.busy = true;
+    // Alton's own changes (and the deploy that follows) aren't "unexpected".
+    this.mods.expectChange(20 * 60_000);
     const p = this.state();
     try {
       const exe = await this.mods.vortexExe();
@@ -619,6 +621,8 @@ export class VortexSync {
     // Only ever deploy the profile Alton changed: Vortex sometimes comes back on another game or
     // a new empty "Default" profile, and deploying that takes every mod out of the game.
     if (!(await this.onRightProfile())) return false;
+    // The deploy applies Alton's own changes: not "unexpected".
+    this.mods.expectChange(10 * 60_000);
     this.deploying = true;
     // Vortex 2 has no "Deploy Mods" button: deploying is "Manual apply (Deploy)" in the Mods
     // page's "More actions" menu (opened with a real click; it has no Invoke pattern).

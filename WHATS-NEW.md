@@ -3,6 +3,23 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.87.0: noticing changes nobody asked for
+
+Phase 1, item 7 of 11.
+
+- **Alton watches your Cyberpunk mods for sudden big changes.** Every minute it counts what's in the
+  game folder (archive mods, script mods, tweaks, RED4ext plugins, Cyber Engine Tweaks mods). If a
+  lot appears or disappears at once and Alton didn't do it, you get a warning saying what changed
+  (e.g. "archive mods 303 → 2") and what to check. This is what would have caught Vortex's empty
+  "Default" profile last week straight away.
+- Alton's own work (Vortex syncs, saving or putting back mods, updates, deploys) doesn't count, so
+  you only hear about surprises.
+- **If Vortex opens on another game or a different Cyberpunk profile,** Alton now tells you, and
+  doesn't deploy until it's back on your usual one.
+
+**What to test:** nothing to do. You should only see a warning if your mods change a lot without
+Alton doing it.
+
 ## 0.86.0: checking changes actually happened
 
 Phase 1, item 6 of 11.

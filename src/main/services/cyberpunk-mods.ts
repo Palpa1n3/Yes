@@ -33,6 +33,7 @@ import {
   type ModUpdate,
   type NexusInfo,
 } from '@shared/cpmods';
+import { describeDrift, footprintDrift, type Footprint } from '@shared/drift';
 import {
   REQUIREMENTS_QUERY,
   definesSymbol,
@@ -573,6 +574,7 @@ export class CyberpunkMods {
   /** Every update, in the background (Premium: all of them, a couple of seconds apart so
    *  Vortex keeps up; free: the next 10 Files pages). Progress shows in status(). */
   updateAll(): { ok: boolean; message: string } {
+    this.expectChange(60 * 60_000);
     if (this.run) return { ok: true, message: 'Already updating.' };
     this.settle();
     const busy = new Set(this.jobs.filter((j) => j.state !== 'failed').map((j) => j.modId));
@@ -1580,6 +1582,64 @@ export class CyberpunkMods {
 
   /** Every minute (while the game isn't running): a new failed launch or REDmod deploy gets
    *  fixed by itself when that's switched on, and the user is told. */
+  /* ── Changes nobody asked for (see shared/drift.ts) ── */
+  private expectUntil = 0;
+  private driftFile = join(app.getPath('userData'), 'cpfootprint.json');
+
+  /** Alton is about to change the game's mods itself: don't call it unexpected. */
+  expectChange(ms = 10 * 60_000): void {
+    this.expectUntil = Math.max(this.expectUntil, Date.now() + ms);
+  }
+
+  /** How many of each kind of mod file are in the game folder now. */
+  footprint(game: string): Footprint {
+    const list = (p: string): string[] => {
+      try {
+        return readdirSync(join(game, p));
+      } catch {
+        return [];
+      }
+    };
+    const cetDir = join(game, 'bin', 'x64', 'plugins', 'cyber_engine_tweaks', 'mods');
+    return {
+      archives: list(join('archive', 'pc', 'mod')).filter((f) => /\.archive$/i.test(f)).length,
+      scripts: list(join('r6', 'scripts')).length,
+      tweaks: list(join('r6', 'tweaks')).length,
+      plugins: list(join('red4ext', 'plugins')).length,
+      cet: list(join('bin', 'x64', 'plugins', 'cyber_engine_tweaks', 'mods')).filter((d) =>
+        existsSync(join(cetDir, d, 'init.lua')),
+      ).length,
+    };
+  }
+
+  /** Once a minute: a big sudden change in the game's mods that Alton didn't make is reported
+   *  (the counts are kept on disk, so changes while Alton was closed count too). */
+  watchDrift(notify: (title: string, body: string) => void): void {
+    const check = async (): Promise<void> => {
+      const game = await this.findGame();
+      if (!game) return;
+      const now = this.footprint(game);
+      let before: Footprint | null;
+      try {
+        before = JSON.parse(readFileSync(this.driftFile, 'utf8')) as Footprint;
+      } catch {
+        before = null;
+      }
+      if (before && Date.now() > this.expectUntil) {
+        const d = footprintDrift(before, now);
+        if (d.length) notify('Cyberpunk mods changed', describeDrift(d));
+      }
+      try {
+        writeFileSync(this.driftFile, JSON.stringify(now));
+      } catch {
+        /* not fatal */
+      }
+    };
+    const t = setInterval(() => void check(), 60_000);
+    t.unref?.();
+    setTimeout(() => void check(), 30_000).unref?.();
+  }
+
   watch(notify: (title: string, body: string) => void): void {
     const check = async (): Promise<void> => {
       if (!this.fixState.auto || this.fixing) return;
@@ -1901,6 +1961,7 @@ export class CyberpunkMods {
 
   /** Move these mods' files out of the game folder (only files that really are theirs). */
   async removeMods(folders: string[]): Promise<{ ok: boolean; message: string }> {
+    this.expectChange();
     const game = await this.findGame();
     const v = this.vortexDir();
     if (!game || !v) return { ok: false, message: 'I couldn’t find the game or Vortex’s mods.' };
@@ -1986,6 +2047,7 @@ export class CyberpunkMods {
   onUpdating: (() => void) | null = null;
 
   async restoreMods(folders: string[]): Promise<{ ok: boolean; message: string }> {
+    this.expectChange();
     const game = await this.findGame();
     if (!game) return { ok: false, message: 'I couldn’t find Cyberpunk 2077.' };
     if (await this.gameRunning()) return { ok: false, message: 'Close Cyberpunk first.' };

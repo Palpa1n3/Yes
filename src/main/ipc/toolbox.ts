@@ -144,6 +144,7 @@ export function registerToolbox(
   let vortexWasOpen = false;
   let lastApply = 0;
   let lastDeploy = 0;
+  let lastWrongTold = 0;
   const vt = setInterval(async () => {
     // Also every time Vortex is closed (new installs may have brought new conflicts).
     if (vortex.isApplying()) return;
@@ -160,6 +161,18 @@ export function registerToolbox(
       lastDeploy = Date.now();
       void vortex.deployWhenOpen().then((ok) => {
         if (ok) notifyUser('Vortex', 'Deployed your mods so Alton’s changes take effect.', 'info');
+        // Vortex came up on another game or profile: say so (once each time).
+        const w = vortex.state().wrongProfile;
+        if (!ok && w && w.at !== lastWrongTold && Date.now() - w.at < 5 * 60_000) {
+          lastWrongTold = w.at;
+          notifyUser(
+            'Vortex',
+            w.gameId && w.gameId !== 'cyberpunk2077'
+              ? `Vortex opened on another game (${w.gameId}), so Alton didn't deploy anything. Switch Vortex back to Cyberpunk 2077 when you want Alton's changes applied.`
+              : `Vortex opened on a different Cyberpunk profile, so Alton didn't deploy (that could take your mods out). Switch back to your usual profile in Vortex (Profiles).`,
+            'warn',
+          );
+        }
       });
     }
     // Changes waiting while Vortex stays open (e.g. from before an update): apply them, at most
@@ -206,6 +219,8 @@ export function registerToolbox(
   });
   // Fix Cyberpunk launch problems by itself (when switched on in the Mods tab).
   mods.watch((title, body) => notifyUser(title, body, 'warn'));
+  // Big changes to the game's mods that Alton didn't make (e.g. Vortex on an empty profile).
+  mods.watchDrift((title, body) => notifyUser(title, body, 'warn'));
   handle(IPC.mods.cancel, () => {
     mods.cancelUpdates();
     return true;
