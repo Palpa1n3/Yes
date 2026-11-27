@@ -1,4 +1,6 @@
 import { registerPower } from './power';
+import { factsAbout, findMentions, whosWho } from '@shared/knowledge';
+import { KnowledgeService } from '../services/knowledge';
 import { app, safeStorage } from 'electron';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
@@ -93,6 +95,23 @@ export function registerAssistantIpc(
     log: (m) => ctx.errors.add('info', 'memory', m),
     onUsage: (model, usage) => void ctx.usage.record(model, usage, 'memory'),
   });
+  // Who and what the user has mentioned, and how they connect (rebuilt when memories change).
+  const knowledge = new KnowledgeService({
+    file: join(userData, 'knowledge.json'),
+    client: async () => {
+      const key = await secrets.get();
+      return key ? new Anthropic({ apiKey: key, maxRetries: 1 }) : null;
+    },
+    memories: () => extra.notes.memoryTexts(),
+    blocked: () =>
+      getSettings().provider !== 'anthropic' || getSettings().saver
+        ? 'Needs Claude (and Saver mode off).'
+        : ctx.usage.blocked('memory'),
+    onUsage: (model, usage) => void ctx.usage.record(model, usage, 'memory'),
+    log: (m) => ctx.errors.add('info', 'knowledge', m),
+  });
+  setTimeout(() => void knowledge.rebuild(), 3 * 60_000).unref?.();
+  setInterval(() => void knowledge.rebuild(), 3 * 3600_000).unref?.();
   // Once a day: merge memories that say the same thing and retire ones about a day that has
   // passed (archived; undo in Notes › Memory).
   const tidy = (): void => {
@@ -190,7 +209,8 @@ export function registerAssistantIpc(
       clipboard: extra.clipboard,
       email: extra.email,
       apps: () => registry.load().map((a) => ({ name: a.name, intents: a.intents })),
-      context: extra.context,
+      // What's going on now, plus who's who from the knowledge graph.
+      context: () => [extra.context?.() ?? '', whosWho(knowledge.get())].filter(Boolean).join(' '),
       onUsage: (model, usage, feature) => void ctx.usage.record(model, usage, feature),
       onInjection: (tool, flags) => {
         const text = `Safety check: content from ${tool} looked like instructions to an AI (${flags.join('; ')}); Alton was told not to act on it.`;
@@ -198,6 +218,14 @@ export function registerAssistantIpc(
         ctx.errors.add('warn', 'safety', text);
       },
       extra: {
+        look_up: (input) => {
+          const q = String((input as { name?: unknown } | null)?.name ?? '').slice(0, 80);
+          const g = knowledge.get();
+          const hits = findMentions(g, q);
+          return hits.length
+            ? { facts: hits.slice(0, 3).flatMap((e) => factsAbout(g, e.id)) }
+            : { found: `Nothing known about “${q}” yet.` };
+        },
         search_past_chats: (input) => {
           const q = String((input as { query?: unknown } | null)?.query ?? '').slice(0, 200);
           const found = extra.chats.excerpts(q);

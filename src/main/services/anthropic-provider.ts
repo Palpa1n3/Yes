@@ -301,6 +301,17 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'look_up',
+    description:
+      'Look up what you know about a person, place, project, organisation or thing the user has mentioned (from your knowledge graph of their memories): who they are, other names, and how they connect to the user and to other things. Use when the user mentions someone or something by name and the details would help.',
+    input_schema: {
+      type: 'object',
+      properties: { name: { type: 'string', description: 'The name (or other name) to look up' } },
+      required: ['name'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'search_past_chats',
     description:
       'Search the user\'s earlier saved conversations with you (all chats, not just this one) for words or a topic. Use when they refer to something discussed before ("what was that recipe we talked about?", "remind me what you said about my router") or when earlier context would help. Returns matching excerpts with chat names and dates.',
@@ -666,6 +677,7 @@ export function toIntent(
     case 'manage_goal':
       return { local: 'notes' };
     case 'search_past_chats':
+    case 'look_up':
     case 'create_routine':
     case 'get_recent_crashes':
     case 'list_installed_games':

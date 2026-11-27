@@ -96,7 +96,12 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
   and retires memories about a moment that has passed ("tomorrow" after 3 days, a date that's over,
   "this week" after 2 weeks, "currently" after 2 months). Everything taken out is archived and
   "Undo last tidy-up" puts it back. Tuned on the owner's 43 real memories.
-- ⬜ Personal knowledge graph.
+- ✅ Personal knowledge graph. **0.95:** `shared/knowledge.ts` + `services/knowledge.ts`: a small
+  model turns the memories into people, places, projects, organisations, things and events (with
+  other names and short notes) and the links between them; rebuilt only when memories change (at
+  most every 3 h; background work, paused at the spending limit). Chat always gets a short "who's
+  who", and a `look_up` tool gives everything known about a name (other names work: "Fives" →
+  Will).
 - ⬜ Predictive assistance.
 - ⬜ Automatic AI model selection.
 - ⬜ Confidence assessment and information verification.

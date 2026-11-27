@@ -3,6 +3,23 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.95.0: Alton knows who's who
+
+Phase 2, item 5.
+
+- **A map of the people and things in your life.** From its memories, Alton now works out who and
+  what you've mentioned and how they connect. For example: Will (also "Fives") shares shifts with
+  you; you work at Customer Cafe in Neath; Alton runs on your PC, Palpatine.
+- **Chat always has a short "who's who"**, so it knows who you mean without you explaining.
+- **It can look someone or something up** for the full details, by any name you use for them.
+- It only rebuilds when your memories change (at most every 3 hours), uses the cheapest Claude
+  model, and pauses if you've hit your spending limit.
+
+**What to test**
+
+1. Ask Alton "who's Fives?" or "what do you know about Will?".
+2. Ask "where do I work?". It should know without you saying.
+
 ## 0.94.0: tidier memories
 
 Phase 2, item 4.

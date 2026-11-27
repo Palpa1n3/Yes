@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.94.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.95.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.95** Knowledge graph: `shared/knowledge.ts` (`parseGraph`, `memoriesKey`, `factsAbout`,
+  `findMentions`, `whosWho`), `services/knowledge.ts` (`KnowledgeService.rebuild`, Haiku + forced
+  `save_graph` tool, userData/knowledge.json); ipc/assistant.ts builds it 3 min after start and every
+  3 h if memories changed, adds `whosWho` to chat context and runs the `look_up` tool. Next:
+  predictive assistance, automatic model choice, confidence checks.
 - **0.94** Memory clean-up: `shared/memory-tidy.ts` (`similarity` word overlap, `SAME_THING` 0.75,
   `NEAR_DUPLICATE` 0.5, `outOfDate`, `planTidy`); NotesStore `remember()` updates a same-thing memory,
   `tidyMemories()` archives into `memoryArchive` (batches), `undoMemoryTidy()`; NotesOps
