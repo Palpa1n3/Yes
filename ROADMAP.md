@@ -38,7 +38,11 @@ hidden instructions → encrypted sync.
   finishes; after a restart the Agent Mode card offers **Carry on** (it restarts the task with what
   was done, checks the screen first and skips finished steps) or Dismiss. Phase 4 builds full
   pause/resume and multi-day tasks on this.
-- ⬜ Verification of system changes before and after execution.
+- ✅ Verification of system changes before and after execution. **0.86:** shared/verify.ts; closing
+  an app now waits up to 8 s and confirms it's gone (else "still open, may be asking you to save");
+  volume compares what Windows reports with what was asked; folder tidy checks every file landed
+  and lists those that couldn't move; RED4ext's ignore list is read back after editing; Minecraft
+  mods switched on/off are checked. (Vortex changes were already read back since 0.72.)
 - ⬜ Detection of unintended changes.
 - ⬜ Protection against conflicting automated tasks.
 - ⬜ Protection against malicious instructions embedded in websites and documents.

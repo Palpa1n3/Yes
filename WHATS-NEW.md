@@ -3,6 +3,26 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.86.0: checking changes actually happened
+
+Phase 1, item 6 of 11.
+
+Alton now checks after it changes something, instead of assuming it worked:
+
+- **Closing an app:** it waits up to 8 seconds and checks the app is really gone. If not, it tells
+  you it's still open (it's probably asking you to save something).
+- **Volume:** it compares what Windows reports with what you asked for, and says if it differs.
+- **Tidying a folder:** it checks every file really moved, and tells you about any that couldn't
+  (usually because they're open in another app). They stay where they were.
+- **Mod fixes:** switching off a RED4ext plugin is read back from its settings file, and switching
+  a Minecraft mod on or off is checked.
+
+**What to test**
+
+1. Open Notepad, type something, then ask Alton to close Notepad. It should say Notepad is still
+   open (it's asking about saving) rather than "closed".
+2. Ask for a volume level; the reply should match the real volume.
+
 ## 0.85.0: carrying on with an interrupted Agent Mode task
 
 Phase 1, item 5 of 11.

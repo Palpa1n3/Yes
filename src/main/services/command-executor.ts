@@ -3,6 +3,7 @@
  *  lookup by name. Launched apps are detached so they outlive ARC. URLs and searches
  *  open in the default browser. Every failure is a readable CommandResult, never a throw.
  *  OS access is injected (ExecutorDeps) so the logic is testable without Electron. */
+import { volumeMismatch } from '@shared/verify';
 import {
   MEDIA_KEYS,
   type CanonicalCommand,
@@ -223,6 +224,9 @@ export function createExecutor(
         if (level === undefined && mute === undefined)
           return done('failed', 'Tell me a volume level or mute/unmute.');
         const r = await sys.setVolume({ level, mute });
+        // Checked after: Windows reports what it actually set.
+        const off = volumeMismatch({ level, mute }, r);
+        if (off) return done('failed', off);
         return done('success', r.muted ? `Muted (volume ${r.level}%).` : `Volume is ${r.level}%.`);
       }
       case 'media_control': {

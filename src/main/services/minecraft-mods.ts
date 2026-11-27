@@ -420,6 +420,12 @@ export class MinecraftMods {
     const to = join(p.modsDir, on ? base : `${base}.disabled`);
     if (!existsSync(from)) return { ok: false, message: 'That mod file isn’t there.' };
     renameSync(from, to);
+    // Checked after: the file really has its new name.
+    if (!existsSync(to) || existsSync(from))
+      return {
+        ok: false,
+        message: `Couldn’t ${on ? 'switch on' : 'switch off'} ${base}: the file didn’t change.`,
+      };
     this.record({
       profile: id,
       kind: on ? 'enable' : 'disable',

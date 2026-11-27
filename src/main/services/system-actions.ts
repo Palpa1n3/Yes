@@ -235,8 +235,20 @@ export function createSystemActions(d: SystemActionDeps): SystemActions {
         const image = n.toLowerCase().endsWith('.exe') ? n : `${n}.exe`;
         // No /F: a polite close request, so apps can still ask to save.
         const r = await run('taskkill.exe', ['/IM', image, '/T']);
-        if (r.code === 0)
-          return { ok: true, message: `Asked ${basename(image, '.exe')} to close.` };
+        if (r.code === 0) {
+          // Checked after: is it actually gone? (An app may stop to ask about saving.)
+          const name = basename(image, '.exe');
+          for (let i = 0; i < 8; i++) {
+            await new Promise((res) => setTimeout(res, 1000));
+            const t = await run('tasklist.exe', ['/FI', `IMAGENAME eq ${image}`, '/NH']);
+            if (!t.out.toLowerCase().includes(image.toLowerCase()))
+              return { ok: true, message: `Closed ${name}.` };
+          }
+          return {
+            ok: false,
+            message: `Asked ${name} to close, but it's still open: it may be asking you to save something.`,
+          };
+        }
         if (r.code !== 128)
           return {
             ok: false,

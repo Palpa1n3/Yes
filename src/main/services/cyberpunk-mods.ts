@@ -1437,6 +1437,13 @@ export class CyberpunkMods {
             if (file && file.toLowerCase() !== action.plugin.toLowerCase())
               ini = setIgnored(ini, file, true);
             writeFileSync(this.iniPath(game), ini);
+            // Checked after: RED4ext's settings really list it now.
+            if (
+              !ignoredPlugins(readFileSync(this.iniPath(game), 'utf8')).some(
+                (p) => p.toLowerCase() === action.plugin.toLowerCase(),
+              )
+            )
+              throw new Error('the change didn’t stay in RED4ext’s config.ini');
             if (upd) note += ` An update is waiting on Nexus: update it, then undo this.`;
           } catch (e) {
             ok = false;

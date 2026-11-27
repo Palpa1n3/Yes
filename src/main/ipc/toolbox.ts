@@ -34,6 +34,7 @@ import {
   type Move,
 } from '../services/toolbox';
 import { handle } from './handle';
+import { movesLanded } from '@shared/verify';
 import { sessionGuard } from '../services/session-guard';
 
 const DISCORD_RE =
@@ -300,10 +301,22 @@ export function registerToolbox(
       if (!ok) return { result: 'The user said no; nothing was moved.' };
       const done = applyTidy(plan);
       writeList<Move>(undoFile, done);
-      ctx.audit.add('action', `Tidied ${which}: moved ${done.length} files into folders`);
+      // Checked after: every file really in its new folder and gone from the old one.
+      const { landed, missing } = movesLanded(done, existsSync);
+      const skipped = plan.length - done.length + missing.length;
+      ctx.audit.add(
+        'action',
+        `Tidied ${which}: moved ${landed.length} files into folders${skipped ? ` (${skipped} couldn't be moved)` : ''}`,
+        skipped === 0,
+      );
       return {
-        moved: done.length,
-        into: [...new Set(done.map((m) => m.to.split(/[\\/]/).at(-2)))],
+        moved: landed.length,
+        into: [...new Set(landed.map((m) => m.to.split(/[\\/]/).at(-2)))],
+        ...(skipped
+          ? {
+              notMoved: `${skipped} file${skipped === 1 ? '' : 's'} couldn't be moved (probably open in another app); they're where they were.`,
+            }
+          : {}),
         undo: 'Say "undo the tidy-up".',
       };
     },

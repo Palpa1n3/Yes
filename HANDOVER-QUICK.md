@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.85.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.86.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,10 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.86** Change checks (`shared/verify.ts`: `volumeMismatch`, `movesLanded`): `closeApp` polls
+  tasklist for 8 s after taskkill; command-executor set_volume compares; toolbox organize_folder
+  reports `notMoved`; cyberpunk-mods reads config.ini back after ignoring a plugin; minecraft-mods
+  setEnabled checks the rename. Next: detection of unintended changes.
 - **0.85** Agent task state: `SavedAgentTask` + `resumeTask()` in shared/agent.ts; ipc/agent.ts saves
   userData/agent-task.json once per step while running/paused, clears it on done/error/stopped; IPC
   `agent.interrupted/resume/dismissInterrupted`; AgentPanel shows a Carry on / Dismiss card when idle
