@@ -5,6 +5,7 @@ import { IPC } from '@shared/ipc';
 import type { UpdateState } from '@shared/updates';
 import type { MainContext } from '../context';
 import { DataBackup } from '../services/data-backup';
+import { bootGuard, rollBack } from '../services/rollback';
 import { emit, handle } from './handle';
 
 const FOUR_HOURS = 4 * 3600_000;
@@ -19,6 +20,8 @@ export function registerUpdatesIpc(ctx: MainContext): void {
     percent: null,
     error: null,
     checkedAt: null,
+    previous: app.isPackaged ? bootGuard().previous() : null,
+    skipped: null,
   };
   const set = (patch: Partial<UpdateState>): void => {
     state = { ...state, ...patch };
@@ -39,6 +42,20 @@ export function registerUpdatesIpc(ctx: MainContext): void {
     }
     return state;
   });
+  handle(IPC.updates.rollback, async () => {
+    const target = bootGuard().previous();
+    if (!app.isPackaged || !target)
+      return { ok: false, message: 'There’s no earlier version to go back to.' };
+    const r = await rollBack({
+      userData: app.getPath('userData'),
+      guard: bootGuard(),
+      current: app.getVersion(),
+      target,
+      quit: ctx.quit,
+    });
+    ctx.audit.add('action', r.message, r.ok);
+    return r;
+  });
   handle(IPC.updates.install, () => {
     if (state.status !== 'ready') return false;
     // quitAndInstall triggers before-quit, so the window really closes (not to the tray).
@@ -47,14 +64,32 @@ export function registerUpdatesIpc(ctx: MainContext): void {
   });
 
   if (!app.isPackaged) return;
-  autoUpdater.autoDownload = true;
+  // Downloads are started by hand below, so a version Alton rolled back from is never fetched.
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.logger = null;
   autoUpdater.on('checking-for-update', () => set({ status: 'checking', error: null }));
   autoUpdater.on('update-not-available', () => set({ status: 'none', checkedAt: Date.now() }));
-  autoUpdater.on('update-available', (i) =>
-    set({ status: 'downloading', version: i.version, percent: 0, checkedAt: Date.now() }),
-  );
+  autoUpdater.on('update-available', (i) => {
+    if (bootGuard().skipped().includes(i.version)) {
+      set({ status: 'none', version: null, skipped: i.version, checkedAt: Date.now() });
+      return;
+    }
+    bootGuard().clearSkipsBelow(i.version);
+    set({
+      status: 'downloading',
+      version: i.version,
+      percent: 0,
+      skipped: null,
+      checkedAt: Date.now(),
+    });
+    void autoUpdater.downloadUpdate().catch((err: unknown) =>
+      set({
+        status: 'error',
+        error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
+      }),
+    );
+  });
   autoUpdater.on('download-progress', (p) =>
     set({ status: 'downloading', percent: Math.round(p.percent) }),
   );

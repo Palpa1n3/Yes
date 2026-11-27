@@ -1,4 +1,5 @@
-import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { RefreshCw, Undo2 } from 'lucide-react';
 import { useUpdatesStore } from '@renderer/stores/updatesStore';
 import { Field, Section } from './controls';
 
@@ -14,6 +15,8 @@ const TEXT: Record<string, string> = {
 
 export function UpdatesSection() {
   const u = useUpdatesStore();
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
   return (
     <Section title="Updates">
       <Field
@@ -44,6 +47,36 @@ export function UpdatesSection() {
           </button>
         )}
       </Field>
+      {u.skipped && (
+        <p className="text-[12px] text-amber">
+          Version {u.skipped} isn’t installed: Alton went back from it because it didn’t start
+          properly. The next version will install as normal.
+        </p>
+      )}
+      {u.previous && u.status !== 'dev' && (
+        <Field
+          label={`Go back to version ${u.previous}`}
+          hint="If this version misbehaves: reinstalls the previous one (checked against its published checksum) and puts back Alton’s data from just before the update. Alton also does this by itself if a new version fails to start twice."
+        >
+          <button
+            type="button"
+            className="hud-button"
+            disabled={busy}
+            onClick={() => {
+              if (!window.confirm(`Go back to version ${u.previous}? Alton will restart.`)) return;
+              setBusy(true);
+              setMsg('Fetching the previous version…');
+              void window.arc.updates
+                .rollback()
+                .then((r) => setMsg(r.message))
+                .finally(() => setBusy(false));
+            }}
+          >
+            <Undo2 size={12} strokeWidth={1.5} /> Go back
+          </button>
+        </Field>
+      )}
+      {msg && <p className="text-[12px] text-accent">{msg}</p>}
     </Section>
   );
 }

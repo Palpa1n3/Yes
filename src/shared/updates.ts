@@ -16,4 +16,8 @@ export interface UpdateState {
   percent: number | null;
   error: string | null;
   checkedAt: number | null;
+  /** The version this one was updated from (Settings can go back to it). */
+  previous?: string | null;
+  /** A newer version that isn't installed because Alton rolled back from it. */
+  skipped?: string | null;
 }

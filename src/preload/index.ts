@@ -83,6 +83,7 @@ const api: ArcAPI = {
     state: () => invoke(IPC.updates.state),
     check: () => invoke(IPC.updates.check),
     install: () => invoke(IPC.updates.install),
+    rollback: () => invoke(IPC.updates.rollback),
     onChange: (cb) => subscribe(IPC.updates.onChange, cb),
   },
   email: {

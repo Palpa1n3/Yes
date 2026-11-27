@@ -7874,6 +7874,7 @@ function wire(): void {
     renderToday();
   };
   $('updateBar').onclick = () => void applyUpdate();
+  $<HTMLAnchorElement>('oldVersions').href = `https://github.com/${__REPO__}/releases`;
   const autoUpd = $<HTMLInputElement>('autoUpd');
   autoUpd.checked = autoUpdateOn();
   autoUpd.onchange = () => {

@@ -195,6 +195,15 @@ function BackupsSection() {
             <span className="flex-1 text-text-primary/90">
               {b.name}{' '}
               <span className="text-text-muted">· {(b.size / 1024 ** 2).toFixed(1)} MB</span>
+              {b.damaged?.length ? (
+                <span
+                  className="text-amber"
+                  title={`Not restored from this backup (couldn’t be read): ${b.damaged.join(', ')}`}
+                >
+                  {' '}
+                  · {b.damaged.length} damaged file{b.damaged.length === 1 ? '' : 's'} skipped
+                </span>
+              ) : null}
             </span>
             {confirm === b.name ? (
               <>

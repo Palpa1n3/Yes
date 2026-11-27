@@ -8,12 +8,19 @@ checks pass. Status: ✅ done · 🔶 started · ⬜ not started.
 Order inside the phase: backups → rollback → limits → recovery → change checks → conflicts →
 hidden instructions → encrypted sync.
 
-- 🔶 Automatic configuration and memory backups. **0.81:** every data file (settings, notes,
+- ✅ Automatic configuration and memory backups. **0.81:** every data file (settings, notes,
   memories, routines, chats, shifts, habits, plugins, the mod tools' records); a manifest per
   backup records which files were readable; 7 daily + 4 weekly kept; a copy before every update;
-  a damaged data file is put back from the newest good backup at start-up. Still to do: show
-  "damaged" backups in Settings › Privacy › Backups.
-- ⬜ Automatic update rollback (the "before update" backups are the data half of this).
+  a damaged data file is put back from the newest good backup at start-up. **0.82:** Settings ›
+  Privacy › Backups marks backups with damaged files (those files are never restored).
+- ✅ Automatic update rollback. **0.82 (PC):** every start is recorded (`boot.json`); a start counts
+  as good a minute after the window loads, or on a clean quit. Two failed starts in a row after an
+  update and Alton goes back by itself: the previous installer from its GitHub release, checked
+  against the SHA-512 in that release's latest.yml, run silently; Alton's data from just before the
+  update put back; the broken version never auto-installed again (until a newer one comes out).
+  Settings › Updates › "Go back to version X" does the same by hand. **Phone:** Android only
+  installs an older version after uninstalling, so Settings › This app links to earlier versions
+  with a warning.
 - ⬜ API usage and spending limits.
 - ⬜ Crash and unexpected shutdown recovery.
 - ⬜ Persistent task state across restarts (saving progress; resuming comes in Phase 4).

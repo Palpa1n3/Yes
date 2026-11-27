@@ -25,6 +25,7 @@ import { AuditLog, ErrorLog } from './services/diagnostics';
 import { UsageTracker } from './services/usage-tracker';
 import { emit } from './ipc/handle';
 import { DataBackup } from './services/data-backup';
+import { bootGuard, rollBack } from './services/rollback';
 import { SettingsStore } from './services/settings-store';
 import { TelemetryService } from './services/telemetry';
 import { TimerService, describeDuration } from './services/timer-service';
@@ -37,6 +38,7 @@ let quitting = false;
 let rendererReady = false;
 let hintedTray = false;
 let timersLoaded = false;
+let startOkTimer: ReturnType<typeof setTimeout> | null = null;
 const pending: AppCommand[] = [];
 
 // Before anything reads Alton's data: a file left damaged (say, by a power cut mid-save) is put
@@ -46,6 +48,15 @@ const recovered = (() => {
     return new DataBackup(app.getPath('userData')).recoverDamaged();
   } catch {
     return [];
+  }
+})();
+// Watch the first starts of a new version: two that never get going and Alton goes back to the
+// version before (see services/rollback.ts).
+const rollbackTarget = (() => {
+  try {
+    return app.isPackaged ? bootGuard().start(app.getVersion()) : null;
+  } catch {
+    return null;
   }
 })();
 const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'));
@@ -329,6 +340,15 @@ function createWindow(): BrowserWindow {
   // Deliver anything queued (hotkey notices etc.) once the UI can receive it.
   win.webContents.on('did-finish-load', () => {
     rendererReady = true;
+    // A minute up with the window loaded: this version works.
+    if (!startOkTimer)
+      startOkTimer = setTimeout(() => {
+        try {
+          bootGuard().markOk();
+        } catch {
+          /* not fatal */
+        }
+      }, 60_000);
     for (const c of pending.splice(0)) emit(win, IPC.app.onCommand, c);
     if (!timersLoaded) {
       timersLoaded = true;
@@ -424,6 +444,25 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(() => {
+    // This version failed to start twice after an update: go back to the one before.
+    if (rollbackTarget)
+      setTimeout(() => {
+        errors.add(
+          'warn',
+          'update',
+          `Version ${app.getVersion()} didn't start properly twice: going back to ${rollbackTarget}.`,
+        );
+        void rollBack({
+          userData: app.getPath('userData'),
+          guard: bootGuard(),
+          current: app.getVersion(),
+          target: rollbackTarget,
+          quit: () => ctx.quit(),
+        }).then((r) => {
+          ctx.audit.add('action', r.message, r.ok);
+          if (!r.ok) errors.add('error', 'update', r.message);
+        });
+      }, 5000);
     // One long-lived PowerShell for systeminformation on Windows: far cheaper than one per probe.
     if (process.platform === 'win32') si.powerShellStart();
     // First run: units from the Windows region (UK: °C + mph, US: °F + mph).
@@ -476,6 +515,13 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     quitting = true;
+    // A clean quit counts as a good start (only crashes and hangs count against a version).
+    if (app.isPackaged)
+      try {
+        bootGuard().markOk();
+      } catch {
+        /* not fatal */
+      }
   });
   app.on('will-quit', () => {
     settings.saveNow();

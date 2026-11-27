@@ -187,6 +187,7 @@ export const IPC = {
     state: 'updates:state',
     check: 'updates:check',
     install: 'updates:install',
+    rollback: 'updates:rollback',
     onChange: 'updates:changed',
   },
   email: {
@@ -424,6 +425,7 @@ export interface InvokeMap {
   [IPC.agent.start]: { args: [task: string]; result: AgentStatus };
   [IPC.updates.check]: { args: []; result: UpdateState };
   [IPC.updates.install]: { args: []; result: boolean };
+  [IPC.updates.rollback]: { args: []; result: { ok: boolean; message: string } };
   [IPC.email.refresh]: { args: []; result: EmailState };
   [IPC.email.connect]: { args: [user: string, appPassword: string]; result: EmailConnectResult };
   [IPC.email.disconnect]: { args: []; result: EmailState };
@@ -753,6 +755,8 @@ export interface ArcAPI {
     check(): Promise<UpdateState>;
     /** Restart now and install the downloaded update. */
     install(): Promise<boolean>;
+    /** Go back to the version this one was updated from (and the data from just before). */
+    rollback(): Promise<{ ok: boolean; message: string }>;
     onChange(cb: (s: UpdateState) => void): Unsubscribe;
   };
   email: {

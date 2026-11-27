@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.81.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.82.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,15 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.82** Update rollback (`shared/rollback.ts`, `services/rollback.ts`): `BootGuard` (userData/boot.json)
+  is started at the top of `main/index.ts` (packaged only); `markOk()` a minute after did-finish-load
+  and on before-quit; `onBoot` returns a version to go back to after `FAILS_BEFORE_ROLLBACK` (2) failed
+  starts of an upgraded version. `rollBack()` fetches `releases/download/v<prev>/latest.yml`, downloads
+  and SHA-512-checks the installer to `%TEMP%\ARC-rollback`, restores the `*-before-update-<current>`
+  backup, runs `ARC-Setup-<prev>.exe /S --force-run`, quits. Skipped versions: `autoUpdater.autoDownload`
+  is now false and `update-available` only downloads versions not in `boot.json` `skip`. IPC
+  `updates.rollback`; Settings › Updates "Go back"; backups list shows damaged files. Owner asked (27 Nov)
+  to start each roadmap item automatically: see ROADMAP.md, next is "API usage and spending limits".
 - **0.81** Phase 1 started. Backups (`services/data-backup.ts`): all of Alton's data files
   (`BACKUP_ITEMS`), a `manifest.json` per backup (which files were readable), 7 daily + 4 weekly
   (`keepPlan`), a `before-update-<version>` copy when an update has downloaded (`ipc/updates.ts`),

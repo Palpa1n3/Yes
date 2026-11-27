@@ -77,6 +77,7 @@ export function installArcMock(): ArcAPI {
         checkedAt: null,
       })),
       install: vi.fn(async () => false),
+      rollback: vi.fn(async () => ({ ok: false, message: '' })),
       onChange: vi.fn(() => () => undefined),
     },
     email: {
