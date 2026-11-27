@@ -291,6 +291,9 @@ export interface Settings {
   phoneAppUrl: string;
   /** Phone companion: serve a web app on the home network (pair with a code). */
   phoneAccess: boolean;
+  /** Also allow unencrypted connections over the home Wi-Fi (plain http://192.168…). Off: only
+   *  Tailscale (encrypted) reaches the phone companion. */
+  phonePlainLan: boolean;
   /** Whisper mode: quieter, slower speech and no sound effects. */
   whisper: boolean;
   /** After answering a spoken request, keep listening a few seconds for a follow-up (no name needed). */
@@ -427,6 +430,7 @@ export const DEFAULT_SETTINGS: Settings = {
   followUp: true,
   localModel: '',
   phoneAccess: false,
+  phonePlainLan: false,
   phoneAppUrl: 'https://palpa1n3.github.io/Yes/',
   monthlyBudget: 0,
   budgetAction: 'pause-background',

@@ -1,5 +1,8 @@
 import { app, BrowserWindow, desktopCapturer, ipcMain, screen, session } from 'electron';
+import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
+import { serveUrlFor } from '@shared/remote-link';
 import { join } from 'node:path';
 import { IPC, type RemoteInfo } from '@shared/ipc';
 import type { AgentStatus } from '@shared/agent';
@@ -372,7 +375,24 @@ const { ipcRenderer } = require('electron');
     approve: (id, ok) => ctx.answerApproval?.(id, ok),
     uploadDir: () => join(app.getPath('downloads'), 'From phone'),
     log: (t) => ctx.audit.add('action', `Phone: ${t}`),
+    allowPlainLan: () => ctx.settings.get().phonePlainLan,
   });
+  // The encrypted address phones should use: Tailscale's HTTPS forwarding to this server.
+  let secureUrl: string | null = null;
+  const findSecureUrl = (): void => {
+    if (process.platform !== 'win32') return;
+    const installed = join(
+      process.env.ProgramFiles ?? 'C:\\Program Files',
+      'Tailscale',
+      'tailscale.exe',
+    );
+    const exe = existsSync(installed) ? installed : 'tailscale';
+    execFile(exe, ['serve', 'status'], { windowsHide: true, timeout: 10_000 }, (_e, out) => {
+      secureUrl = serveUrlFor(String(out ?? ''), REMOTE_PORT);
+    });
+  };
+  findSecureUrl();
+  setInterval(findSecureUrl, 5 * 60_000).unref?.();
 
   const info = (): RemoteInfo => ({
     running: server.running,
@@ -381,6 +401,8 @@ const { ipcRenderer } = require('electron');
     paired: server.pairedCount(),
     error,
     macs: macs(),
+    secureUrl,
+    plainLan: ctx.settings.get().phonePlainLan,
   });
 
   const apply = async (on: boolean): Promise<void> => {

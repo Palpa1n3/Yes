@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.89.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.90.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.90** Phase 1 done. `shared/remote-link.ts` (`linkKind` loopback/tailscale/lan/outside,
+  `serveUrlFor` parses `tailscale serve status`); remote-server refuses `lan` unless setting
+  `phonePlainLan`; ipc/remote.ts finds `secureUrl` every 5 min; RemoteInfo `secureUrl`/`plainLan`;
+  Privacy › Phone companion shows the encrypted address, uses it in the pairing QR, and has the plain
+  Wi-Fi switch. Owner's PC: https://palpatine.tailf883ad.ts.net → 127.0.0.1:47615.
 - **0.89** Prompt-injection guard: `shared/injection.ts` (`guardText`, `warningFor`, `OUTSIDE_TOOLS`,
   `guardToolResult`); anthropic-provider checks string tool results before pushing them
   (`deps.onInjection` → audit + log); phone main.ts checks every tool result; buildSystemPrompt has the

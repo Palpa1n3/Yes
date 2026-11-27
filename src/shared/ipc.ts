@@ -999,6 +999,10 @@ export interface RemoteInfo {
   error: string | null;
   /** Network adapters' MAC addresses (for a Wake-on-LAN app). */
   macs: string[];
+  /** The encrypted address (Tailscale HTTPS, e.g. https://pc.tail1234.ts.net), if set up. */
+  secureUrl?: string | null;
+  /** Unencrypted home-Wi-Fi connections allowed too. */
+  plainLan?: boolean;
 }
 
 /** A copy of Alton's data in userData/backups. */

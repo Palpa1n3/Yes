@@ -271,13 +271,34 @@ export function PhoneSection() {
       </Field>
       {s.phoneAccess && info && (
         <div className="space-y-2 py-2 text-[12px]">
+          {info.secureUrl ? (
+            <p className="text-ok">
+              Encrypted link ready: <span className="font-mono">{info.secureUrl}</span> (Tailscale).
+            </p>
+          ) : (
+            <p className="text-amber">
+              No encrypted address found. Install Tailscale on this PC and your phone, then run{' '}
+              <code>tailscale serve --bg 47615</code> once; or allow home Wi-Fi below (not
+              encrypted).
+            </p>
+          )}
+          <Field
+            label="Also allow plain home Wi-Fi (not encrypted)"
+            hint="Off: phones reach Alton only through Tailscale, which is encrypted. On: phones on your home Wi-Fi can also use the plain http://192.168… address, where anyone on the same Wi-Fi could read the traffic."
+          >
+            <Toggle
+              label="Allow plain home Wi-Fi"
+              checked={s.phonePlainLan}
+              onChange={(v) => void update({ phonePlainLan: v })}
+            />
+          </Field>
           {info.error && <p className="text-alert">{info.error}</p>}
           {info.running && (
             <>
               {info.urls[0] && info.code && (
                 <div className="flex items-center gap-4 rounded-[10px] border border-accent/40 bg-accent/5 p-3">
                   <QrCode
-                    text={`${pairUrl(info.urls)}/#pair=${info.code}`}
+                    text={`${info.secureUrl ?? pairUrl(info.urls)}/#pair=${info.code}`}
                     label="Scan to open and pair the phone app"
                   />
                   <p className="text-[13px] text-text-primary">
@@ -285,7 +306,9 @@ export function PhoneSection() {
                     tap the link. It opens {s.assistantName} and pairs by itself.
                     <br />
                     <span className="text-[12px] text-text-muted">
-                      (Phone on the same Wi-Fi. The code changes after each phone pairs.)
+                      {info.secureUrl
+                        ? '(Encrypted, through Tailscale: the phone needs the Tailscale app on. The code changes after each phone pairs.)'
+                        : '(Phone on the same Wi-Fi. The code changes after each phone pairs.)'}
                     </span>
                   </p>
                 </div>

@@ -214,6 +214,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     projectDir: str('projectDir', 400).trim(),
     whisper: bool('whisper'),
     phoneAccess: bool('phoneAccess'),
+    phonePlainLan: bool('phonePlainLan'),
     onboarded: typeof r['onboarded'] === 'boolean' ? r['onboarded'] : true,
     monthlyBudget:
       typeof r['monthlyBudget'] === 'number' &&

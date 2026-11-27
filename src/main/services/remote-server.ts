@@ -4,6 +4,7 @@
  *  emergency stop and send files to Downloads\From phone. Only private (LAN) addresses are
  *  served, code guesses are rate-limited, and paired phones can be forgotten at any time. */
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { linkKind } from '@shared/remote-link';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import {
   existsSync,
@@ -59,6 +60,8 @@ export interface RemoteDeps {
   uploadDir(): string;
   /** Paired-device token hashes are kept here. */
   file?: string;
+  /** Allow unencrypted connections over the home Wi-Fi too (off: Tailscale only). */
+  allowPlainLan?(): boolean;
   log?(text: string): void;
   /** Everything else the phone app asks for (chats, notes, controls…). */
   route?(
@@ -234,6 +237,12 @@ export class RemoteServer {
     try {
       if (!isPrivateAddress(req.socket.remoteAddress))
         return send(403, { error: 'Home network only.' });
+      // Plain home Wi-Fi isn't encrypted: only when switched on (Tailscale always is).
+      if (linkKind(req.socket.remoteAddress) === 'lan' && !this.d.allowPlainLan?.())
+        return send(403, {
+          error:
+            'Unencrypted home-Wi-Fi connections are switched off. Use the PC’s Tailscale address (https://….ts.net), or allow home Wi-Fi in Alton’s Settings › Privacy › Phone companion.',
+        });
       const url = new URL(req.url ?? '/', 'http://local');
       // The phone app (GitHub Pages) talks to the API directly: allow exactly its origin.
       // Also the Android app, whose pages live at https://localhost on the phone itself.

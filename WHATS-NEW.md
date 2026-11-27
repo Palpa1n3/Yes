@@ -3,6 +3,27 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.90.0: encrypted phone link (Phase 1 complete)
+
+Phase 1, item 11 of 11. **Phase 1, "Safety foundations", is finished.**
+
+- **Your phone app was already encrypted.** It only talks to the PC through Tailscale's HTTPS
+  address (`https://palpatine.tailf883ad.ts.net`), which is encrypted end to end.
+- **The gap was the PC's plain home-Wi-Fi address** (http://192.168…): anyone on the same Wi-Fi could
+  read that traffic, including the pairing code. It's now **off by default**.
+- **Pairing a phone is encrypted too.** Alton finds its Tailscale HTTPS address by itself, and the
+  pairing QR code in Settings › Privacy › Phone companion uses it.
+- Settings shows "Encrypted link ready" with the address. If you ever need the plain home-Wi-Fi
+  address (say, a phone without Tailscale), switch on **Also allow plain home Wi-Fi (not
+  encrypted)** there.
+
+**What to test**
+
+1. The phone app should carry on working exactly as before (it already uses Tailscale).
+2. Settings › Privacy › Phone companion should say "Encrypted link ready: https://….ts.net".
+3. If you used Alton in a phone **browser** at an http://192.168… address, that now needs the
+   switch above, or use the https://….ts.net address instead.
+
 ## 0.89.0: hidden instructions in emails, pages and files
 
 Phase 1, item 9 of 11.

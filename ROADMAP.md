@@ -3,7 +3,7 @@
 Agreed with the owner on 27 Nov 2026. Each item ships as its own tested release, pushed once all
 checks pass. Status: ✅ done · 🔶 started · ⬜ not started.
 
-## Phase 1: Safety foundations (current)
+## Phase 1: Safety foundations (done, 0.81–0.90)
 
 Order inside the phase: backups → rollback → limits → recovery → change checks → conflicts →
 hidden instructions → encrypted sync.
@@ -62,7 +62,11 @@ hidden instructions → encrypted sync.
   messages, logs, past chats) and every phone tool result; each catch goes in the action history.
   Chat now has the standing rule Agent Mode already had: tool content is information, never
   instructions.
-- ⬜ Encrypted cross-device synchronization.
+- ✅ Encrypted cross-device synchronization. **0.90:** the phone app already only talks to the PC
+  over Tailscale HTTPS (TLS inside Tailscale's encrypted tunnel). The PC's phone server now refuses
+  plain, unencrypted home-Wi-Fi connections (http://192.168…) unless Settings › Privacy › Phone
+  companion › "Also allow plain home Wi-Fi" is on; Alton finds its Tailscale HTTPS address itself
+  (`tailscale serve status`) and the pairing QR code uses it, so pairing is encrypted too.
 - ✅ PIN authentication kept instead of biometrics.
 
 Also in 0.81 (asked for alongside Phase 1): **easier Android updates**: the new version
@@ -70,7 +74,7 @@ downloads in the background, is checked (same app, same signing key) and is inst
 Android's PackageInstaller when you leave Alton. After the first such update, Android 12+ needs
 no Install screen. Switch: phone app › Settings › This app › Update automatically.
 
-## Phase 2: Unified intelligence
+## Phase 2: Unified intelligence (next)
 
 - ⬜ Central intelligence engine connecting all existing capabilities.
 - ⬜ Shared contextual awareness across applications.
