@@ -90,7 +90,12 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
   “title”" for the chat open on the PC in the last 30 minutes (one tap opens it, fetching it first
   if needed); the PC says "Carry on from your phone: “title”" when a conversation from the last 15
   minutes arrives from the phone (once per chat).
-- ⬜ Intelligent memory consolidation.
+- ✅ Intelligent memory consolidation. **0.94:** `shared/memory-tidy.ts`: a new memory that says
+  the same as an existing one (similarity ≥ 0.75) updates it; a daily tidy-up (and Notes › Memory ›
+  Tidy memories) merges near-duplicates (≥ 0.5, the newest wording kept, never across projects)
+  and retires memories about a moment that has passed ("tomorrow" after 3 days, a date that's over,
+  "this week" after 2 weeks, "currently" after 2 months). Everything taken out is archived and
+  "Undo last tidy-up" puts it back. Tuned on the owner's 43 real memories.
 - ⬜ Personal knowledge graph.
 - ⬜ Predictive assistance.
 - ⬜ Automatic AI model selection.

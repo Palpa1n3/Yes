@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.93.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.94.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.94** Memory clean-up: `shared/memory-tidy.ts` (`similarity` word overlap, `SAME_THING` 0.75,
+  `NEAR_DUPLICATE` 0.5, `outOfDate`, `planTidy`); NotesStore `remember()` updates a same-thing memory,
+  `tidyMemories()` archives into `memoryArchive` (batches), `undoMemoryTidy()`; NotesOps
+  `tidyMemories`/`undoMemoryTidy`; daily run in ipc/assistant.ts; Notes tab buttons. Next: personal
+  knowledge graph.
 - **0.93** Continuity: RemoteStatus `activeChat` (the PC's open chat; phone-started chats use their
   `phoneId`); phone `showPcContinue()` bar (#pcContinue, fresh <30 min, not the open chat, shown once
   per update); remote-api `/api/import` sends a "Carry on from your phone" notice for a chat with a

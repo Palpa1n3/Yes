@@ -3,6 +3,28 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.94.0: tidier memories
+
+Phase 2, item 4.
+
+Alton had picked up repeats and out-of-date facts: "first shift at 13:15 tomorrow" three times,
+Lunar Client 26.3 twice, the GTA 6 role twice, and several old shift times.
+
+- **No more repeats:** when Alton learns something it already knows in other words, it updates the
+  existing memory (with the newest wording) instead of adding another.
+- **A daily tidy-up:**
+  - memories that say the same thing are merged, keeping the newest;
+  - memories about a moment that's passed ("tomorrow" a few days later, a date that's over,
+    "this week" after a fortnight) are retired.
+- **Nothing is lost:** whatever the tidy-up takes out is kept, and **Undo last tidy-up** in
+  Notes › Memory puts it back (hover over it to see what was taken out). There's also a
+  **Tidy memories** button to run it now.
+
+**What to test**
+
+1. Notes › Memory: press **Tidy memories**. The repeated shift and Minecraft memories should go.
+2. Press **Undo last tidy-up**: they come back. Press Tidy again if you're happy with it.
+
 ## 0.93.0: pick up a conversation on the other device
 
 Phase 2, item 3. Also: the six safety items you added are now a **safety gate** in ROADMAP.md that

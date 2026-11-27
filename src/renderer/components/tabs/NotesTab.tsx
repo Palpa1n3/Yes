@@ -126,7 +126,8 @@ function memoryGroups(memories: Memory[]): Array<[string, Memory[]]> {
 }
 
 export function NotesTab() {
-  const { lists, notes, memories, apply } = useNotesStore();
+  const { lists, notes, memories, apply, memoryArchive } = useNotesStore();
+  const archive = memoryArchive ?? [];
   const name = useSettingsStore((s) => s.settings.assistantName);
   const [selected, setSelected] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
@@ -375,6 +376,30 @@ export function NotesTab() {
               label="Add memory"
               onAdd={(text) => void apply({ op: 'remember', text })}
             />
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
+              <button
+                type="button"
+                className="hud-button"
+                title="Merge memories that say the same thing, and retire ones about a day that has passed (kept so you can undo)"
+                onClick={() => void apply({ op: 'tidyMemories' })}
+              >
+                Tidy memories
+              </button>
+              {!!archive.length && (
+                <button
+                  type="button"
+                  className="hud-button"
+                  title={`Last tidy-up took out: ${archive
+                    .filter((a) => a.batch === archive[archive.length - 1]?.batch)
+                    .map((a) => `${a.text} (${a.why})`)
+                    .join(' · ')}`}
+                  onClick={() => void apply({ op: 'undoMemoryTidy' })}
+                >
+                  Undo last tidy-up
+                </button>
+              )}
+              <span>Tidies itself once a day.</span>
+            </div>
             <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto" aria-label="Memories">
               {memoryGroups(memories).map(([group, list]) => (
                 <li key={group}>

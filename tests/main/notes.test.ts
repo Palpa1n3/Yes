@@ -123,3 +123,40 @@ describe('offline brain: lists, notes, memory', () => {
     expect(await ask(s, 'check the weather')).not.toMatch(/Ticked|No list item/);
   }, 30_000);
 });
+
+describe('memory clean-up', () => {
+  it('updates a memory that says the same thing instead of keeping two', () => {
+    let now = 1_000;
+    const n = new NotesStore({ now: () => now });
+    const a = n.remember('Their PC is named Palpatine.');
+    now = 2_000;
+    const b = n.remember('Their PC is named Palpatine');
+    expect(b?.id).toBe(a?.id);
+    expect(n.state().memories).toHaveLength(1);
+    expect(n.state().memories[0]?.createdAt).toBe(2_000);
+  });
+
+  it('tidies repeats and passed days, and undo puts them back', () => {
+    const DAY = 86_400_000;
+    let now = 10 * DAY;
+    const n = new NotesStore({ now: () => now });
+    n.remember(
+      'They are a member of the GTA 6 voice cast playing a character named Mandy, per their own claim in this conversation.',
+    );
+    now = 11 * DAY;
+    n.remember('Their GTA 6 voice cast role is Mandy, per their own claim.');
+    n.remember('Their first shift starts at 13:15 tomorrow.');
+    n.remember('They live in Neath.');
+    now = 20 * DAY;
+    expect(n.tidyMemories()).toEqual({ merged: 1, outOfDate: 1 });
+    expect(n.state().memories.map((m) => m.text)).toEqual([
+      'Their GTA 6 voice cast role is Mandy, per their own claim.',
+      'They live in Neath.',
+    ]);
+    expect(n.state().memoryArchive).toHaveLength(2);
+    expect(n.undoMemoryTidy()).toBe(2);
+    expect(n.state().memories).toHaveLength(4);
+    expect(n.state().memoryArchive).toHaveLength(0);
+    expect(n.undoMemoryTidy()).toBe(0);
+  });
+});

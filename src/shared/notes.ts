@@ -70,6 +70,16 @@ export interface NotesState {
   notes: Note[];
   memories: Memory[];
   goals: Goal[];
+  /** Memories a tidy-up took out (newest last), so a tidy-up can be undone. */
+  memoryArchive?: ArchivedMemory[];
+}
+
+/** A memory taken out by a tidy-up: merged into another, or about a moment that has passed. */
+export interface ArchivedMemory extends Memory {
+  removedAt: number;
+  why: 'merged' | 'out of date';
+  /** Which tidy-up (undo puts back a whole batch). */
+  batch: string;
 }
 
 export const MAX_ITEMS = 200;
@@ -136,6 +146,8 @@ export type NotesOp =
   | { op: 'remember'; text: string }
   | { op: 'forget'; id: string }
   | { op: 'editMemory'; id: string; text: string }
+  | { op: 'tidyMemories' }
+  | { op: 'undoMemoryTidy' }
   | { op: 'addGoal'; title: string; due?: string }
   | { op: 'goalProgress'; id: string; progress: number; note?: string }
   | { op: 'removeGoal'; id: string };

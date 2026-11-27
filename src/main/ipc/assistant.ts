@@ -93,6 +93,18 @@ export function registerAssistantIpc(
     log: (m) => ctx.errors.add('info', 'memory', m),
     onUsage: (model, usage) => void ctx.usage.record(model, usage, 'memory'),
   });
+  // Once a day: merge memories that say the same thing and retire ones about a day that has
+  // passed (archived; undo in Notes › Memory).
+  const tidy = (): void => {
+    const r = extra.notes.tidyMemories();
+    if (r.merged || r.outOfDate)
+      ctx.audit.add(
+        'memory',
+        `Tidied memories: merged ${r.merged}, retired ${r.outOfDate} out of date (undo in Notes › Memory)`,
+      );
+  };
+  setTimeout(tidy, 2 * 60_000).unref?.();
+  setInterval(tidy, 24 * 3600_000).unref?.();
   // Memory learning is background work: paused at the monthly limit (Settings › AI › Spending).
   extra.chats.onSaved = (id) => {
     if (!ctx.usage.blocked('memory')) learner.schedule(id);

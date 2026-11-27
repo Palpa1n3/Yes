@@ -15,7 +15,9 @@ import {
   type NoteList,
   type NotesOp,
   type NotesState,
+  type ArchivedMemory,
 } from '@shared/notes';
+import { SAME_THING, planTidy, similarity, tidyCount } from '@shared/memory-tidy';
 
 const str = (v: unknown, n = 300): string =>
   typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
@@ -59,6 +61,9 @@ export class NotesStore {
         memories: arr<Memory>(raw.memories)
           .filter((m) => m && typeof m.text === 'string')
           .slice(0, MAX_MEMORIES),
+        memoryArchive: arr<ArchivedMemory>(raw.memoryArchive)
+          .filter((m) => m && typeof m.text === 'string' && typeof m.batch === 'string')
+          .slice(-200),
         goals: arr<Goal>(raw.goals)
           .filter((g) => g && typeof g.title === 'string')
           .map((g) => ({
@@ -170,6 +175,17 @@ export class NotesStore {
     if (!t) return null;
     const dupe = this.s.memories.find((m) => m.text.toLowerCase() === t.toLowerCase());
     if (dupe) return dupe;
+    // Saying the same thing as an existing memory: update that one (newest wording) instead of
+    // keeping two.
+    const same = this.s.memories.find(
+      (m) => (m.project ?? '') === (project ?? '') && similarity(m.text, t) >= SAME_THING,
+    );
+    if (same) {
+      same.text = t;
+      same.createdAt = this.now();
+      this.changed();
+      return same;
+    }
     const m: Memory = {
       id: this.id('m'),
       text: t,
@@ -182,6 +198,50 @@ export class NotesStore {
     if (this.s.memories.length > MAX_MEMORIES) this.s.memories.shift();
     this.changed();
     return m;
+  }
+
+  /** Merge memories that say the same thing and retire ones about a moment that has passed.
+   *  What's taken out is archived (undo puts it back). Returns how many of each. */
+  tidyMemories(): { merged: number; outOfDate: number } {
+    const plan = planTidy(this.s.memories, this.now());
+    if (!tidyCount(plan)) return { merged: 0, outOfDate: 0 };
+    const batch = `t${this.now().toString(36)}`;
+    const removedAt = this.now();
+    const out = new Map<string, ArchivedMemory['why']>();
+    for (const g of plan.merges) for (const id of g.drop) out.set(id, 'merged');
+    for (const id of plan.outOfDate) out.set(id, 'out of date');
+    const archived: ArchivedMemory[] = this.s.memories
+      .filter((m) => out.has(m.id))
+      .map((m) => ({ ...m, removedAt, why: out.get(m.id) ?? 'merged', batch }));
+    this.s.memories = this.s.memories.filter((m) => !out.has(m.id));
+    this.s.memoryArchive = [...(this.s.memoryArchive ?? []), ...archived].slice(-200);
+    this.changed();
+    return {
+      merged: archived.filter((a) => a.why === 'merged').length,
+      outOfDate: archived.filter((a) => a.why === 'out of date').length,
+    };
+  }
+
+  /** Put back what the last tidy-up took out. Returns how many came back. */
+  undoMemoryTidy(): number {
+    const arch = this.s.memoryArchive ?? [];
+    const last = arch[arch.length - 1]?.batch;
+    if (!last) return 0;
+    const back = arch.filter((a) => a.batch === last);
+    for (const a of back) {
+      const m: Memory = {
+        id: a.id,
+        text: a.text,
+        createdAt: a.createdAt,
+        ...(a.learned ? { learned: true } : {}),
+        ...(a.category ? { category: a.category } : {}),
+        ...(a.project ? { project: a.project } : {}),
+      };
+      if (!this.s.memories.some((x) => x.id === m.id)) this.s.memories.push(m);
+    }
+    this.s.memoryArchive = arch.filter((a) => a.batch !== last);
+    this.changed();
+    return back.length;
   }
 
   /** Forget memories matching the words (or by id); returns what was forgotten. */
@@ -289,6 +349,12 @@ export class NotesStore {
         break;
       case 'forget':
         this.forget(String(o.id));
+        break;
+      case 'tidyMemories':
+        this.tidyMemories();
+        break;
+      case 'undoMemoryTidy':
+        this.undoMemoryTidy();
         break;
       case 'editMemory': {
         const m = this.s.memories.find((x) => x.id === o.id);
