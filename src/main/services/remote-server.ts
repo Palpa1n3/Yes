@@ -40,6 +40,8 @@ export interface RemoteStatus {
   approvals: Array<{ id: string; title: string; detail: string }>;
   /** The latest messages in the chat open on the PC. */
   history: Array<{ who: 'you' | 'alton'; text: string }>;
+  /** Alton's picture of what's going on on the PC right now (shared/context.ts). */
+  now?: string;
 }
 
 /** Where the Android app's pages come from (Capacitor's https scheme). Calls still need pairing. */

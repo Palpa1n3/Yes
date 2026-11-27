@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.91.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.92.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.92** Phase 2 started: `shared/context.ts` (`NowFacts`, `describeNow`, ≤700 chars); ipc/index.ts
+  `nowContext()` gathers foreground, gaming, jobLocks, calendar, shifts, timers, email, media, weather,
+  phone messages and is the chat `context`; RemoteStatus `now` sends it to the phone, whose
+  `systemText()` adds "On the user's PC: …" while paired. Next: cross-device conversation
+  continuity, then memory consolidation.
 - **0.91** Any email provider: `shared/mail-servers.ts` (`mailServersFor` known providers + guesses
   imap./mail./domain, `manualServer`, `signInHelp`; Outlook.com/Hotmail `passwordBlocked`, Proton via
   Bridge 127.0.0.1:1143 STARTTLS). `services/gmail-imap.ts` `openImap` (host from creds or address,

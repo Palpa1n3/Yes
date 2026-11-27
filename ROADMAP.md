@@ -76,8 +76,15 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
 
 ## Phase 2: Unified intelligence (next)
 
-- ⬜ Central intelligence engine connecting all existing capabilities.
-- ⬜ Shared contextual awareness across applications.
+- 🔶 Central intelligence engine connecting all existing capabilities. **0.92:** the first piece:
+  `shared/context.ts` `describeNow()` builds one "right now" picture from everything Alton knows
+  and every chat gets it (see the next item). Still to do: one place that decides which
+  capability answers what (with model choice and confidence later in this phase).
+- ✅ Shared contextual awareness across applications. **0.92:** chat on the PC now knows, on every
+  message: the app in front, gaming, what Alton itself is busy with (Agent Mode, mod updates…), the
+  next calendar event, today's shift, running timers, unread email (count and senders), what's
+  playing, the weather (and rain soon) and phone messages. The phone app gets the same picture from
+  the PC (in its status) for its own chats while the PC is connected.
 - ⬜ Cross-device conversation continuity.
 - ⬜ Intelligent memory consolidation.
 - ⬜ Personal knowledge graph.

@@ -3,6 +3,29 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.92.0: Alton knows what's going on (Phase 2 begins)
+
+Phase 2, "Unified intelligence", has started.
+
+- **Chat now sees the whole picture, every message.** Before, it only knew which app was in front,
+  whether you were gaming and your phone messages. Now it also knows:
+  - your **next calendar event** and **today's shift**;
+  - **timers** that are running;
+  - **unread email** (how many and who from);
+  - what's **playing**;
+  - the **weather**, including rain coming soon;
+  - what Alton itself is **busy with** (Agent Mode, mod updates…).
+- So you can ask things like "have I got time to game before work?" or "anything I should know?"
+  without explaining.
+- **The phone knows too.** When your phone app is connected to the PC, its own chats get the same
+  picture, so it knows what's happening at home.
+- It's told to use this only when it's relevant and not to recite it back to you.
+
+**What to test**
+
+1. Start a timer, then ask Alton "what's going on?" or "how long until my timer?".
+2. On the phone (PC connected), ask "what's my PC doing?".
+
 ## 0.91.0: any email account, not just Gmail
 
 (You asked for this alongside the roadmap.)

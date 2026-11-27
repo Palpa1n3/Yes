@@ -62,6 +62,8 @@ export function registerRemoteIpc(
       execute(cmd: CanonicalCommand): Promise<CommandResult>;
     };
     history(): Array<{ who: 'you' | 'alton'; text: string }>;
+    /** The PC's "right now" picture, shared with the phone. */
+    now?(): string;
   },
 ): void {
   const replies = new Map<string, (text: string) => void>();
@@ -348,6 +350,7 @@ const { ipcRenderer } = require('electron');
         playing: n?.title ? `${n.title}${n.artist ? ` – ${n.artist}` : ''}` : null,
         gaming: g.active ? (g.game ?? 'on') : null,
         agent: { state: a.state, task: a.task, last: a.last, question: a.question },
+        now: src.now?.() ?? '',
         notices: src.notices(),
         approvals: ctx.pendingApprovals?.() ?? [],
         history: src.history(),

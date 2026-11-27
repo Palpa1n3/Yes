@@ -113,6 +113,8 @@ export interface PcStatus {
   };
   notices: Array<{ at: number; text: string }>;
   approvals: Array<{ id: string; title: string; detail: string }>;
+  /** What's going on on the PC right now (for the phone's own chats). */
+  now?: string;
 }
 
 export interface PcJob {

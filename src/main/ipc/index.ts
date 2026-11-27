@@ -42,6 +42,10 @@ import { contextLine, registerAwareness } from './awareness';
 import { isErrorWindow } from '../services/foreground-watch';
 import { agentBusy } from '@shared/agent';
 import { registerVoiceIpc } from './voice';
+import { describeNow } from '@shared/context';
+import { senderName } from '@shared/email';
+import { describeWeather, rainSoon } from '@shared/weather';
+import { jobLocks } from '../services/job-locks';
 import { registerSettingsIpc } from './settings';
 import { registerSystemIpc } from './system';
 import { registerWindowIpc } from './window';
@@ -180,20 +184,65 @@ export function registerIpc(ctx: MainContext): void {
     const t = setInterval(tick, 3000);
     t.unref?.();
   }
+  const nowContext = (): string => {
+    const now = Date.now();
+    const g = gaming.get();
+    const cal = calendar.state();
+    const next = cal.configured
+      ? (cal.events
+          .filter((e) => !e.allDay && e.start > now)
+          .sort((a, b) => a.start - b.start)[0] ?? null)
+      : null;
+    const mail = email.get();
+    const song = media.get();
+    const w = weather.get().data;
+    const day = new Date(now).toDateString();
+    const shift = ctx.shifts.upcoming().find((s) => new Date(s.start).toDateString() === day);
+    const hhmm = (s: string): string => s.slice(11, 16);
+    return describeNow(
+      {
+        now,
+        foreground: contextLine(awareness.foreground()),
+        gaming: g.active ? g.game || 'a game' : null,
+        jobs: jobLocks.busy().map((b) => b.label),
+        nextEvent: next
+          ? {
+              title: next.title,
+              start: next.start,
+              ...(next.location ? { location: next.location } : {}),
+            }
+          : null,
+        unread:
+          mail.configured && !mail.error
+            ? {
+                count: mail.unread,
+                from: [
+                  ...new Set(mail.recent.filter((m) => m.unread).map((m) => senderName(m.from))),
+                ],
+              }
+            : null,
+        timers: ctx.timers.list().map((t) => ({ label: t.label, dueAt: t.dueAt, kind: t.kind })),
+        shiftToday: shift ? `${hhmm(shift.start)}–${hhmm(shift.end)} ${shift.title}` : null,
+        playing: song?.playing ? { title: song.title, artist: song.artist, app: song.app } : null,
+        weather: w
+          ? {
+              label: describeWeather(w.current.code, w.current.isDay).label,
+              temp: w.current.temp,
+              unit: w.units.temp === 'f' ? '°F' : '°C',
+              rainSoonMin: rainSoon(w),
+            }
+          : null,
+        phone: phoneMessageContext(),
+      },
+      (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    );
+  };
   registerAssistantIpc(ctx, {
     chats,
     notes,
     awarenessTools: awareness.tools,
-    context: () => {
-      const g = gaming.get();
-      return [
-        contextLine(awareness.foreground()),
-        g.active ? `The user is gaming${g.game ? ` (${g.game})` : ''}.` : '',
-        phoneMessageContext(),
-      ]
-        .filter(Boolean)
-        .join(' ');
-    },
+    // One picture of right now, from everything Alton already knows (see shared/context.ts).
+    context: () => nowContext(),
     nowPlaying: () => media.get(),
     screen: screenWatch,
     clipboard: (q) => clips.forModel(q),
@@ -288,6 +337,7 @@ export function registerIpc(ctx: MainContext): void {
     gaming: () => gaming.get(),
     nowPlaying: () => media.get(),
     notices: () => ctx.recentNotices(),
+    now: () => nowContext(),
     history: () =>
       chats
         .messages(chats.state().activeId)
