@@ -27,8 +27,14 @@ hidden instructions → encrypted sync.
   until next month; chat carries on) / pause everything (chat uses the offline model if there is
   one) / only warn. Each Agent Mode task has its own cap (default about £1; it stops and says so).
   Not counted yet: the phone app's own Claude use (it uses its own key directly).
-- ⬜ Crash and unexpected shutdown recovery.
-- ⬜ Persistent task state across restarts (saving progress; resuming comes in Phase 4).
+- ✅ Crash and unexpected shutdown recovery. **0.84:** heartbeat + clean-quit mark in
+  `session.json` (Windows shutting down normally counts as clean); the next start says whether the
+  PC went off or Alton stopped, and names interrupted Agent Mode / research work; the window
+  reloads itself after a crash or a 20-second freeze (at most 3 times in 5 minutes). Data files
+  were already repaired at start-up (0.81); failed starts after an update roll back (0.82).
+- 🔶 Persistent task state across restarts (saving progress; resuming comes in Phase 4). **0.84:**
+  the running Agent Mode task (and step) and background research are saved as they go and named
+  after a bad shutdown. Still to do: save each task's full progress so Phase 4 can resume it.
 - ⬜ Verification of system changes before and after execution.
 - ⬜ Detection of unintended changes.
 - ⬜ Protection against conflicting automated tasks.

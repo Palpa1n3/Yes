@@ -34,6 +34,7 @@ import {
   type Move,
 } from '../services/toolbox';
 import { handle } from './handle';
+import { sessionGuard } from '../services/session-guard';
 
 const DISCORD_RE =
   /^https:\/\/(?:canary\.|ptb\.)?(?:discord|discordapp)\.com\/api\/webhooks\/\d+\/[\w-]+$/;
@@ -774,6 +775,11 @@ export function registerToolbox(
         startedAt: Date.now(),
       };
       tasks.unshift(task);
+      try {
+        sessionGuard().researchStarted(topic);
+      } catch {
+        /* not fatal */
+      }
       void (async () => {
         try {
           const client = new Anthropic({ apiKey: key, maxRetries: 2 });
@@ -821,6 +827,12 @@ export function registerToolbox(
             type: 'notice',
             text: `Background research on “${topic}” failed: ${task.summary}`,
           });
+        } finally {
+          try {
+            sessionGuard().researchEnded(topic);
+          } catch {
+            /* not fatal */
+          }
         }
       })();
       return {

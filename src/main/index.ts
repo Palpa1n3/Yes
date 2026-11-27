@@ -26,6 +26,8 @@ import { UsageTracker } from './services/usage-tracker';
 import { emit } from './ipc/handle';
 import { DataBackup } from './services/data-backup';
 import { bootGuard, rollBack } from './services/rollback';
+import { sessionGuard } from './services/session-guard';
+import { describeRecovery } from '@shared/session';
 import { SettingsStore } from './services/settings-store';
 import { TelemetryService } from './services/telemetry';
 import { TimerService, describeDuration } from './services/timer-service';
@@ -39,6 +41,7 @@ let rendererReady = false;
 let hintedTray = false;
 let timersLoaded = false;
 let startOkTimer: ReturnType<typeof setTimeout> | null = null;
+let recoveryTold = false;
 const pending: AppCommand[] = [];
 
 // Before anything reads Alton's data: a file left damaged (say, by a power cut mid-save) is put
@@ -55,6 +58,15 @@ const recovered = (() => {
 const rollbackTarget = (() => {
   try {
     return app.isPackaged ? bootGuard().start(app.getVersion()) : null;
+  } catch {
+    return null;
+  }
+})();
+// Did the last session end properly? (A power cut, Windows crashing or Alton crashing leave it
+// marked unfinished; the report says what was interrupted.) Also starts this session's record.
+const lastSession = (() => {
+  try {
+    return sessionGuard().report;
   } catch {
     return null;
   }
@@ -341,6 +353,20 @@ function createWindow(): BrowserWindow {
   // Deliver anything queued (hotkey notices etc.) once the UI can receive it.
   win.webContents.on('did-finish-load', () => {
     rendererReady = true;
+    // Once per run: say if the last session ended badly, and what was interrupted.
+    if (lastSession && !recoveryTold) {
+      recoveryTold = true;
+      const text = describeRecovery(lastSession, (ms) =>
+        new Date(ms).toLocaleString([], {
+          weekday: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+      );
+      errors.add('warn', 'session', text);
+      ctx.audit.add('action', text, false);
+      setTimeout(() => ctx.command({ type: 'notice', text }), 3000);
+    }
     // A minute up with the window loaded: this version works.
     if (!startOkTimer)
       startOkTimer = setTimeout(() => {
@@ -369,9 +395,49 @@ function createWindow(): BrowserWindow {
         `${message}${sourceId ? ` (${sourceId.split('/').pop()}:${lineNumber})` : ''}`,
       );
   });
-  win.webContents.on('render-process-gone', (_e, d) =>
-    errors.add('error', 'ui', `The window's renderer stopped: ${d.reason} (code ${d.exitCode})`),
-  );
+  // The window's page crashed or froze: reload it (a few times at most, so a page that keeps
+  // crashing doesn't loop).
+  let reloads: number[] = [];
+  const reloadWindow = (why: string): void => {
+    const now = Date.now();
+    reloads = reloads.filter((t) => now - t < 5 * 60_000);
+    if (reloads.length >= 3) {
+      errors.add('error', 'ui', `The window keeps failing (${why}); not reloading it again.`);
+      return;
+    }
+    reloads.push(now);
+    errors.add('warn', 'ui', `The window ${why}: reloading it.`);
+    setTimeout(() => {
+      if (!win.isDestroyed()) win.webContents.reload();
+    }, 1000);
+  };
+  win.webContents.on('render-process-gone', (_e, d) => {
+    errors.add('error', 'ui', `The window's renderer stopped: ${d.reason} (code ${d.exitCode})`);
+    if (d.reason !== 'clean-exit') reloadWindow('stopped');
+  });
+  let frozen: ReturnType<typeof setTimeout> | null = null;
+  win.on('unresponsive', () => {
+    if (frozen) return;
+    frozen = setTimeout(() => {
+      frozen = null;
+      if (!win.isDestroyed()) {
+        win.webContents.forcefullyCrashRenderer();
+        reloadWindow('froze for 20 seconds');
+      }
+    }, 20_000);
+  });
+  win.on('responsive', () => {
+    if (frozen) clearTimeout(frozen);
+    frozen = null;
+  });
+  // Windows signing out or shutting down normally isn't a crash.
+  win.on('session-end', () => {
+    try {
+      sessionGuard().markClean();
+    } catch {
+      /* not fatal */
+    }
+  });
 
   // Telemetry only runs while the window is actually on screen.
   // ...or while the desktop widget / taskbar strip is showing.
@@ -445,6 +511,11 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(() => {
+    try {
+      sessionGuard().start();
+    } catch {
+      /* not fatal */
+    }
     // This version failed to start twice after an update: go back to the one before.
     if (rollbackTarget)
       setTimeout(() => {
@@ -516,6 +587,11 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     quitting = true;
+    try {
+      sessionGuard().markClean();
+    } catch {
+      /* not fatal */
+    }
     // A clean quit counts as a good start (only crashes and hangs count against a version).
     if (app.isPackaged)
       try {

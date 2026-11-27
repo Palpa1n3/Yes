@@ -2,6 +2,7 @@ import { deskState } from '../desk-state';
 import { app, BrowserWindow, desktopCapturer, globalShortcut, safeStorage, screen } from 'electron';
 import { join } from 'node:path';
 import { fmtUsd, taskCapReached } from '@shared/usage';
+import { sessionGuard } from '../services/session-guard';
 import Anthropic from '@anthropic-ai/sdk';
 import { IPC } from '@shared/ipc';
 import { agentBusy, shotSize, type AgentQuestion, type AgentStatus } from '@shared/agent';
@@ -291,6 +292,15 @@ export function registerAgentIpc(
     },
     onStatus: (s: AgentStatus) => {
       deskState.agentWaiting = !!s.question;
+      // Remember the task in progress, to name it if the PC goes off mid-task.
+      try {
+        if (s.state === 'running' || s.state === 'paused')
+          sessionGuard().setAgent({ task: s.task, step: s.step });
+        else if (s.state === 'done' || s.state === 'error' || s.state === 'stopped')
+          sessionGuard().setAgent(null);
+      } catch {
+        /* not fatal */
+      }
       const prev = lastState;
       lastState = s.state;
       if (s.question && s.question.id !== lastQuestion) {

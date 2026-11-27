@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.83.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.84.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,14 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.84** Crash/shutdown recovery: `services/session-guard.ts` (`sessionGuard()` singleton,
+  userData/session.json: `clean`, `lastAlive` heartbeat every 30 s, `work.agent`/`work.research`);
+  `shared/session.ts` `lastSessionReport(prev, bootedAt)` (PC went down if Windows booted after the
+  last heartbeat) + `describeRecovery`. index.ts: report read before stores load, notice after the
+  window first loads, `markClean()` on before-quit and window `session-end`; renderer
+  `render-process-gone` / `unresponsive` (20 s) → reload, max 3 per 5 min. Agent onStatus and
+  background research record their work. **WHATS-NEW.md**: the owner's one-page summary, newest
+  first; refresh it and send it after every item (they asked 27 Nov).
 - **0.83** Spending limits: settings `budgetAction` ('warn' | 'pause-background' | 'pause-all', default
   pause-background) and `agentTaskLimit` (USD, default 1.3 ≈ £1). `budgetBlock()` in shared/usage.ts
   (`BACKGROUND_FEATURES`), `UsageTracker.blocked(feature)`; checked before Agent Mode starts
