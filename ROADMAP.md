@@ -92,7 +92,29 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
 - ⬜ Automatic AI model selection.
 - ⬜ Confidence assessment and information verification.
 
-## Phase 3: Self-development
+## Safety gate (must be done and tested before Phase 3 or Phase 4 starts)
+
+Added by the owner on 27 Nov 2026. Phase 3 (self-development) and Phase 4 (persistent autonomous
+agents) stay switched off until every item here is implemented and has tests. Phase 2 carries on
+meanwhile. PIN authentication stays; no biometrics.
+
+- ⬜ Shared API spending limits across desktop and mobile (one monthly limit and per-task caps
+  covering the PC and the phone app's own Claude use).
+- ⬜ Verification of intended versus actual changes during Alton's own automated operations (each
+  automated job states what it means to change, and the result is compared; mismatches stop it and
+  are reported).
+- ⬜ Automated post-update health checks beyond successful application startup (key features
+  exercised after an update; failures count towards rollback).
+- ⬜ Stronger prompt injection protection enforced at the tool and permission level (content from
+  outside can't unlock risky tools: after untrusted content is read, risky actions need the user's
+  explicit approval, whatever the model says).
+- ⬜ Optional encrypted backups to a separate storage location (another drive or folder, encrypted
+  with a key only on this PC, restorable).
+- ⬜ Safe task resumption that prevents duplicate irreversible actions (resumed tasks know which
+  irreversible steps already happened and never repeat them).
+- ✅ PIN authentication retained; biometrics excluded.
+
+## Phase 3: Self-development (blocked until the safety gate is done)
 
 - ⬜ Self-diagnosis and error analysis (partly there: Alton reads its own errors and code).
 - ⬜ Source code analysis.
@@ -104,7 +126,7 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
 - ⬜ Automatic documentation.
 - ⬜ Performance benchmarking.
 
-## Phase 4: Persistent agents
+## Phase 4: Persistent agents (blocked until the safety gate is done)
 
 - ⬜ Multiple simultaneous background tasks.
 - ⬜ Pause, resume, edit and cancel tasks.

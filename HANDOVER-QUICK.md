@@ -43,6 +43,11 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Roadmap
 
+**Safety gate:** six safety items in ROADMAP.md (shared desktop+mobile spending limits, intended vs
+actual change checks for automated jobs, post-update health checks, tool/permission-level injection
+protection, optional encrypted off-PC backups, resumption without repeating irreversible actions)
+must be implemented and tested before Phase 3 or 4. PIN only, never biometrics.
+
 `ROADMAP.md` holds the agreed plan to 1.0 (six phases; Phase 1 "Safety foundations" is under way)
 with each item's status. Update it with every release that moves an item.
 
