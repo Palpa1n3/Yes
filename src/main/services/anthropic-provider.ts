@@ -450,7 +450,7 @@ const TOOLS: Anthropic.Beta.BetaTool[] = [
   {
     name: 'get_emails',
     description:
-      "The user's newest Gmail inbox messages (sender, subject, date, unread), plus the unread count. Read-only.",
+      "The user's newest email inbox messages (sender, subject, date, unread), plus the unread count. Read-only.",
     input_schema: {
       type: 'object',
       properties: { unreadOnly: { type: 'boolean' }, query: { type: 'string' } },
@@ -1129,7 +1129,7 @@ export class AnthropicProvider implements AIProvider {
             if (!svc || !svc.get().configured)
               r = {
                 error:
-                  'Email is not connected. The user can add Gmail in Settings › Connections › Email.',
+                  'Email is not connected. The user can connect their email (any provider) in Settings › Connections › Email.',
               };
             else if (t.name === 'read_email') r = await svc.read(Number(o['uid']));
             else {

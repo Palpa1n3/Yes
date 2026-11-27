@@ -433,7 +433,10 @@ export interface InvokeMap {
   [IPC.updates.install]: { args: []; result: boolean };
   [IPC.updates.rollback]: { args: []; result: { ok: boolean; message: string } };
   [IPC.email.refresh]: { args: []; result: EmailState };
-  [IPC.email.connect]: { args: [user: string, appPassword: string]; result: EmailConnectResult };
+  [IPC.email.connect]: {
+    args: [user: string, password: string, server?: string];
+    result: EmailConnectResult;
+  };
   [IPC.email.disconnect]: { args: []; result: EmailState };
   [IPC.clipboard.copy]: { args: [id: string]; result: boolean };
   [IPC.clipboard.remove]: { args: [id: string]; result: ClipItem[] };
@@ -773,8 +776,8 @@ export interface ArcAPI {
   email: {
     state(): Promise<EmailState>;
     refresh(): Promise<EmailState>;
-    /** Check a Gmail address + app password (logs in once), then store them encrypted. */
-    connect(user: string, appPassword: string): Promise<EmailConnectResult>;
+    /** Connect any email account (server worked out from the address, or `server` by hand). */
+    connect(user: string, password: string, server?: string): Promise<EmailConnectResult>;
     disconnect(): Promise<EmailState>;
     onChange(cb: (s: EmailState) => void): Unsubscribe;
   };

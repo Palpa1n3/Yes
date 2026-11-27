@@ -3,6 +3,30 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.91.0: any email account, not just Gmail
+
+(You asked for this alongside the roadmap.)
+
+- **Settings › Connections › Email** now takes any email address. Alton picks the right mail server
+  by itself for Gmail, Yahoo, iCloud, AOL, BT, Sky, Virgin Media, TalkTalk, GMX, mail.com, Zoho,
+  Fastmail, Yandex and Proton (through the Proton Mail Bridge app).
+- **Your own domain or a provider not on the list:** Alton tries the usual server names
+  (imap.yourdomain, mail.yourdomain…). If none work, type your provider's IMAP server in the new
+  **Mail server** box.
+- **As you type your address, it shows how to sign in** for that provider, e.g. which "app
+  password" page to use. Passwords are no longer limited to Google's 16-letter format.
+- **Outlook.com / Hotmail:** Microsoft switched off password sign-in for mail apps in 2024, so these
+  can't connect with a password. Alton tells you that instead of failing oddly. A work address on
+  your own domain may still work through its server.
+- It's still **read-only** (nothing marked as read, sent or deleted), and the password is stored
+  encrypted on the PC. The inbox panel's link opens your provider's webmail.
+- Your existing Gmail connection carries on as it was.
+
+**What to test**
+
+1. Settings › Connections › Email: type a non-Gmail address and check the sign-in help changes.
+2. If you have another account (say Yahoo or BT), connect it with its app password.
+
 ## 0.90.0: encrypted phone link (Phase 1 complete)
 
 Phase 1, item 11 of 11. **Phase 1, "Safety foundations", is finished.**

@@ -1,4 +1,4 @@
-/** Email (Gmail via an app password, read-only). */
+/** Email (any provider over IMAP, read-only). */
 export interface EmailSummary {
   uid: number;
   from: string;
@@ -11,6 +11,10 @@ export interface EmailState {
   configured: boolean;
   /** The connected address (shown to the user only). */
   address: string | null;
+  /** e.g. "Gmail", "BT Mail", or the domain. */
+  provider?: string | null;
+  /** Where to read it in a browser. */
+  webmail?: string | null;
   unread: number;
   /** Newest first. */
   recent: EmailSummary[];

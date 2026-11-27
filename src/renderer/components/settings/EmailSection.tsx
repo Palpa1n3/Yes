@@ -1,28 +1,32 @@
 import { CheckCircle2, Mail, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import type { EmailConnectResult } from '@shared/email';
+import { signInHelp } from '@shared/mail-servers';
 import { useEmailStore } from '@renderer/stores/emailStore';
 import { Field, Section } from './controls';
 
 const field =
   'h-8 w-64 border border-line bg-panel-raised/80 px-2 font-mono text-[12px] text-text-primary placeholder:text-text-muted/70 focus:border-accent focus:outline-none';
 
-/** Gmail via an app password (read-only, stored encrypted). */
+/** Any email account over IMAP (read-only, stored encrypted). */
 export function EmailSection() {
-  const { configured, address, error } = useEmailStore();
+  const { configured, address, error, provider } = useEmailStore();
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
+  const [server, setServer] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<EmailConnectResult | null>(null);
 
   return (
     <Section title="Email">
       <Field
-        label="Gmail"
+        label="Email account"
         hint={
           configured
-            ? `Connected${address ? ` as ${address}` : ''}${error ? ` · ${error}` : ''}. Read-only: nothing is marked as read, sent or deleted. Checks every 5 minutes.`
-            : 'Needs a Google “app password”: myaccount.google.com › Security › 2-Step Verification (turn it on if it isn’t) › App passwords › create one called ARC, then paste the 16 letters here. Not your normal password, and not in a chat.'
+            ? `Connected${address ? ` as ${address}` : ''}${provider ? ` (${provider})` : ''}${error ? ` · ${error}` : ''}. Read-only: nothing is marked as read, sent or deleted. Checks every 5 minutes.`
+            : `Any email account: Gmail, Yahoo, iCloud, BT, Sky, Virgin Media, your own domain… ${
+                signInHelp(user) || 'Type your address to see how to sign in.'
+              } Never type the password in a chat.`
         }
         stacked
       >
@@ -52,7 +56,7 @@ export function EmailSection() {
               setBusy(true);
               setResult(null);
               void window.arc.email
-                .connect(user, pass)
+                .connect(user, pass, server)
                 .then((r) => {
                   setResult(r);
                   if (r.ok) setPass('');
@@ -64,8 +68,8 @@ export function EmailSection() {
               type="email"
               value={user}
               onChange={(e) => setUser(e.target.value)}
-              placeholder="you@gmail.com"
-              aria-label="Gmail address"
+              placeholder="you@example.com"
+              aria-label="Email address"
               autoComplete="off"
               spellCheck={false}
               className={field}
@@ -75,8 +79,8 @@ export function EmailSection() {
                 type="password"
                 value={pass}
                 onChange={(e) => setPass(e.target.value)}
-                placeholder="App password (16 letters)"
-                aria-label="App password"
+                placeholder="Password for mail apps"
+                aria-label="Email password"
                 autoComplete="off"
                 spellCheck={false}
                 className={field}
@@ -84,11 +88,20 @@ export function EmailSection() {
               <button
                 type="submit"
                 className="hud-button"
-                disabled={busy || !user.trim() || pass.replace(/\s/g, '').length < 16}
+                disabled={busy || !user.trim() || pass.trim().length < 4}
               >
                 <Mail size={12} strokeWidth={1.5} /> {busy ? 'Checking…' : 'Connect'}
               </button>
             </div>
+            <input
+              value={server}
+              onChange={(e) => setServer(e.target.value)}
+              placeholder="Mail server (only if it won't connect), e.g. imap.example.com"
+              aria-label="IMAP mail server (optional)"
+              autoComplete="off"
+              spellCheck={false}
+              className={field}
+            />
           </form>
         )}
         {result && (

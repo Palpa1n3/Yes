@@ -2,8 +2,9 @@ import { app, safeStorage } from 'electron';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
 import type { MainContext } from '../context';
-import { EmailService, explainMailError, type Creds } from '../services/email';
-import { openGmail } from '../services/gmail-imap';
+import { EmailService, explainMailError, isAuthError, type Creds } from '../services/email';
+import { openImap } from '../services/gmail-imap';
+import { mailServersFor, manualServer } from '@shared/mail-servers';
 import { SecretStore } from '../services/secret-store';
 import { emit, handle } from './handle';
 
@@ -21,7 +22,7 @@ export function registerEmailIpc(ctx: MainContext): EmailService {
     }
   };
   const email = new EmailService({
-    open: openGmail,
+    open: openImap,
     getCreds,
     hasCreds: () => secret.has(),
     onChange: (s) => emit(ctx.getWindow(), IPC.email.onChange, s),
@@ -32,24 +33,55 @@ export function registerEmailIpc(ctx: MainContext): EmailService {
     await email.refresh();
     return email.get();
   });
-  handle(IPC.email.connect, async (rawUser, rawPass) => {
+  handle(IPC.email.connect, async (rawUser, rawPass, rawServer) => {
     const user = String(rawUser).trim();
-    const pass = String(rawPass).replace(/\s+/g, '');
+    const pass = String(rawPass ?? '');
+    const serverText = typeof rawServer === 'string' ? rawServer.trim() : '';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user))
       return { ok: false, message: 'Enter your full email address.' };
-    if (!/^[a-zA-Z]{16}$/.test(pass))
-      return {
-        ok: false,
-        message: 'An app password is 16 letters (Google shows it in groups of four).',
+    if (pass.trim().length < 4) return { ok: false, message: 'Enter the password for mail apps.' };
+    // The provider's server, a server typed in by hand, or likely names for the domain.
+    const manual = serverText ? manualServer(user, serverText) : null;
+    if (serverText && !manual)
+      return { ok: false, message: 'That mail server doesn’t look right (e.g. imap.example.com).' };
+    const candidates = manual ? [manual] : mailServersFor(user);
+    const first = candidates[0];
+    if (!first) return { ok: false, message: 'Enter your full email address.' };
+    if (first.passwordBlocked && !manual) return { ok: false, message: first.howTo };
+    let lastErr: unknown = null;
+    for (const s of candidates) {
+      const creds: Creds = {
+        user,
+        pass,
+        host: s.host,
+        port: s.port,
+        secure: s.secure,
+        ...(s.local ? { local: true } : {}),
+        provider: s.provider,
+        webmail: s.webmail,
       };
-    try {
-      const { unread } = await email.test({ user, pass });
-      await secret.set(JSON.stringify({ user, pass }));
-      await email.refresh();
-      return { ok: true, message: `Connected. ${unread} unread in your inbox.` };
-    } catch (err) {
-      return { ok: false, message: explainMailError(err) };
+      try {
+        const { unread } = await email.test(creds);
+        await secret.set(JSON.stringify(creds));
+        await email.refresh();
+        return {
+          ok: true,
+          message: `Connected to ${s.provider}${s.guess ? ` (${s.host})` : ''}. ${unread} unread in your inbox.`,
+        };
+      } catch (err) {
+        lastErr = err;
+        // The server answered and refused the password: other servers won't do better.
+        if (isAuthError(err)) break;
+      }
     }
+    return {
+      ok: false,
+      message: `${explainMailError(lastErr, first.guess ? undefined : first.provider)}${
+        first.guess && !manual && !isAuthError(lastErr)
+          ? ' Add your provider’s IMAP server in the box below (their help pages list it).'
+          : ''
+      }`,
+    };
   });
   handle(IPC.email.disconnect, () => {
     secret.clear();

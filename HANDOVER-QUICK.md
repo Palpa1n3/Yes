@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.90.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.91.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,12 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.91** Any email provider: `shared/mail-servers.ts` (`mailServersFor` known providers + guesses
+  imap./mail./domain, `manualServer`, `signInHelp`; Outlook.com/Hotmail `passwordBlocked`, Proton via
+  Bridge 127.0.0.1:1143 STARTTLS). `services/gmail-imap.ts` `openImap` (host from creds or address,
+  `doSTARTTLS` when not secure, self-signed allowed only for local bridge, `cleanPassword`). Creds now
+  keep host/port/secure/local/provider/webmail; connect IPC takes an optional server and tries
+  candidates, stopping at an auth error. EmailState `provider`/`webmail`.
 - **0.90** Phase 1 done. `shared/remote-link.ts` (`linkKind` loopback/tailscale/lan/outside,
   `serveUrlFor` parses `tailscale serve status`); remote-server refuses `lan` unless setting
   `phonePlainLan`; ipc/remote.ts finds `secureUrl` every 5 min; RemoteInfo `secureUrl`/`plainLan`;

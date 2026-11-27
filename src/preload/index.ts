@@ -89,7 +89,7 @@ const api: ArcAPI = {
   email: {
     state: () => invoke(IPC.email.state),
     refresh: () => invoke(IPC.email.refresh),
-    connect: (u, p) => invoke(IPC.email.connect, u, p),
+    connect: (u, p, s) => invoke(IPC.email.connect, u, p, s),
     disconnect: () => invoke(IPC.email.disconnect),
     onChange: (cb) => subscribe(IPC.email.onChange, cb),
   },

@@ -11,9 +11,11 @@ const when = (t: number): string => {
     : d.toLocaleDateString([], { day: 'numeric', month: 'short' });
 };
 
-/** Newest Gmail messages (read-only). Hidden until email is connected. */
+/** Newest messages from the connected email account (read-only). Hidden until connected. */
 export function InboxPanel({ className = '' }: { className?: string }) {
-  const { configured, unread, recent, error } = useEmailStore();
+  const { configured, unread, recent, error, provider, webmail } = useEmailStore();
+  const site = webmail || 'https://mail.google.com/';
+  const name = provider || 'your email';
   if (!configured) return null;
   return (
     <Panel
@@ -32,9 +34,9 @@ export function InboxPanel({ className = '' }: { className?: string }) {
           )}
           <button
             type="button"
-            aria-label="Open Gmail"
-            title="Open Gmail"
-            onClick={() => window.arc.app.openUrl('https://mail.google.com/')}
+            aria-label={`Open ${name}`}
+            title={`Open ${name}`}
+            onClick={() => window.arc.app.openUrl(site)}
             className="text-text-muted hover:text-accent"
           >
             <ExternalLink size={12} />

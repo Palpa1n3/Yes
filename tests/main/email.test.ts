@@ -94,7 +94,7 @@ describe('email', () => {
       fail: new Error('Command failed: AUTHENTICATIONFAILED Invalid credentials'),
     });
     await svc.refresh();
-    expect(svc.get().error).toMatch(/rejected the email address or app password/);
+    expect(svc.get().error).toMatch(/rejected the email address or password/);
     expect(explainMailError(new Error('getaddrinfo ENOTFOUND imap.gmail.com'))).toMatch(/internet/);
     expect(await service({ creds: false }).svc.read(1)).toEqual({
       error: expect.stringMatching(/not connected/),
