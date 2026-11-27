@@ -21,7 +21,12 @@ hidden instructions → encrypted sync.
   Settings › Updates › "Go back to version X" does the same by hand. **Phone:** Android only
   installs an older version after uninstalling, so Settings › This app links to earlier versions
   with a warning.
-- ⬜ API usage and spending limits.
+- ✅ API usage and spending limits. Cost per request, day and feature were already counted (with
+  80%/100% warnings). **0.83:** the monthly limit now acts: Settings › AI › Spending › "At the
+  limit" = pause background work (default: Agent Mode, background research, memory learning stop
+  until next month; chat carries on) / pause everything (chat uses the offline model if there is
+  one) / only warn. Each Agent Mode task has its own cap (default about £1; it stops and says so).
+  Not counted yet: the phone app's own Claude use (it uses its own key directly).
 - ⬜ Crash and unexpected shutdown recovery.
 - ⬜ Persistent task state across restarts (saving progress; resuming comes in Phase 4).
 - ⬜ Verification of system changes before and after execution.

@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
-import { budgetFromGbp, budgetInGbp, fmtUsd, type UsageSummary } from '@shared/usage';
+import {
+  budgetFromGbp,
+  budgetInGbp,
+  fmtUsd,
+  gbpToUsd,
+  usdToGbp,
+  type UsageSummary,
+} from '@shared/usage';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
-import { Field, Section, Toggle } from './controls';
+import { Field, Section, Select, Toggle } from './controls';
 
 const FEATURE: Record<string, string> = {
   chat: 'Chat',
@@ -77,7 +84,7 @@ export function SpendingSection() {
       )}
       <Field
         label="Monthly limit"
-        hint="Alton warns you at 80% and 100% of this (in pounds; Anthropic bills in US dollars, so costs are converted at about $1 = £0.76). These are estimates from each reply's size; your Anthropic console shows the exact bill, and you can set a hard limit there (console.anthropic.com › Limits). 0 = no warnings."
+        hint="Alton warns you at 80% and 100% of this, and then does what you pick below (in pounds; Anthropic bills in US dollars, so costs are converted at about $1 = £0.76). These are estimates from each reply's size; your Anthropic console shows the exact bill, and you can set a hard limit there too (console.anthropic.com › Limits). 0 = no limit."
       >
         <span className="flex items-center gap-1 font-mono text-[12px] text-text-muted">
           £
@@ -92,6 +99,48 @@ export function SpendingSection() {
               })
             }
             aria-label="Monthly limit in pounds"
+            className="h-8 w-20 rounded-[6px] border border-line bg-panel-raised px-2 text-text-primary focus:border-accent focus:outline-none"
+          />
+        </span>
+      </Field>
+      <Field
+        label="At the limit"
+        hint="Pausing background work stops Agent Mode, background research and memory learning until next month (chat keeps working). Pausing everything also stops chat using Claude (the offline model is used if you have one)."
+      >
+        <Select
+          label="What happens at the monthly limit"
+          value={s.budgetAction}
+          onChange={(v) => void update({ budgetAction: v })}
+          options={[
+            { value: 'pause-background', label: 'Pause background work' },
+            { value: 'pause-all', label: 'Pause everything' },
+            { value: 'warn', label: 'Only warn me' },
+          ]}
+        />
+      </Field>
+      <Field
+        label="Most one Agent Mode task may spend"
+        hint="A task that reaches this is stopped (you're told, and can raise it). 0 = no cap."
+      >
+        <span className="flex items-center gap-1 font-mono text-[12px] text-text-muted">
+          £
+          <input
+            type="number"
+            min={0}
+            max={75}
+            step={0.5}
+            defaultValue={
+              s.agentTaskLimit > 0 ? Math.round(usdToGbp(s.agentTaskLimit) * 100) / 100 : 0
+            }
+            onBlur={(e) =>
+              void update({
+                agentTaskLimit: Math.max(
+                  0,
+                  Math.round(gbpToUsd(Number(e.target.value) || 0) * 100) / 100,
+                ),
+              })
+            }
+            aria-label="Most one Agent Mode task may spend, in pounds"
             className="h-8 w-20 rounded-[6px] border border-line bg-panel-raised px-2 text-text-primary focus:border-accent focus:outline-none"
           />
         </span>

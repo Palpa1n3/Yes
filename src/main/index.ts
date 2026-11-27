@@ -88,6 +88,7 @@ const ctx: MainContext = {
   usage: new UsageTracker({
     file: join(app.getPath('userData'), 'usage.json'),
     budget: () => settings.get().monthlyBudget,
+    action: () => settings.get().budgetAction,
     warn: (text) => {
       ctx.notify(text);
       ctx.command({ type: 'notice', text });

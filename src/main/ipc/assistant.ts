@@ -93,7 +93,10 @@ export function registerAssistantIpc(
     log: (m) => ctx.errors.add('info', 'memory', m),
     onUsage: (model, usage) => void ctx.usage.record(model, usage, 'memory'),
   });
-  extra.chats.onSaved = (id) => learner.schedule(id);
+  // Memory learning is background work: paused at the monthly limit (Settings › AI › Spending).
+  extra.chats.onSaved = (id) => {
+    if (!ctx.usage.blocked('memory')) learner.schedule(id);
+  };
   app.on('will-quit', () => learner.stop());
   const plugins = new Plugins(join(userData, 'plugins'));
   const systemPrompt = (): string => {
@@ -309,6 +312,17 @@ export function registerAssistantIpc(
           message:
             'No Anthropic API key saved, so I am using the offline mock. Add a key in Settings › AI.',
         });
+    }
+
+    // At the monthly limit with "pause everything": no Claude (the offline model if there is one).
+    const paused = provider === chat.claude ? ctx.usage.blocked('chat') : null;
+    if (paused) {
+      provider = local ?? mock;
+      out({
+        type: 'notice',
+        responseId,
+        message: local ? `${paused} Using the offline model instead.` : paused,
+      });
     }
 
     let text = '';

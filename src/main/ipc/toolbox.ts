@@ -765,6 +765,8 @@ export function registerToolbox(
       if (!topic) return { error: 'Missing "topic".' };
       const key = await d.anthropicKey();
       if (!key) return { error: 'Background research needs Claude (an API key).' };
+      const paused = ctx.usage.blocked('research');
+      if (paused) return { error: paused };
       const task: BackgroundTask = {
         id: `bg-${Date.now().toString(36)}`,
         topic,

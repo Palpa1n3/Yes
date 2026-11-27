@@ -120,6 +120,28 @@ export function fmtUsd(n: number): string {
   return `£${p.toFixed(p < 10 ? 2 : 0)}`;
 }
 
+/** Features that run without you waiting on them (paused first at the limit). */
+export const BACKGROUND_FEATURES = new Set(['agent', 'research', 'memory', 'routine', 'scheduled']);
+
+/** At the monthly limit: is this feature paused? Returns why, or null when it may go ahead. */
+export function budgetBlock(
+  month: number,
+  budget: number,
+  action: 'warn' | 'pause-background' | 'pause-all',
+  feature: string,
+): string | null {
+  if (budget <= 0 || month < budget || action === 'warn') return null;
+  if (action === 'pause-background' && !BACKGROUND_FEATURES.has(feature)) return null;
+  return `This month's Claude limit (${fmtUsd(budget)}) is reached, so ${
+    action === 'pause-all'
+      ? 'Alton isn’t using Claude'
+      : 'background work (Agent Mode, research, memory learning) is paused'
+  } until next month. Raise the limit in Settings › AI › Spending to carry on.`;
+}
+
+/** One Agent Mode task has spent its cap. */
+export const taskCapReached = (spent: number, cap: number): boolean => cap > 0 && spent >= cap;
+
 /** Which budget warning (if any) a new month total crosses: 80% and 100%. */
 export function budgetCrossed(before: number, after: number, budget: number): 80 | 100 | null {
   if (budget <= 0) return null;

@@ -221,6 +221,17 @@ export function sanitizeSettings(raw: unknown): Settings {
       r['monthlyBudget'] <= 10_000
         ? Math.round(r['monthlyBudget'])
         : d.monthlyBudget,
+    budgetAction: (['warn', 'pause-background', 'pause-all'] as const).includes(
+      r['budgetAction'] as 'warn',
+    )
+      ? (r['budgetAction'] as 'warn' | 'pause-background' | 'pause-all')
+      : d.budgetAction,
+    agentTaskLimit:
+      typeof r['agentTaskLimit'] === 'number' &&
+      r['agentTaskLimit'] >= 0 &&
+      r['agentTaskLimit'] <= 100
+        ? Math.round(r['agentTaskLimit'] * 100) / 100
+        : d.agentTaskLimit,
     phoneAppUrl: /^https:\/\/[\w.-]+(\/[\w./~-]*)?$/.test(String(r['phoneAppUrl'] ?? ''))
       ? String(r['phoneAppUrl'])
       : d.phoneAppUrl,

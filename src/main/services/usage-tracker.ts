@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import {
   addUsage,
   budgetCrossed,
+  budgetBlock,
   costOf,
   fmtUsd,
   summarise,
@@ -20,6 +21,7 @@ export class UsageTracker {
     private readonly d: {
       file?: string;
       budget(): number;
+      action?(): 'warn' | 'pause-background' | 'pause-all';
       warn?(text: string): void;
       now?: () => Date;
     },
@@ -54,6 +56,11 @@ export class UsageTracker {
       );
     this.save();
     return usd;
+  }
+
+  /** Is this feature paused by the monthly limit? The reason, or null to go ahead. */
+  blocked(feature: string): string | null {
+    return budgetBlock(this.summary().month, this.d.budget(), this.d.action?.() ?? 'warn', feature);
   }
 
   summary(): UsageSummary {

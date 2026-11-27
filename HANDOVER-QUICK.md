@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.82.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.83.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,13 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.83** Spending limits: settings `budgetAction` ('warn' | 'pause-background' | 'pause-all', default
+  pause-background) and `agentTaskLimit` (USD, default 1.3 ≈ £1). `budgetBlock()` in shared/usage.ts
+  (`BACKGROUND_FEATURES`), `UsageTracker.blocked(feature)`; checked before Agent Mode starts
+  (ipc/agent.ts, which also adds up `taskSpend` per task and calls `runner.stop()` at the cap), before
+  background research (toolbox `start_background_research`), before memory learning
+  (`chats.onSaved`) and for chat (assistant.ts: offline model or mock with a notice). Settings › AI ›
+  Spending has both controls. Next roadmap item: crash and unexpected shutdown recovery.
 - **0.82** Update rollback (`shared/rollback.ts`, `services/rollback.ts`): `BootGuard` (userData/boot.json)
   is started at the top of `main/index.ts` (packaged only); `markOk()` a minute after did-finish-load
   and on before-quit; `onBoot` returns a version to go back to after `FAILS_BEFORE_ROLLBACK` (2) failed

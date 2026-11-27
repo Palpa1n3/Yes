@@ -282,6 +282,11 @@ export interface Settings {
   saver: boolean;
   /** Monthly Claude spending limit in US dollars for warnings (0 = no limit). */
   monthlyBudget: number;
+  /** What happens once the monthly limit is reached: only warn, pause background work (Agent
+   *  Mode, research, memory learning) or pause everything that uses Claude. */
+  budgetAction: 'warn' | 'pause-background' | 'pause-all';
+  /** Most one Agent Mode task may spend, in US dollars (0 = no cap). */
+  agentTaskLimit: number;
   /** Where the phone-only app lives (GitHub Pages). */
   phoneAppUrl: string;
   /** Phone companion: serve a web app on the home network (pair with a code). */
@@ -424,6 +429,8 @@ export const DEFAULT_SETTINGS: Settings = {
   phoneAccess: false,
   phoneAppUrl: 'https://palpa1n3.github.io/Yes/',
   monthlyBudget: 0,
+  budgetAction: 'pause-background',
+  agentTaskLimit: 1.3,
   homeAddress: '',
   leaveReminders: true,
   ambient: true,

@@ -1,6 +1,7 @@
 import { deskState } from '../desk-state';
 import { app, BrowserWindow, desktopCapturer, globalShortcut, safeStorage, screen } from 'electron';
 import { join } from 'node:path';
+import { fmtUsd, taskCapReached } from '@shared/usage';
 import Anthropic from '@anthropic-ai/sdk';
 import { IPC } from '@shared/ipc';
 import { agentBusy, shotSize, type AgentQuestion, type AgentStatus } from '@shared/agent';
@@ -253,13 +254,28 @@ export function registerAgentIpc(
     });
   };
 
+  // What the current task has cost so far, for its spending cap.
+  let taskSpend = 0;
+  let capHit = false;
   const runner = new AgentRunner({
     client: async () => {
       const key = await secrets.get();
       return key ? new Anthropic({ apiKey: key, maxRetries: 2 }) : null;
     },
     model: () => ctx.settings.get().agentModel,
-    onUsage: (model, usage) => void ctx.usage.record(model, usage, 'agent'),
+    onUsage: (model, usage) => {
+      taskSpend += ctx.usage.record(model, usage, 'agent');
+      // One task may only spend so much (Settings › AI › Spending).
+      const cap = ctx.settings.get().agentTaskLimit;
+      if (!capHit && taskCapReached(taskSpend, cap)) {
+        capHit = true;
+        const msg = `Agent Mode stopped: this task reached its spending cap (${fmtUsd(cap)}). Raise it in Settings › AI › Spending if it needs more.`;
+        ctx.notify(msg);
+        ctx.command({ type: 'notice', text: msg });
+        ctx.audit.add('agent', msg, false);
+        runner.stop();
+      }
+    },
     lessons: () => extra.lessons(),
     learn: (l) => extra.learn(l),
     names: () => {
@@ -331,6 +347,16 @@ export function registerAgentIpc(
       });
       return runner.get();
     }
+    const paused = ctx.usage.blocked('agent');
+    if (paused) {
+      emit(ctx.getWindow(), IPC.agent.onChange, {
+        ...runner.get(),
+        state: 'error',
+        task: t,
+        result: paused,
+      });
+      return runner.get();
+    }
     if (!ctx.settings.get().agentMode) {
       emit(ctx.getWindow(), IPC.agent.onChange, {
         ...runner.get(),
@@ -347,6 +373,8 @@ export function registerAgentIpc(
     void (async () => {
       // Give the window a moment to get out of the way before the first screenshot.
       await new Promise((r) => setTimeout(r, 500));
+      taskSpend = 0;
+      capHit = false;
       await runner.run(t, opts);
       escOff();
       closeOverlay();
