@@ -3,6 +3,7 @@ import { app, BrowserWindow, desktopCapturer, globalShortcut, safeStorage, scree
 import { join } from 'node:path';
 import { fmtUsd, taskCapReached } from '@shared/usage';
 import { sessionGuard } from '../services/session-guard';
+import { jobLocks } from '../services/job-locks';
 import Anthropic from '@anthropic-ai/sdk';
 import { IPC } from '@shared/ipc';
 import {
@@ -431,7 +432,30 @@ export function registerAgentIpc(
       await new Promise((r) => setTimeout(r, 500));
       taskSpend = 0;
       capHit = false;
-      await runner.run(t, opts);
+      // Agent Mode has the mouse and keyboard to itself (e.g. no Vortex Deploy press meanwhile);
+      // wait up to half a minute for a short job using them to finish.
+      let lock = jobLocks.take(['input'], 'Agent Mode', 4 * 3600_000);
+      for (let i = 0; i < 30 && 'waitingFor' in lock; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        lock = jobLocks.take(['input'], 'Agent Mode', 4 * 3600_000);
+      }
+      if ('waitingFor' in lock) {
+        emit(ctx.getWindow(), IPC.agent.onChange, {
+          ...runner.get(),
+          state: 'error',
+          task: t,
+          result: `Agent Mode didn't start: ${lock.waitingFor}. Try again in a moment.`,
+        });
+        escOff();
+        closeOverlay();
+        restoreMain();
+        return;
+      }
+      try {
+        await runner.run(t, opts);
+      } finally {
+        lock.release();
+      }
       escOff();
       closeOverlay();
       for (const resolve of pending.values()) resolve(null);

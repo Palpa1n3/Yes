@@ -1,4 +1,5 @@
 import { notifyUser } from '../holo';
+import { jobLocks } from '../services/job-locks';
 /** Power: shut down, restart or sleep the PC (always with a delay that can be cancelled),
  *  and "do this when Steam finishes updating". Windows only. */
 import { app, powerSaveBlocker } from 'electron';
@@ -108,7 +109,12 @@ export function registerPower(ctx: MainContext): {
     }
     const when = secs >= 120 ? `${Math.round(secs / 60)} minutes` : `${secs} seconds`;
     ctx.audit.add('action', `${VERB[action]} in ${when}: ${why}`);
-    return `${VERB[action]} in ${when}. Say “cancel shutdown” to stop it.`;
+    // Anything of Alton's still running gets cut off: say what.
+    const running = jobLocks.busy().map((b) => b.label);
+    const warn = running.length
+      ? ` Heads up: ${[...new Set(running)].join(', ')} ${running.length === 1 ? 'is' : 'are'} still running and will be cut off.`
+      : '';
+    return `${VERB[action]} in ${when}. Say “cancel shutdown” to stop it.${warn}`;
   };
 
   const cancelQuiet = async (): Promise<boolean> => {

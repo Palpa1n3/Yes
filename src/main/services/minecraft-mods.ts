@@ -5,6 +5,7 @@
  *  (".jar.disabled", which Lunar understands). Downloads only from Modrinth's CDN, checked by
  *  hash; replaced jars are kept in "_alton_backup" so every change can be undone. */
 import { createHash } from 'node:crypto';
+import { jobLocks } from './job-locks';
 import { execFile } from 'node:child_process';
 import {
   existsSync,
@@ -519,6 +520,17 @@ export class MinecraftMods {
   /** Fix what can be fixed safely: duplicates off, missing mods added, wrong-version mods updated
    *  (or switched off when there's no version for this Minecraft). */
   async fixAll(id: string): Promise<{ ok: boolean; message: string; done: string[] }> {
+    const lock = jobLocks.take(['minecraft-files'], 'Minecraft mod tools', 30 * 60_000);
+    if ('waitingFor' in lock)
+      return { ok: false, message: `Waiting: ${lock.waitingFor}.`, done: [] };
+    try {
+      return await this.fixAllNow(id);
+    } finally {
+      lock.release();
+    }
+  }
+
+  private async fixAllNow(id: string): Promise<{ ok: boolean; message: string; done: string[] }> {
     if (await this.minecraftRunning())
       return { ok: false, message: 'Close Minecraft first.', done: [] };
     const r = await this.checkUpdates(id);
@@ -556,6 +568,16 @@ export class MinecraftMods {
 
   /** Update every mod that has a Modrinth update for this Minecraft version. */
   async updateAll(id: string): Promise<{ ok: boolean; message: string }> {
+    const lock = jobLocks.take(['minecraft-files'], 'Minecraft mod tools', 30 * 60_000);
+    if ('waitingFor' in lock) return { ok: false, message: `Waiting: ${lock.waitingFor}.` };
+    try {
+      return await this.updateAllNow(id);
+    } finally {
+      lock.release();
+    }
+  }
+
+  private async updateAllNow(id: string): Promise<{ ok: boolean; message: string }> {
     const r = await this.checkUpdates(id);
     if (!r.updates.length)
       return { ok: true, message: 'Every mod is up to date for this Minecraft version.' };

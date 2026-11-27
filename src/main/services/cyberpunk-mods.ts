@@ -34,6 +34,7 @@ import {
   type NexusInfo,
 } from '@shared/cpmods';
 import { describeDrift, footprintDrift, type Footprint } from '@shared/drift';
+import { jobLocks } from './job-locks';
 import {
   REQUIREMENTS_QUERY,
   definesSymbol,
@@ -427,6 +428,17 @@ export class CyberpunkMods {
 
   /** Send one mod's update to Vortex (Premium) or open its Files page (free). */
   async update(modId: number): Promise<{ ok: boolean; message: string }> {
+    const lock = jobLocks.take(['vortex'], 'Updating mods', 10 * 60_000);
+    if ('waitingFor' in lock) return { ok: false, message: `Waiting: ${lock.waitingFor}.` };
+    try {
+      return await this.updateOne(modId);
+    } finally {
+      // Vortex installs it over the next few minutes.
+      setTimeout(() => lock.release(), 3 * 60_000);
+    }
+  }
+
+  private async updateOne(modId: number): Promise<{ ok: boolean; message: string }> {
     this.onUpdating?.();
     const j = this.job(modId, 'sending');
     const name = j.name;
@@ -590,6 +602,10 @@ export class CyberpunkMods {
       };
     const premium = this.account?.premium === true;
     const list = premium ? todo : todo.slice(0, 10);
+    // Updates go through Vortex: nothing else (a sync closing it) meanwhile.
+    const lock = jobLocks.take(['vortex'], 'Updating mods', 3 * 3600_000);
+    if ('waitingFor' in lock)
+      return { ok: false, message: `Waiting: ${lock.waitingFor}. Try again in a minute.` };
     for (const id of list) this.job(id, 'queued');
     const run = { total: list.length, done: 0, current: '', cancel: false };
     this.run = run;
@@ -608,6 +624,8 @@ export class CyberpunkMods {
       // Anything not reached goes back to plain "update available".
       this.jobs = this.jobs.filter((j) => j.state !== 'queued');
       if (this.run === run) this.run = null;
+      // Vortex keeps installing for a few minutes after the last download.
+      setTimeout(() => lock.release(), 4 * 60_000);
     })();
     return {
       ok: true,
@@ -1347,6 +1365,8 @@ export class CyberpunkMods {
     if (!game) return { done: [], message: 'I couldn’t find Cyberpunk 2077.' };
     if (await this.gameRunning())
       return { done: [], message: 'Cyberpunk is running: close it first, then I can fix it.' };
+    const lock = jobLocks.take(['cyberpunk-files'], 'Cyberpunk mod tools', 20 * 60_000);
+    if ('waitingFor' in lock) return { done: [], message: `Waiting: ${lock.waitingFor}.` };
     this.fixing = true;
     const done: FixRecord[] = [];
     try {
@@ -1509,6 +1529,7 @@ export class CyberpunkMods {
                 : 'Nothing to fix: the last launch didn’t fail on a mod.',
       };
     } finally {
+      lock.release();
       this.fixing = false;
     }
   }
@@ -1961,6 +1982,16 @@ export class CyberpunkMods {
 
   /** Move these mods' files out of the game folder (only files that really are theirs). */
   async removeMods(folders: string[]): Promise<{ ok: boolean; message: string }> {
+    const lock = jobLocks.take(['cyberpunk-files'], 'Cyberpunk mod tools', 20 * 60_000);
+    if ('waitingFor' in lock) return { ok: false, message: `Waiting: ${lock.waitingFor}.` };
+    try {
+      return await this.removeModsNow(folders);
+    } finally {
+      lock.release();
+    }
+  }
+
+  private async removeModsNow(folders: string[]): Promise<{ ok: boolean; message: string }> {
     this.expectChange();
     const game = await this.findGame();
     const v = this.vortexDir();
@@ -2047,6 +2078,16 @@ export class CyberpunkMods {
   onUpdating: (() => void) | null = null;
 
   async restoreMods(folders: string[]): Promise<{ ok: boolean; message: string }> {
+    const lock = jobLocks.take(['cyberpunk-files'], 'Cyberpunk mod tools', 20 * 60_000);
+    if ('waitingFor' in lock) return { ok: false, message: `Waiting: ${lock.waitingFor}.` };
+    try {
+      return await this.restoreModsNow(folders);
+    } finally {
+      lock.release();
+    }
+  }
+
+  private async restoreModsNow(folders: string[]): Promise<{ ok: boolean; message: string }> {
     this.expectChange();
     const game = await this.findGame();
     if (!game) return { ok: false, message: 'I couldn’t find Cyberpunk 2077.' };

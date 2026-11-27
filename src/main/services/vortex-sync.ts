@@ -34,6 +34,7 @@ import {
   type VortexRule,
 } from '@shared/vortex';
 import { QUARANTINE } from '@shared/cpoutdated';
+import { jobLocks } from './job-locks';
 import type { CyberpunkMods } from './cyberpunk-mods';
 
 const GAME = 'cyberpunk2077';
@@ -241,6 +242,9 @@ export class VortexSync {
       return { ok: false, message: 'Waiting for Cyberpunk to be closed.' };
     if (this.mods.updatingNow())
       return { ok: false, message: 'Waiting for the updates to finish installing in Vortex.' };
+    // Closing Vortex would cut off anything else using it.
+    const lock = jobLocks.take(['vortex', 'cyberpunk-files'], 'Vortex sync', 15 * 60_000);
+    if ('waitingFor' in lock) return { ok: false, message: `Waiting: ${lock.waitingFor}.` };
     this.applying = true;
     try {
       const wasOpen = await this.vortexRunning();
@@ -273,6 +277,7 @@ export class VortexSync {
           : r.message,
       };
     } finally {
+      lock.release();
       this.applying = false;
     }
   }
@@ -307,6 +312,9 @@ export class VortexSync {
     if (await this.mods.gameRunning())
       return { ok: false, message: 'Waiting for Cyberpunk to be closed.' };
     if (!force && !this.due()) return { ok: true, message: 'Nothing to change in Vortex.' };
+    // Nothing else may use Vortex or the mod files meanwhile (an update installing, a fix…).
+    const lock = jobLocks.take(['vortex', 'cyberpunk-files'], 'Vortex sync', 15 * 60_000);
+    if ('waitingFor' in lock) return { ok: false, message: `Waiting: ${lock.waitingFor}.` };
     this.busy = true;
     // Alton's own changes (and the deploy that follows) aren't "unexpected".
     this.mods.expectChange(20 * 60_000);
@@ -513,6 +521,7 @@ export class VortexSync {
       this.save({ ...p, lastRun: { at: Date.now(), message: msg, ok: false } });
       return { ok: false, message: msg };
     } finally {
+      lock.release();
       this.busy = false;
     }
   }
@@ -621,6 +630,9 @@ export class VortexSync {
     // Only ever deploy the profile Alton changed: Vortex sometimes comes back on another game or
     // a new empty "Default" profile, and deploying that takes every mod out of the game.
     if (!(await this.onRightProfile())) return false;
+    // Pressing Deploy moves the mouse: not while Agent Mode (or anything else) is using it.
+    const lock = jobLocks.take(['vortex', 'input'], 'Pressing Deploy in Vortex', 6 * 60_000);
+    if ('waitingFor' in lock) return false;
     // The deploy applies Alton's own changes: not "unexpected".
     this.mods.expectChange(10 * 60_000);
     this.deploying = true;
@@ -706,6 +718,7 @@ while ((Get-Date) -lt $stop) {
       if (ok) this.save({ ...this.state(), needsDeploy: false });
       return ok;
     } finally {
+      lock.release();
       this.deploying = false;
     }
   }

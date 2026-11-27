@@ -3,6 +3,26 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.88.0: Alton's jobs no longer trip over each other
+
+Phase 1, item 8 of 11.
+
+Alton runs several things by itself (Vortex syncs, mod updates, auto-fixes, pressing Deploy, Agent
+Mode). They now take turns instead of colliding:
+
+- **Vortex:** a sync (which closes and reopens Vortex) waits while mod updates are installing
+  through it, and updates wait for a sync to finish.
+- **Mouse and keyboard:** pressing Vortex's Deploy button waits while Agent Mode is using the mouse,
+  and Agent Mode waits a few seconds for a quick button press to finish.
+- **Mod files:** auto-fixes, saving mods away and putting them back happen one at a time, for
+  Cyberpunk and for Minecraft.
+- When something has to wait, you're told what it's waiting for ("Waiting: Updating mods is using
+  Vortex") instead of it failing oddly.
+- **Shutting down or restarting** the PC through Alton now warns you if any of this is still running.
+
+**What to test:** nothing special. If you start mod updates and then press Mods › Vortex › Sync now,
+the sync should say it's waiting for the updates.
+
 ## 0.87.0: noticing changes nobody asked for
 
 Phase 1, item 7 of 11.

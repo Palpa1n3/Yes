@@ -48,7 +48,12 @@ hidden instructions → encrypted sync.
   change (≥15 items and ≥25%) that Alton didn't make warns you (Alton's own syncs, saves, restores,
   updates and deploys mark themselves as expected). If Vortex opens on another game or a different
   Cyberpunk profile, Alton says so instead of quietly not deploying.
-- ⬜ Protection against conflicting automated tasks.
+- ✅ Protection against conflicting automated tasks. **0.88:** one shared set of locks
+  (`services/job-locks.ts`: Vortex, mouse/keyboard, Cyberpunk mod files, Minecraft mods; the same
+  job can take a lock again; holds expire so a crashed job can't block). Vortex sync and "close and
+  reopen Vortex" wait for updates; pressing Deploy waits for Agent Mode (mouse); Agent Mode waits
+  up to 30 s for a short job using the mouse; fixes, saving and putting back mods and the Minecraft
+  tools don't overlap. Shutting down / restarting names any Alton work that will be cut off.
 - ⬜ Protection against malicious instructions embedded in websites and documents.
 - ⬜ Encrypted cross-device synchronization.
 - ✅ PIN authentication kept instead of biometrics.

@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.87.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.88.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,13 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.88** Job locks (`services/job-locks.ts`, `jobLocks` singleton; resources vortex / input /
+  cyberpunk-files / minecraft-files; `take()` all-or-nothing, same label re-enters with a count,
+  holds expire). Used by VortexSync.sync/applyNow ('Vortex sync'), deployWhenOpen ('Pressing Deploy
+  in Vortex', vortex+input), CyberpunkMods.update/updateAll ('Updating mods', released a few minutes
+  after so Vortex can install), autofix/removeMods/restoreMods ('Cyberpunk mod tools'), Minecraft
+  fixAll/updateAll, Agent Mode runs (input), and power.ts names busy jobs. Next: malicious
+  instructions in websites and documents.
 - **0.87** Unintended changes: `shared/drift.ts` (`footprintDrift`, `describeDrift`);
   `CyberpunkMods.footprint()/watchDrift()/expectChange()` (counts in userData/cpfootprint.json, checked
   every 60 s); expectChange from removeMods/restoreMods/updateAll and VortexSync sync/deployWhenOpen.
