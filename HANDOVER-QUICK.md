@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.92.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.93.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.93** Continuity: RemoteStatus `activeChat` (the PC's open chat; phone-started chats use their
+  `phoneId`); phone `showPcContinue()` bar (#pcContinue, fresh <30 min, not the open chat, shown once
+  per update); remote-api `/api/import` sends a "Carry on from your phone" notice for a chat with a
+  message from the last 15 min (once per title). Tests in tests/main/phoneApi.test.ts. Next: memory
+  consolidation.
 - **0.92** Phase 2 started: `shared/context.ts` (`NowFacts`, `describeNow`, ≤700 chars); ipc/index.ts
   `nowContext()` gathers foreground, gaming, jobLocks, calendar, shifts, timers, email, media, weather,
   phone messages and is the chat `context`; RemoteStatus `now` sends it to the phone, whose

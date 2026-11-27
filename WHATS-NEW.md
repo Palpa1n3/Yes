@@ -3,6 +3,24 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.93.0: pick up a conversation on the other device
+
+Phase 2, item 3. Also: the six safety items you added are now a **safety gate** in ROADMAP.md that
+must be done and tested before Phase 3 or 4 can start (PIN only, no biometrics).
+
+- **PC → phone:** if you were chatting on the PC in the last half hour, the phone shows
+  **"Continue from your PC · “title”"** at the top of the chat. Tap it and that conversation opens
+  on the phone, ready to carry on.
+- **Phone → PC:** when a conversation you've just had on the phone reaches the PC, Alton says
+  **"Carry on from your phone: “title” is in your chat list."**
+- Chats were already copied between the two whenever the phone connected; this makes switching
+  device a single tap.
+
+**What to test**
+
+1. Chat with Alton on the PC, then open the phone app: tap "Continue from your PC" and keep going.
+2. Chat on the phone, then look at the PC: it should say which chat to carry on with.
+
 ## 0.92.0: Alton knows what's going on (Phase 2 begins)
 
 Phase 2, "Unified intelligence", has started.

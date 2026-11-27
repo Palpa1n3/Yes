@@ -85,7 +85,11 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
   next calendar event, today's shift, running timers, unread email (count and senders), what's
   playing, the weather (and rain soon) and phone messages. The phone app gets the same picture from
   the PC (in its status) for its own chats while the PC is connected.
-- ⬜ Cross-device conversation continuity.
+- ✅ Cross-device conversation continuity. Chat history already synced both ways when the phone
+  connects. **0.93:** picking up where you left off: the phone shows "Continue from your PC ·
+  “title”" for the chat open on the PC in the last 30 minutes (one tap opens it, fetching it first
+  if needed); the PC says "Carry on from your phone: “title”" when a conversation from the last 15
+  minutes arrives from the phone (once per chat).
 - ⬜ Intelligent memory consolidation.
 - ⬜ Personal knowledge graph.
 - ⬜ Predictive assistance.

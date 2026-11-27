@@ -115,6 +115,8 @@ export interface PcStatus {
   approvals: Array<{ id: string; title: string; detail: string }>;
   /** What's going on on the PC right now (for the phone's own chats). */
   now?: string;
+  /** The chat open on the PC, to carry on with here. */
+  activeChat?: { id: string; title: string; updatedAt: number } | null;
 }
 
 export interface PcJob {

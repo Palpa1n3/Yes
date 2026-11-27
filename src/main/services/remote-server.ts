@@ -42,6 +42,8 @@ export interface RemoteStatus {
   history: Array<{ who: 'you' | 'alton'; text: string }>;
   /** Alton's picture of what's going on on the PC right now (shared/context.ts). */
   now?: string;
+  /** The chat open on the PC (to pick it up on the phone). */
+  activeChat?: { id: string; title: string; updatedAt: number } | null;
 }
 
 /** Where the Android app's pages come from (Capacitor's https scheme). Calls still need pairing. */

@@ -338,6 +338,12 @@ export function registerIpc(ctx: MainContext): void {
     nowPlaying: () => media.get(),
     notices: () => ctx.recentNotices(),
     now: () => nowContext(),
+    activeChat: () => {
+      const s = chats.state();
+      const c = s.chats.find((x) => x.id === s.activeId);
+      // Chats from the phone keep the phone's id, so the phone finds its own copy.
+      return c ? { id: c.phoneId ?? c.id, title: c.title, updatedAt: c.updatedAt } : null;
+    },
     history: () =>
       chats
         .messages(chats.state().activeId)

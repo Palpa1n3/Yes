@@ -83,6 +83,7 @@ export function makePhoneRoutes(
   const ok = (json: unknown): RouteResult => ({ json });
   const bad = (msg: string, status = 400): RouteResult => ({ status, json: { error: msg } });
 
+  let lastPhoneChatTold = '';
   const chatView = (id: string) => {
     const meta = d.chats.get(id);
     if (!meta) return null;
@@ -351,6 +352,24 @@ export function makePhoneRoutes(
         if (typeof n === 'string' && n.trim() && d.notes.addNote(n)) notes++;
       const shifts = ctx.shifts.merge(data.shifts);
       if (data.phone) setPhoneStatus(data.phone);
+      // A conversation you've just been having on the phone: say where to carry on with it here.
+      const recent = (Array.isArray(data.chats) ? data.chats : [])
+        .map((c) => ({
+          title: str(c?.title, 80),
+          at: Math.max(
+            0,
+            ...(Array.isArray(c?.messages) ? c.messages : []).map((m) => Number(m?.at) || 0),
+          ),
+        }))
+        .filter((c) => c.title && Date.now() - c.at < 15 * 60_000)
+        .sort((a, b) => b.at - a.at)[0];
+      if (recent && recent.title !== lastPhoneChatTold) {
+        lastPhoneChatTold = recent.title;
+        ctx.command({
+          type: 'notice',
+          text: `Carry on from your phone: “${recent.title}” is in your chat list.`,
+        });
+      }
       ctx.audit.add(
         'action',
         `Synced from the phone app: ${messages} messages, ${memories} memories, ${items} list items, ${ops} ticked/removed, ${notes} notes, ${shifts} shifts`,

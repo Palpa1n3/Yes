@@ -1546,6 +1546,7 @@ async function checkPc(): Promise<void> {
   if (tok) {
     try {
       pcStatus = await pcApi<PcStatus>({ base, token: tok }, 'GET', '/api/status', undefined, 6000);
+      showPcContinue();
       pcWhy = '';
       if (pcStatus.name && pcStatus.name !== S.pcName) {
         S.pcName = pcStatus.name;
@@ -1610,6 +1611,38 @@ function setLink(l: PcLink): void {
     void syncWithPc();
   if (view === 'pc') renderPc();
   if (view === 'today') renderToday();
+}
+
+/* ── Pick up on the phone the chat you were just having on the PC ── */
+let pcContinueSeen = '';
+function showPcContinue(): void {
+  const bar = document.getElementById('pcContinue');
+  if (!bar) return;
+  const a = pcStatus?.activeChat;
+  const key = a ? `${a.id}:${a.updatedAt}` : '';
+  const fresh = !!a && Date.now() - a.updatedAt < 30 * 60_000;
+  if (!a || !fresh || a.id === chatId || pcLink !== 'paired' || key === pcContinueSeen) {
+    bar.hidden = true;
+    return;
+  }
+  const b = document.createElement('b');
+  b.textContent = 'Continue from your PC';
+  bar.replaceChildren(b, document.createTextNode(` · “${cleanTitle(a.title)}”`));
+  bar.hidden = false;
+  bar.onclick = () => {
+    pcContinueSeen = key;
+    bar.hidden = true;
+    void (async () => {
+      // Make sure the phone has the latest of that chat, then open it.
+      if (!S.chats.some((c) => c.id === a.id)) await syncWithPc();
+      const c = S.chats.find((x) => x.id === a.id);
+      if (!c) return toast('That chat hasn’t reached the phone yet: try again in a moment.');
+      chatId = c.id;
+      research = c.research;
+      setView('chat');
+      renderMsgs();
+    })();
+  };
 }
 
 /* ── Live sync: send what changed here, then take the PC's latest ── */
@@ -5049,6 +5082,7 @@ function assistantNode(m: PhoneMessage, liveActivity?: string): HTMLElement {
 }
 
 function renderMsgs(activity?: string): void {
+  showPcContinue();
   stopWelcome();
   stopWelcome = () => undefined;
   renderShiftCard();
@@ -7181,6 +7215,7 @@ async function refreshPcStatus(): Promise<void> {
   if (!c) return;
   try {
     pcStatus = await pcApi<PcStatus>(c, 'GET', '/api/status', undefined, 6000);
+    showPcContinue();
     renderPcStatus();
     void refreshRoutinesTimers(c);
   } catch {

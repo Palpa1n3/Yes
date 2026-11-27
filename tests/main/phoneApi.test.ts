@@ -113,6 +113,48 @@ describe('phone-only app sync', () => {
   });
 });
 
+describe('carrying on from the phone', () => {
+  it('tells the PC about a conversation just had on the phone, once', async () => {
+    const { call, command } = setup();
+    const now = Date.now();
+    const chat = {
+      id: 'p-recent',
+      title: 'Holiday plans',
+      research: false,
+      updatedAt: now,
+      messages: [{ role: 'user', text: 'Somewhere warm in May?', at: now - 60_000 }],
+    };
+    await call('POST', '/api/import', {
+      data: { v: 1, chats: [chat], memories: [], listItems: [] },
+    });
+    await call('POST', '/api/import', {
+      data: { v: 1, chats: [chat], memories: [], listItems: [] },
+    });
+    const notices = command.mock.calls.filter((c) =>
+      (c[0] as { text?: string }).text?.includes('Carry on from your phone'),
+    );
+    expect(notices).toHaveLength(1);
+    expect((notices[0]?.[0] as { text: string }).text).toMatch(/Holiday plans/);
+  });
+
+  it('stays quiet about old phone chats', async () => {
+    const { call, command } = setup();
+    const old = {
+      id: 'p-old',
+      title: 'Old chat',
+      research: false,
+      updatedAt: 1,
+      messages: [{ role: 'user', text: 'hi', at: 1 }],
+    };
+    await call('POST', '/api/import', {
+      data: { v: 1, chats: [old], memories: [], listItems: [] },
+    });
+    expect(
+      command.mock.calls.some((c) => (c[0] as { text?: string }).text?.includes('Carry on')),
+    ).toBe(false);
+  });
+});
+
 describe('shifts reach the phone', () => {
   it("sends the PC's upcoming shifts in the sync", async () => {
     const { call, ctx } = setup();
