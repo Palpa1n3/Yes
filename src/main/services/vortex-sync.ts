@@ -15,6 +15,8 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  statSync,
+  unlinkSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -120,9 +122,17 @@ export class VortexSync {
     for (;;) {
       const s = lastProfileSwitch(this.vortexLog());
       if (s && s.at >= since) {
-        if (s.gameId === GAME && (!want || s.profile === want)) {
+        // A startup line names only the profile: it counts when it's the one Alton changed.
+        const right =
+          s.gameId === GAME ? !want || s.profile === want : !!want && s.profile === want;
+        if (right) {
           if (this.state().wrongProfile) this.save({ ...this.state(), wrongProfile: null });
           return true;
+        }
+        if (!s.gameId && !want) {
+          if (Date.now() > stop) return false;
+          await new Promise((res) => setTimeout(res, 3000));
+          continue;
         }
         this.save({
           ...this.state(),
@@ -161,6 +171,60 @@ export class VortexSync {
     const again = Date.now();
     spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
     if (await this.onRightProfile(again - 5000)) await this.deployWhenOpen();
+  }
+
+  /** Saved mods' files that are in the game folder again (the very same file as the saved
+   *  mod's copy in Vortex's staging folder, so a newer copy Vortex deployed is never touched)
+   *  go back into the saved folder. If the saved folder already has that same file, the game's
+   *  entry is only an extra link to it and is dropped (nothing is lost). Returns the count. */
+  private clearSavedFromGame(game: string): number {
+    const staging = this.mods.vortexDir();
+    if (!staging) return 0;
+    const id = (p: string): string | null => {
+      try {
+        const s = statSync(p, { bigint: true });
+        return `${s.dev}:${s.ino}`;
+      } catch {
+        return null;
+      }
+    };
+    let n = 0;
+    for (const r of this.mods.removed())
+      for (const rel of r.files) {
+        const inGame = join(game, rel);
+        const stage = id(join(staging, r.folder, rel));
+        if (!stage || id(inGame) !== stage) continue;
+        const saved = join(game, QUARANTINE, r.folder, rel);
+        try {
+          if (existsSync(saved)) {
+            if (id(saved) !== stage) continue;
+            unlinkSync(inGame);
+          } else {
+            mkdirSync(join(saved, '..'), { recursive: true });
+            renameSync(inGame, saved);
+          }
+          n++;
+        } catch {
+          /* left as it is */
+        }
+      }
+    return n;
+  }
+
+  /** Collection entries switched on in Vortex (they re-enable their mods when Vortex starts). */
+  private async enabledCollections(
+    get: (paths: string[]) => Promise<Map<string, unknown>>,
+    enabled: Set<string>,
+  ): Promise<string[]> {
+    const all = await get([`persistent.mods.${GAME}`]);
+    const pre = `persistent.mods.${GAME}.`;
+    const out: string[] = [];
+    for (const [k, v] of all)
+      if (k.startsWith(pre) && k.endsWith('.type') && v === 'collection') {
+        const modId = k.slice(pre.length, -'.type'.length);
+        if (enabled.has(modId)) out.push(modId);
+      }
+    return out;
   }
 
   private applying = false;
@@ -278,33 +342,35 @@ export class VortexSync {
       const enabledKey = (id: string): string => `${modStatePrefix}.${escPath(id)}.enabled`;
       const pairs: Array<[string, string]> = [];
 
-      // 1. Saved (removed) mods: files back where Vortex expects them, switched off in Vortex.
-      const removed = this.mods.removed();
-      const toOff = removed.filter((r) => !r.vortexOff);
-      for (const r of toOff) {
-        for (const rel of r.files) {
-          const from = join(game, QUARANTINE, r.folder, rel);
-          const to = join(game, rel);
-          try {
-            if (existsSync(to) || !existsSync(from)) continue;
-            mkdirSync(join(to, '..'), { recursive: true });
-            renameSync(from, to);
-          } catch {
-            /* stays saved */
-          }
-        }
-        pairs.push([enabledKey(r.folder), 'false']);
-      }
-      // 2. Put back: switch on again.
-      for (const id of p.enable) pairs.push([enabledKey(id), 'true']);
-
-      // 3. Which mods are enabled now (after the changes above), and their conflicts.
+      // Which mods Vortex has switched on right now.
       const states = await get([modStatePrefix]);
       const enabled = new Set<string>();
       const pre = `${modStatePrefix.replace(/\\\./g, '.')}.`;
       for (const [k, v] of states)
         if (k.startsWith(pre) && k.endsWith('.enabled') && v === true)
           enabled.add(k.slice(pre.length, -'.enabled'.length));
+
+      // 1. Saved (removed) mods are switched off in Vortex: new ones, and any that something in
+      //    Vortex switched back on (a collection re-enables its mods every time Vortex starts).
+      //    Their files stay saved: never moved back into the game (Vortex may have forgotten
+      //    them, and then they'd simply be active again).
+      const removed = this.mods.removed();
+      const toOff = removed.filter(
+        (r) => !p.enable.includes(r.folder) && (!r.vortexOff || enabled.has(r.folder)),
+      );
+      const drift = toOff.filter((r) => r.vortexOff);
+      for (const r of toOff) pairs.push([enabledKey(r.folder), 'false']);
+      // Saved mods' files that are back in the game folder go back to the saved folder.
+      const cleared = this.clearSavedFromGame(game);
+      // A collection that keeps switching saved mods back on is switched off itself (it's only a
+      // list; its mods stay installed and keep their own on/off).
+      const collections = drift.length ? await this.enabledCollections(get, enabled) : [];
+      for (const c of collections) pairs.push([enabledKey(c), 'false']);
+      // 2. Put back: switch on again.
+      for (const id of p.enable) pairs.push([enabledKey(id), 'true']);
+
+      // 3. Which mods are enabled now (after the changes above), and their conflicts.
+      for (const c of collections) enabled.delete(c);
       for (const r of toOff) enabled.delete(r.folder);
       for (const id of p.enable) enabled.add(id);
       let list = this.mods.list().filter((m) => enabled.has(m.folder));
@@ -398,6 +464,15 @@ export class VortexSync {
       const msg = [
         toOff.length
           ? `Switched off ${toOff.length - notOff.length} saved mod${toOff.length === 1 ? '' : 's'} in Vortex.`
+          : '',
+        drift.length
+          ? `${drift.length} saved mod${drift.length === 1 ? ' was' : 's were'} switched back on inside Vortex; switched off again.`
+          : '',
+        collections.length
+          ? `Switched off the collection entr${collections.length === 1 ? 'y' : 'ies'} that kept switching saved mods back on (its mods stay installed).`
+          : '',
+        cleared
+          ? `Took ${cleared} file${cleared === 1 ? '' : 's'} of saved mods back out of the game folder.`
           : '',
         p.enable.length ? `Switched ${p.enable.length} back on.` : '',
         dupsOff.length

@@ -125,5 +125,11 @@ describe('which profile Vortex is on', () => {
       at: Date.parse('2026-11-24T18:47:29.392Z'),
     });
     expect(lastProfileSwitch('nothing')).toBeNull();
+    // Vortex starting on the same profile only logs the health-check line.
+    expect(
+      lastProfileSwitch(
+        `${log}\n2026-11-27T22:06:35.245Z [DEBG] [RENDERER] Triggering profile change health checks {"profileId":"wpFTd0uli"}`,
+      ),
+    ).toEqual({ gameId: '', profile: 'wpFTd0uli', at: Date.parse('2026-11-27T22:06:35.245Z') });
   });
 });

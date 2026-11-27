@@ -161,9 +161,15 @@ export function lastProfileSwitch(
   log: string,
 ): { gameId: string; profile: string; at: number } | null {
   let found: { gameId: string; profile: string; at: number } | null = null;
+  // "switched to profile" when it changes; at startup on the same profile Vortex only logs
+  // "Triggering profile change health checks {"profileId":…}" (game unknown: gameId '').
   for (const m of log.matchAll(
-    /^(\S+) \[INFO\] \[RENDERER\] switched to profile \{"gameId":"([^"]+)","current":"([^"]+)"\}/gm,
+    /^(\S+) \[\w+\] \[RENDERER\] (?:switched to profile \{"gameId":"([^"]+)","current":"([^"]+)"\}|Triggering profile change health checks \{"profileId":"([^"]+)"\})/gm,
   ))
-    found = { at: Date.parse(m[1] ?? '') || 0, gameId: m[2] ?? '', profile: m[3] ?? '' };
+    found = {
+      at: Date.parse(m[1] ?? '') || 0,
+      gameId: m[2] ?? '',
+      profile: m[3] ?? m[4] ?? '',
+    };
   return found;
 }

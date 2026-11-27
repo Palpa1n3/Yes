@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.79.0, 24 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.80.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -43,6 +43,19 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 
 ## Recent work (newest first)
 
+- **0.80** Saved mods stay saved. Found 24–27 Nov: (a) the sync used to move saved mods' files back
+  into the game "so Vortex removes them on deploy", but Vortex had forgotten them, so they were simply
+  active again (1,185 files of 44 mods); (b) the owner's Vortex **collection "Welcome to Night City 2.5"**
+  (`collection_iszwwe_484_…`) re-enables its required mods every time Vortex starts ("start installing
+  dependencies … determined unfulfilled dependencies 41"), so saved mods kept coming back. Now: the sync
+  never moves saved files into the game; it switches off any saved mod Vortex has on (drift), switches off
+  enabled collection entries when that happens (they're only lists), and `clearSavedFromGame` takes saved
+  files out of the game when the game file IS the saved mod's staging file (same dev:ino; if the saved
+  folder already has that file the extra link is dropped). `lastProfileSwitch` also reads Vortex's startup
+  line "Triggering profile change health checks {profileId}". Done by hand on 27 Nov: collection entry and
+  43 saved mods off, redeployed; 0 saved files left in the game.
+  Crashes left: 22:15 and 22:57 on 24 Nov were `Cyberpunk2077.exe+0x2FA84E6` while driving (no mod on the
+  stack), with the saved mods still active. Car mods (Authentic Shift ×5, Shift) are still off for testing.
 - **0.79** Deploy guard: Vortex can come back from a restart on another game and a **new empty
   "Default" Cyberpunk profile** (log: "the active game is no longer known, resetting"); deploying that
   takes every mod out of the game (happened 24 Nov 18:47, fixed by hand: `settings.profiles.activeProfileId`,
