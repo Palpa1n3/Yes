@@ -471,6 +471,19 @@ interface AltonNativePlugin {
   wakeOnLan(o: { mac: string }): Promise<void>;
   /** Download the new APK and open the Install screen (rejects "ALLOW: …" if not allowed yet). */
   installUpdate(o: { url: string }): Promise<void>;
+  /** Download (and check) the new APK in the background, without installing it yet. */
+  downloadUpdate(o: { url: string }): Promise<{ ready: boolean }>;
+  /** Install the downloaded update (with no Install screen when Android allows it). */
+  installDownloaded(): Promise<void>;
+  /** Where updating stands. `silent`: Android 12+ and Alton installed itself, so no Install
+   *  screen; `state`/`error`: the last install's result. */
+  updateInfo(): Promise<{
+    ready: boolean;
+    allowed: boolean;
+    silent: boolean;
+    state: string;
+    error: string;
+  }>;
   media(o: {
     action: 'next' | 'previous' | 'pause' | 'play' | 'play_pause' | 'volume_up' | 'volume_down';
   }): Promise<void>;
@@ -481,6 +494,10 @@ interface AltonNativePlugin {
     fn: (d: { mode?: 'drive' | 'talk' }) => void,
   ): Promise<PluginListenerHandle>;
   addListener(event: 'message', fn: (m: AppMessage) => void): Promise<PluginListenerHandle>;
+  addListener(
+    event: 'updateProgress',
+    fn: (d: { percent: number }) => void,
+  ): Promise<PluginListenerHandle>;
 }
 /** The app's own native code (android/app/src/main/java/com/alton/phone/AltonNativePlugin.java). */
 export const Native = registerPlugin<AltonNativePlugin>('AltonNative');

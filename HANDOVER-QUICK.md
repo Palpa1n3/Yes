@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.80.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.81.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -41,7 +41,26 @@ detail is in `HANDOVER.md`; read this first if you need to pick the work up fast
 - The PC's own data: `%APPDATA%\ARC\` (settings.json, encrypted keys `*.bin`, chats, logs\arc.log, and the
   mod tools' files listed below).
 
+## Roadmap
+
+`ROADMAP.md` holds the agreed plan to 1.0 (six phases; Phase 1 "Safety foundations" is under way)
+with each item's status. Update it with every release that moves an item.
+
 ## Recent work (newest first)
+
+- **0.81** Phase 1 started. Backups (`services/data-backup.ts`): all of Alton's data files
+  (`BACKUP_ITEMS`), a `manifest.json` per backup (which files were readable), 7 daily + 4 weekly
+  (`keepPlan`), a `before-update-<version>` copy when an update has downloaded (`ipc/updates.ts`),
+  `recoverDamaged()` at the very top of `main/index.ts` (before any store reads its file) puts back an
+  unreadable JSON file from the newest good backup and keeps the damaged one as
+  `<file>.damaged-<time>`. Restore skips copies recorded as damaged. Paired phones and `*.bin` are
+  never copied. Android self-update (`SelfUpdate.java`, `UpdateReceiver.java`): background download
+  with progress events, APK checked (package name + signing certificates equal the installed app's),
+  installed through a PackageInstaller session (`USER_ACTION_NOT_REQUIRED` on Android 12+; needs
+  `UPDATE_PACKAGES_WITHOUT_USER_ACTION`, and Alton must be the installer of record, which it becomes
+  after its first self-install, so the first one still shows the Install screen). Phone app: auto
+  download when a release with Alton.apk is found, install on `visibilitychange` hidden when silent is
+  possible, "Updated to X" toast, switch in Settings › This app (`alton-auto-update`).
 
 - **0.80** Saved mods stay saved. Found 24–27 Nov: (a) the sync used to move saved mods' files back
   into the game "so Vortex removes them on deploy", but Vortex had forgotten them, so they were simply

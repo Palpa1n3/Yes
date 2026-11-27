@@ -1795,9 +1795,11 @@ async function checkAppUpdate(manual: boolean): Promise<void> {
     if (v && apk && newer(v, __APP_VERSION__)) {
       newVersion = v;
       apkUrl = apk.browser_download_url;
-      $('updVer').textContent = v;
+      const ver = document.getElementById('updVer');
+      if (ver) ver.textContent = v;
       $('updateBar').hidden = false;
       if (manual) $('updMsg').textContent = `Version ${v} is ready: tap the banner at the top.`;
+      void autoDownload();
     } else if (manual)
       $('updMsg').textContent =
         v && newer(v, __APP_VERSION__)
@@ -1807,6 +1809,67 @@ async function checkAppUpdate(manual: boolean): Promise<void> {
     if (manual) $('updMsg').textContent = 'Couldn’t check (no signal?).';
   }
   renderAbout();
+}
+/* Android app updates by itself: the new version downloads in the background (checked: same
+   app, same signing key), then installs when you leave Alton (Android 12+, after the first
+   update Alton installed itself, there's no Install screen). Off: Settings › This app. */
+const AUTO_UPD = 'alton-auto-update';
+const autoUpdateOn = (): boolean => localStorage.getItem(AUTO_UPD) !== 'off';
+let updDownloading = false;
+let updReady = false;
+let updSilent = false;
+let updFor = '';
+/** The update banner: a bold part and the rest (plain text, nothing parsed as HTML). */
+function setBar(bold: string, rest: string): void {
+  const b = document.createElement('b');
+  b.textContent = bold;
+  $('updateBar').replaceChildren(b, document.createTextNode(` · ${rest}`));
+}
+async function autoDownload(): Promise<void> {
+  // A newer version than the one already downloaded: get that instead.
+  if (updReady && updFor !== apkUrl) updReady = false;
+  if (!isApp || !autoUpdateOn() || updDownloading || updReady) return;
+  updDownloading = true;
+  const handle = await Native.addListener('updateProgress', (d) => {
+    setBar('Downloading update', `${newVersion} · ${d.percent}%`);
+  }).catch(() => null);
+  try {
+    await Native.downloadUpdate({ url: apkUrl });
+    const info = await Native.updateInfo();
+    updReady = info.ready;
+    updFor = apkUrl;
+    updSilent = info.silent && info.allowed;
+    setBar(
+      `Update ${newVersion} ready`,
+      updSilent ? 'installs when you leave Alton (or tap now)' : 'tap to install',
+    );
+  } catch {
+    setBar('Update ready', `${newVersion} · tap to update`);
+  } finally {
+    updDownloading = false;
+    void handle?.remove();
+  }
+}
+/** Leaving the app with an update downloaded: put it in now (only when no tap is needed). */
+function installOnLeave(): void {
+  if (!isApp || !updReady || !updSilent || !autoUpdateOn()) return;
+  localStorage.setItem('alton-updating-to', newVersion);
+  void Native.installDownloaded().catch(() => undefined);
+}
+/** After an update: say so; after a failed one, say why. */
+async function updateResult(): Promise<void> {
+  if (!isApp) return;
+  const to = localStorage.getItem('alton-updating-to') ?? '';
+  const last = localStorage.getItem('alton-last-version') ?? '';
+  localStorage.setItem('alton-last-version', __APP_VERSION__);
+  if (last && last !== __APP_VERSION__) toast(`Alton updated to ${__APP_VERSION__} ✓`);
+  localStorage.removeItem('alton-updating-to');
+  try {
+    const info = await Native.updateInfo();
+    if (info.error && to && to !== __APP_VERSION__) toast(info.error);
+  } catch {
+    /* older app build */
+  }
 }
 async function checkUpdate(manual = false): Promise<void> {
   if (isApp) return checkAppUpdate(manual);
@@ -1828,10 +1891,12 @@ async function checkUpdate(manual = false): Promise<void> {
 async function applyUpdate(): Promise<void> {
   if (isApp) {
     // A new app version is a new APK: Alton downloads it and opens the Install screen.
-    toast('Downloading the update…');
+    toast(updReady ? 'Installing the update: Alton restarts…' : 'Downloading the update…');
+    localStorage.setItem('alton-updating-to', newVersion);
     try {
-      await Native.installUpdate({ url: apkUrl });
-      toast('Tap Install to finish updating.');
+      if (updReady) await Native.installDownloaded();
+      else await Native.installUpdate({ url: apkUrl });
+      if (!updSilent) toast('Tap Install to finish updating.');
     } catch (e) {
       const m = (e as Error).message;
       if (m.startsWith('ALLOW: ')) toast(m.slice(7));
@@ -7457,8 +7522,10 @@ function wire(): void {
     if (!document.hidden) void checkPc();
   }, 60_000);
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) hiddenAt = Date.now();
-    else {
+    if (document.hidden) {
+      hiddenAt = Date.now();
+      installOnLeave();
+    } else {
       if (S.pinHash && hiddenAt && Date.now() - hiddenAt > 5 * 60_000) lockNow();
       void checkPc();
       if (hiddenAt && Date.now() - hiddenAt > 10 * 60_000) void checkUpdate();
@@ -7807,6 +7874,13 @@ function wire(): void {
     renderToday();
   };
   $('updateBar').onclick = () => void applyUpdate();
+  const autoUpd = $<HTMLInputElement>('autoUpd');
+  autoUpd.checked = autoUpdateOn();
+  autoUpd.onchange = () => {
+    localStorage.setItem(AUTO_UPD, autoUpd.checked ? 'on' : 'off');
+    if (autoUpd.checked && newVersion) void autoDownload();
+  };
+  void updateResult();
   $('updCheck').onclick = () => {
     $('updMsg').textContent = 'Checking…';
     void checkUpdate(true);

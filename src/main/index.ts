@@ -24,6 +24,7 @@ import { registerIpc } from './ipc';
 import { AuditLog, ErrorLog } from './services/diagnostics';
 import { UsageTracker } from './services/usage-tracker';
 import { emit } from './ipc/handle';
+import { DataBackup } from './services/data-backup';
 import { SettingsStore } from './services/settings-store';
 import { TelemetryService } from './services/telemetry';
 import { TimerService, describeDuration } from './services/timer-service';
@@ -38,6 +39,15 @@ let hintedTray = false;
 let timersLoaded = false;
 const pending: AppCommand[] = [];
 
+// Before anything reads Alton's data: a file left damaged (say, by a power cut mid-save) is put
+// back from the newest backup where it's fine.
+const recovered = (() => {
+  try {
+    return new DataBackup(app.getPath('userData')).recoverDamaged();
+  } catch {
+    return [];
+  }
+})();
 const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'));
 /** Started by "launch at login": stay in the tray until summoned. */
 const startHidden = process.argv.includes('--hidden');
@@ -51,6 +61,8 @@ app.setMaxListeners(40);
 const notices: Array<{ at: number; text: string }> = [];
 const errors = new ErrorLog(join(app.getPath('userData'), 'logs', 'arc.log'));
 errors.capture();
+for (const r of recovered)
+  errors.add('warn', 'backup', `${r.file} was damaged; put back from the ${r.from} backup.`);
 
 const ctx: MainContext = {
   getWindow,

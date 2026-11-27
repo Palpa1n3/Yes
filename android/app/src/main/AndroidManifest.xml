@@ -109,6 +109,8 @@
 
         <!-- Workplace arrival alert, and setting it up again after a restart -->
         <receiver android:name=".PlaceReceiver" android:exported="false" />
+        <!-- The result of an update Alton handed to Android's installer -->
+        <receiver android:name=".UpdateReceiver" android:exported="false" />
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
@@ -190,6 +192,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- One-tap updates: open Android's Install screen for the new version (you still confirm) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 12+: once Alton installed itself, its own updates need no Install screen -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- Reminders on time, and the shift alarm buttons (they open the Clock app filled in) -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.VIBRATE" />

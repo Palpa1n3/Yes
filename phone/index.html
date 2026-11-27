@@ -80,6 +80,9 @@
       .is-app .web-only {
         display: none !important;
       }
+      html:not(.is-app) .app-only {
+        display: none !important;
+      }
       header {
         display: flex;
         align-items: center;
@@ -3715,6 +3718,13 @@
             <div class="gb">
               <p id="aboutVer" style="margin-top: 0"></p>
               <button class="btn full" id="updCheck">Check for updates</button>
+              <label class="row app-only" style="margin-top: 8px; gap: 8px; align-items: center">
+                <input type="checkbox" id="autoUpd" checked />
+                <span
+                  >Update automatically (downloads in the background, installs when you leave
+                  Alton)</span
+                >
+              </label>
               <a class="btn acc full" id="getApk" hidden style="margin-top: 8px"
                 >Get the Android app</a
               >

@@ -991,6 +991,8 @@ export interface BackupInfo {
   name: string;
   at: number;
   size: number;
+  /** Files that couldn't be read when the backup was made (never restored from it). */
+  damaged?: string[];
 }
 
 export type OpenTarget =

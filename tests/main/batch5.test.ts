@@ -37,7 +37,7 @@ describe('crash reports', () => {
 });
 
 describe('data backups', () => {
-  it('backs up daily, keeps 7, and restores', () => {
+  it('backs up daily, keeps a week plus weekly copies, and restores', () => {
     const ud = mkdtempSync(join(tmpdir(), 'arc-bk-'));
     writeFileSync(join(ud, 'settings.json'), '{"a":1}');
     writeFileSync(join(ud, 'anthropic-key.bin'), 'secret');
@@ -50,7 +50,10 @@ describe('data backups', () => {
     expect(existsSync(join(ud, 'backups', '2026-11-01', 'chats', 'c1.json'))).toBe(true);
     expect(existsSync(join(ud, 'backups', '2026-11-01', 'anthropic-key.bin'))).toBe(false);
     for (day = 2; day <= 10; day++) b.daily();
-    expect(b.list().filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.name))).toHaveLength(7);
+    // The newest 7 days, plus one from each older week (here: one more).
+    const daily = b.list().filter((x) => /^\d{4}-\d{2}-\d{2}$/.test(x.name));
+    expect(daily).toHaveLength(8);
+    expect(daily.slice(0, 7).map((x) => x.name)[0]).toBe('2026-11-10');
     writeFileSync(join(ud, 'settings.json'), '{"a":2}');
     expect(b.restore('2026-11-09')).toBe(true);
     expect(readFileSync(join(ud, 'settings.json'), 'utf8')).toBe('{"a":1}');

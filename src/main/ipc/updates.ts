@@ -4,6 +4,7 @@ import { autoUpdater } from 'electron-updater';
 import { IPC } from '@shared/ipc';
 import type { UpdateState } from '@shared/updates';
 import type { MainContext } from '../context';
+import { DataBackup } from '../services/data-backup';
 import { emit, handle } from './handle';
 
 const FOUR_HOURS = 4 * 3600_000;
@@ -58,6 +59,12 @@ export function registerUpdatesIpc(ctx: MainContext): void {
     set({ status: 'downloading', percent: Math.round(p.percent) }),
   );
   autoUpdater.on('update-downloaded', (i) => {
+    // A copy of Alton's data from just before this version, to go back to if it misbehaves.
+    try {
+      new DataBackup(app.getPath('userData')).backup(`before-update-${i.version}`);
+    } catch {
+      /* the daily backups still stand */
+    }
     set({ status: 'ready', version: i.version, percent: 100 });
     ctx.command({
       type: 'notice',

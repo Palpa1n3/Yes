@@ -211,14 +211,15 @@ public class AltonNativePlugin extends Plugin {
     }
 
     /**
-     * Updates the app in one tap: downloads the new APK (GitHub releases only) into the cache and
-     * opens Android's Install screen for it. Android always asks the user to confirm the install.
+     * Updates the app in one tap: downloads the new APK (GitHub releases only), checks it's Alton
+     * signed with the same key, and hands it to Android's installer (SelfUpdate). Android asks for
+     * a tap the first time; after that, on Android 12+, updates go in by themselves.
      */
     @PluginMethod
     public void installUpdate(final PluginCall call) {
         final String url = call.getString("url", "");
         final Context ctx = getContext();
-        if (!url.startsWith("https://github.com/") || !url.endsWith(".apk")) {
+        if (!SelfUpdate.allowedUrl(url)) {
             call.reject("Not an Alton update link.");
             return;
         }
@@ -232,45 +233,81 @@ public class AltonNativePlugin extends Plugin {
             return;
         }
         new Thread(() -> {
-            java.io.File out = new java.io.File(ctx.getCacheDir(), "alton-update.apk");
             try {
-                java.net.HttpURLConnection c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-                c.setInstanceFollowRedirects(true);
-                c.setConnectTimeout(20_000);
-                c.setReadTimeout(60_000);
-                // GitHub sends release files from another host: follow the redirect by hand if needed.
-                int code = c.getResponseCode();
-                for (int hops = 0; (code == 301 || code == 302 || code == 307 || code == 308) && hops < 5; hops++) {
-                    String next = c.getHeaderField("Location");
-                    c.disconnect();
-                    c = (java.net.HttpURLConnection) new java.net.URL(next).openConnection();
-                    c.setConnectTimeout(20_000);
-                    c.setReadTimeout(60_000);
-                    code = c.getResponseCode();
-                }
-                if (code != 200) throw new Exception("Download failed (" + code + ")");
-                try (java.io.InputStream in = c.getInputStream(); java.io.FileOutputStream fo = new java.io.FileOutputStream(out)) {
-                    byte[] buf = new byte[64 * 1024];
-                    int n;
-                    while ((n = in.read(buf)) > 0) fo.write(buf, 0, n);
-                }
-                c.disconnect();
-                Uri uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", out);
-                Intent i = new Intent(Intent.ACTION_VIEW);
-                i.setDataAndType(uri, "application/vnd.android.package-archive");
-                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+                SelfUpdate.download(ctx, url, pc -> updateProgress(pc));
+                SelfUpdate.install(ctx);
+                main.post(call::resolve);
+            } catch (Exception e) {
+                main.post(() -> call.reject("Couldn't update: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    /** Download (and check) the new version in the background, without installing it yet. */
+    @PluginMethod
+    public void downloadUpdate(final PluginCall call) {
+        final String url = call.getString("url", "");
+        final Context ctx = getContext();
+        if (!SelfUpdate.allowedUrl(url)) {
+            call.reject("Not an Alton update link.");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                SelfUpdate.download(ctx, url, pc -> updateProgress(pc));
                 main.post(() -> {
-                    try {
-                        ctx.startActivity(i);
-                        call.resolve();
-                    } catch (Exception e) {
-                        call.reject("Couldn't open the installer.");
-                    }
+                    JSObject r = new JSObject();
+                    r.put("ready", true);
+                    call.resolve(r);
                 });
             } catch (Exception e) {
                 main.post(() -> call.reject("Couldn't download the update: " + e.getMessage()));
             }
         }).start();
+    }
+
+    /** Where updating stands: downloaded?, allowed to install?, can it go in without a tap?, last result. */
+    @PluginMethod
+    public void updateInfo(final PluginCall call) {
+        Context ctx = getContext();
+        android.content.SharedPreferences p = SelfUpdate.prefs(ctx);
+        String state = p.getString("state", "");
+        // Installed: the old download isn't needed any more.
+        if ("done".equals(state) || "installing".equals(state)) {
+            SelfUpdate.apkFile(ctx).delete();
+            p.edit().putString("state", "").remove("url").apply();
+        }
+        JSObject r = new JSObject();
+        r.put("ready", SelfUpdate.ready(ctx));
+        r.put("allowed", Build.VERSION.SDK_INT < 26 || ctx.getPackageManager().canRequestPackageInstalls());
+        r.put("silent", SelfUpdate.silentPossible(ctx));
+        r.put("state", state);
+        r.put("error", p.getString("error", ""));
+        call.resolve(r);
+    }
+
+    /** Install the update that's already downloaded (silently when Android allows it). */
+    @PluginMethod
+    public void installDownloaded(final PluginCall call) {
+        final Context ctx = getContext();
+        if (!SelfUpdate.ready(ctx)) {
+            call.reject("No update downloaded yet.");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                SelfUpdate.install(ctx);
+                main.post(call::resolve);
+            } catch (Exception e) {
+                main.post(() -> call.reject("Couldn't install the update: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    private void updateProgress(int percent) {
+        JSObject e = new JSObject();
+        e.put("percent", percent);
+        main.post(() -> notifyListeners("updateProgress", e));
     }
 
     /**
