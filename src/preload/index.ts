@@ -186,6 +186,9 @@ const api: ArcAPI = {
     stop: () => send(IPC.agent.stop),
     pause: (on) => send(IPC.agent.pause, on),
     answer: (id, a) => send(IPC.agent.answer, id, a),
+    interrupted: () => invoke(IPC.agent.interrupted),
+    resume: () => invoke(IPC.agent.resume),
+    dismissInterrupted: () => invoke(IPC.agent.dismissInterrupted),
     onChange: (cb) => subscribe(IPC.agent.onChange, cb),
   },
   gaming: {

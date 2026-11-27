@@ -132,6 +132,9 @@ export const IPC = {
     stop: 'agent:stop',
     pause: 'agent:pause',
     answer: 'agent:answer',
+    interrupted: 'agent:interrupted',
+    resume: 'agent:resume',
+    dismissInterrupted: 'agent:dismiss-interrupted',
     onChange: 'agent:changed',
   },
   window: {
@@ -423,6 +426,9 @@ export interface InvokeMap {
   [IPC.remote.newCode]: { args: []; result: RemoteInfo };
   [IPC.remote.forget]: { args: []; result: RemoteInfo };
   [IPC.agent.start]: { args: [task: string]; result: AgentStatus };
+  [IPC.agent.interrupted]: { args: []; result: import('./agent').SavedAgentTask | null };
+  [IPC.agent.resume]: { args: []; result: AgentStatus };
+  [IPC.agent.dismissInterrupted]: { args: []; result: boolean };
   [IPC.updates.check]: { args: []; result: UpdateState };
   [IPC.updates.install]: { args: []; result: boolean };
   [IPC.updates.rollback]: { args: []; result: { ok: boolean; message: string } };
@@ -748,6 +754,11 @@ export interface ArcAPI {
     pause(on: boolean): void;
     /** Answer the agent's question (text) or risky-step check (true = approve). */
     answer(id: string, answer: string | boolean): void;
+    /** A task cut off by a restart (saved as it ran), if there is one. */
+    interrupted(): Promise<import('./agent').SavedAgentTask | null>;
+    /** Carry on with the interrupted task (it checks the screen and skips what's done). */
+    resume(): Promise<AgentStatus>;
+    dismissInterrupted(): Promise<boolean>;
     onChange(cb: (s: AgentStatus) => void): Unsubscribe;
   };
   updates: {

@@ -266,6 +266,9 @@ export function installArcMock(): ArcAPI {
       stop: vi.fn(),
       pause: vi.fn(),
       answer: vi.fn(),
+      interrupted: vi.fn(async () => null),
+      resume: vi.fn(async () => ({ ...IDLE_AGENT })),
+      dismissInterrupted: vi.fn(async () => true),
       onChange: vi.fn(() => () => undefined),
     },
     gaming: {

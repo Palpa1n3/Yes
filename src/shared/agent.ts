@@ -242,3 +242,29 @@ export function shotSize(screen: { width: number; height: number }): {
   const s = Math.min(1, 1280 / screen.width, 800 / screen.height);
   return { width: Math.round(screen.width * s), height: Math.round(screen.height * s) };
 }
+
+/** An Agent Mode task saved as it runs (userData/agent-task.json), so it can be picked up after
+ *  Alton or the PC restarts. */
+export interface SavedAgentTask {
+  task: string;
+  step: number;
+  log: AgentLogItem[];
+  startedAt: number;
+  savedAt: number;
+}
+
+/** The task to run when carrying on after a restart: the original, plus what was already done
+ *  (the agent checks the screen first, since some of it may be finished). */
+export function resumeTask(s: SavedAgentTask): string {
+  const done = s.log
+    .map((l) => l.text)
+    .filter((t) => !/^Task: /.test(t))
+    .slice(-15);
+  return [
+    s.task,
+    '',
+    `(This task was interrupted by a restart after step ${s.step}. What had been done so far:`,
+    ...done.map((t) => `- ${t}`),
+    'Look at the screen first: some of it may already be finished, and windows may have closed. Carry on from where it got to; don’t redo finished steps.)',
+  ].join('\n');
+}

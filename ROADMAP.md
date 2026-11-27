@@ -32,9 +32,12 @@ hidden instructions → encrypted sync.
   PC went off or Alton stopped, and names interrupted Agent Mode / research work; the window
   reloads itself after a crash or a 20-second freeze (at most 3 times in 5 minutes). Data files
   were already repaired at start-up (0.81); failed starts after an update roll back (0.82).
-- 🔶 Persistent task state across restarts (saving progress; resuming comes in Phase 4). **0.84:**
-  the running Agent Mode task (and step) and background research are saved as they go and named
-  after a bad shutdown. Still to do: save each task's full progress so Phase 4 can resume it.
+- ✅ Persistent task state across restarts. **0.84:** the running Agent Mode task and background
+  research are recorded and named after a bad shutdown. **0.85:** each Agent Mode task's progress
+  (task, step, last 30 actions) is saved as it runs (`agent-task.json`) and cleared when it
+  finishes; after a restart the Agent Mode card offers **Carry on** (it restarts the task with what
+  was done, checks the screen first and skips finished steps) or Dismiss. Phase 4 builds full
+  pause/resume and multi-day tasks on this.
 - ⬜ Verification of system changes before and after execution.
 - ⬜ Detection of unintended changes.
 - ⬜ Protection against conflicting automated tasks.

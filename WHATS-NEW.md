@@ -3,6 +3,26 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.85.0: carrying on with an interrupted Agent Mode task
+
+Phase 1, item 5 of 11.
+
+- **Agent Mode tasks survive a restart.** While a task runs, Alton saves what it's doing (the task,
+  which step it's on, and its last 30 actions). If Alton or the PC restarts mid-task, the Agent Mode
+  card shows **"… was cut off by a restart after step N. Carry on?"**
+  - **Carry on** starts it again with a note of what was already done. It looks at the screen first
+    and skips the steps that are finished.
+  - **Dismiss** forgets it.
+- A task that finishes, fails or that you stop is cleared, so the card only shows for real
+  interruptions.
+
+**What to test**
+
+1. Start an Agent Mode task with a few steps (e.g. "open Notepad and type a shopping list").
+2. While it's running, close Alton from Task Manager (End task).
+3. Start Alton: the Agent Mode card should offer to carry on. Tap **Carry on** and check it doesn't
+   redo what was already done.
+
 ## 0.84.0: recovering from crashes and power cuts
 
 Phase 1, item 4 of 11.

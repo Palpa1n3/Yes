@@ -5,7 +5,15 @@ import { fmtUsd, taskCapReached } from '@shared/usage';
 import { sessionGuard } from '../services/session-guard';
 import Anthropic from '@anthropic-ai/sdk';
 import { IPC } from '@shared/ipc';
-import { agentBusy, shotSize, type AgentQuestion, type AgentStatus } from '@shared/agent';
+import {
+  agentBusy,
+  resumeTask,
+  shotSize,
+  type AgentQuestion,
+  type AgentStatus,
+  type SavedAgentTask,
+} from '@shared/agent';
+import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import type { MainContext } from '../context';
 import {
   AgentRunner,
@@ -255,6 +263,41 @@ export function registerAgentIpc(
     });
   };
 
+  // The task in progress, saved as it runs (userData/agent-task.json).
+  const savedFile = join(app.getPath('userData'), 'agent-task.json');
+  let lastSavedStep = -1;
+  const savedTask = {
+    read: (): SavedAgentTask | null => {
+      try {
+        const j = JSON.parse(readFileSync(savedFile, 'utf8')) as SavedAgentTask;
+        return typeof j.task === 'string' && j.task ? j : null;
+      } catch {
+        return null;
+      }
+    },
+    save: (s: AgentStatus): void => {
+      // A write per step (not per status change) is plenty.
+      if (s.step === lastSavedStep) return;
+      lastSavedStep = s.step;
+      const rec: SavedAgentTask = {
+        task: s.task,
+        step: s.step,
+        log: s.log.slice(-30),
+        startedAt: s.startedAt,
+        savedAt: Date.now(),
+      };
+      try {
+        writeFileSync(`${savedFile}.tmp`, JSON.stringify(rec));
+        renameSync(`${savedFile}.tmp`, savedFile);
+      } catch {
+        /* not fatal */
+      }
+    },
+    clear: (): void => {
+      lastSavedStep = -1;
+      rmSync(savedFile, { force: true });
+    },
+  };
   // What the current task has cost so far, for its spending cap.
   let taskSpend = 0;
   let capHit = false;
@@ -292,12 +335,15 @@ export function registerAgentIpc(
     },
     onStatus: (s: AgentStatus) => {
       deskState.agentWaiting = !!s.question;
-      // Remember the task in progress, to name it if the PC goes off mid-task.
+      // Remember the task in progress (to name it, and carry on with it, after a restart).
       try {
-        if (s.state === 'running' || s.state === 'paused')
+        if (s.state === 'running' || s.state === 'paused') {
           sessionGuard().setAgent({ task: s.task, step: s.step });
-        else if (s.state === 'done' || s.state === 'error' || s.state === 'stopped')
+          savedTask.save(s);
+        } else if (s.state === 'done' || s.state === 'error' || s.state === 'stopped') {
           sessionGuard().setAgent(null);
+          savedTask.clear();
+        }
       } catch {
         /* not fatal */
       }
@@ -400,6 +446,18 @@ export function registerAgentIpc(
 
   handle(IPC.agent.status, () => runner.get());
   handle(IPC.agent.start, (task) => start(String(task)));
+  // A task cut off by a restart: offer to carry on (see SavedAgentTask).
+  handle(IPC.agent.interrupted, () => (agentBusy(runner.get()) ? null : savedTask.read()));
+  handle(IPC.agent.resume, () => {
+    const s = savedTask.read();
+    if (!s || agentBusy(runner.get())) return runner.get();
+    savedTask.clear();
+    return start(resumeTask(s));
+  });
+  handle(IPC.agent.dismissInterrupted, () => {
+    savedTask.clear();
+    return true;
+  });
   on(
     IPC.agent.stop,
     () => {

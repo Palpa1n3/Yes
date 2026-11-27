@@ -1,6 +1,6 @@
 import { Bot, Check, Pause, Play, Square, X } from 'lucide-react';
-import { useState } from 'react';
-import { agentBusy } from '@shared/agent';
+import { useEffect, useState } from 'react';
+import { agentBusy, type SavedAgentTask } from '@shared/agent';
 import { useAgentStore } from '@renderer/stores/agentStore';
 
 /** Agent Mode card (bottom right): the task, progress, Stop, and its questions. */
@@ -9,6 +9,57 @@ export function AgentPanel() {
   const [answer, setAnswer] = useState('');
   const [dismissed, setDismissed] = useState(-1);
   const busy = agentBusy(s);
+  // A task cut off by a restart: offer to carry on with it.
+  const [cut, setCut] = useState<SavedAgentTask | null>(null);
+  useEffect(() => {
+    void window.arc.agent
+      .interrupted()
+      .then(setCut)
+      .catch(() => setCut(null));
+  }, []);
+  if (s.state === 'idle' && cut)
+    return (
+      <section
+        aria-label="Interrupted Agent Mode task"
+        className="fixed bottom-10 right-4 z-50 w-[380px] border border-amber bg-panel/95 p-3 shadow-glow-sm backdrop-blur"
+      >
+        <header className="mb-2 flex items-center gap-2">
+          <Bot size={14} className="text-amber" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-ice">
+            Agent mode · interrupted
+          </span>
+        </header>
+        <p className="text-[12.5px] text-text-primary">
+          “{cut.task}” was cut off by a restart after step {cut.step}
+          {cut.savedAt
+            ? ` (${new Date(cut.savedAt).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })})`
+            : ''}
+          . Carry on? It checks the screen first and skips what's already done.
+        </p>
+        <div className="mt-2 flex gap-2">
+          <button
+            type="button"
+            className="hud-button"
+            onClick={() => {
+              setCut(null);
+              void window.arc.agent.resume();
+            }}
+          >
+            <Play size={12} /> Carry on
+          </button>
+          <button
+            type="button"
+            className="hud-button"
+            onClick={() => {
+              setCut(null);
+              void window.arc.agent.dismissInterrupted();
+            }}
+          >
+            <X size={12} /> Dismiss
+          </button>
+        </div>
+      </section>
+    );
   if (s.state === 'idle' || (!busy && dismissed === s.startedAt)) return null;
   const q = s.question;
 
