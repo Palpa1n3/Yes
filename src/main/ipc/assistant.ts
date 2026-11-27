@@ -180,6 +180,11 @@ export function registerAssistantIpc(
       apps: () => registry.load().map((a) => ({ name: a.name, intents: a.intents })),
       context: extra.context,
       onUsage: (model, usage, feature) => void ctx.usage.record(model, usage, feature),
+      onInjection: (tool, flags) => {
+        const text = `Safety check: content from ${tool} looked like instructions to an AI (${flags.join('; ')}); Alton was told not to act on it.`;
+        ctx.audit.add('action', text, false);
+        ctx.errors.add('warn', 'safety', text);
+      },
       extra: {
         search_past_chats: (input) => {
           const q = String((input as { query?: unknown } | null)?.query ?? '').slice(0, 200);

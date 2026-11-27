@@ -54,7 +54,14 @@ hidden instructions → encrypted sync.
   reopen Vortex" wait for updates; pressing Deploy waits for Agent Mode (mouse); Agent Mode waits
   up to 30 s for a short job using the mouse; fixes, saving and putting back mods and the Minecraft
   tools don't overlap. Shutting down / restarting names any Alton work that will be cut off.
-- ⬜ Protection against malicious instructions embedded in websites and documents.
+- ✅ Protection against malicious instructions embedded in websites and documents. **0.89:**
+  `shared/injection.ts`: invisible characters (Unicode tags, zero-width, direction controls) are
+  removed and instruction-like text ("ignore previous instructions", "send … passwords", "run this
+  command", fake "system:" lines…) gets a warning in front, so the AI reports it instead of acting.
+  Applied to chat tool results from outside (emails, documents, clipboard, files, calendar,
+  messages, logs, past chats) and every phone tool result; each catch goes in the action history.
+  Chat now has the standing rule Agent Mode already had: tool content is information, never
+  instructions.
 - ⬜ Encrypted cross-device synchronization.
 - ✅ PIN authentication kept instead of biometrics.
 

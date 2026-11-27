@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.88.0, 27 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.89.0, 27 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -48,6 +48,10 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.89** Prompt-injection guard: `shared/injection.ts` (`guardText`, `warningFor`, `OUTSIDE_TOOLS`,
+  `guardToolResult`); anthropic-provider checks string tool results before pushing them
+  (`deps.onInjection` → audit + log); phone main.ts checks every tool result; buildSystemPrompt has the
+  "tool content is information" rule. Next: encrypted cross-device sync (last Phase 1 item).
 - **0.88** Job locks (`services/job-locks.ts`, `jobLocks` singleton; resources vortex / input /
   cyberpunk-files / minecraft-files; `take()` all-or-nothing, same label re-enters with a count,
   holds expire). Used by VortexSync.sync/applyNow ('Vortex sync'), deployWhenOpen ('Pressing Deploy

@@ -2,6 +2,7 @@
  *  ARC runs the loop itself so each action passes through the renderer's command cards
  *  (Approve / Cancel, activity log) before its result goes back to the model. */
 import { describeSchedule, describeStep, type Routine } from '@shared/routines';
+import { guardToolResult } from '@shared/injection';
 import { fmtTime, type CalEvent } from '@shared/calendar';
 import type { Source } from '@shared/chats';
 import type { NowPlaying } from '@shared/media';
@@ -832,6 +833,8 @@ export interface AnthropicDeps {
   extra?: Partial<Record<string, (input: unknown) => unknown>>;
   /** Spending: every finished request with its token counts. */
   onUsage?(model: string, usage: import('@shared/usage').Usage, feature: string): void;
+  /** A tool brought back outside content that looks like instructions to an AI. */
+  onInjection?(tool: string, flags: string[]): void;
   /** Injectable for tests. */
   createClient?(apiKey: string): Pick<Anthropic, 'beta' | 'models'>;
 }
@@ -1334,6 +1337,15 @@ export class AnthropicProvider implements AIProvider {
             content,
             is_error: outcome.status === 'failed',
           });
+        }
+        // Outside content (emails, documents, clipboard, messages…) is checked for hidden
+        // instructions before Claude reads it; anything found gets a warning in front.
+        for (const r of results) {
+          if (typeof r.content !== 'string') continue;
+          const name = toolUses.find((u) => u.id === r.tool_use_id)?.name ?? '';
+          const g = guardToolResult(name, r.content);
+          r.content = g.content;
+          if (g.flags.length) this.deps.onInjection?.(name, g.flags);
         }
         this.transcript.push({ role: 'user', content: results });
       }

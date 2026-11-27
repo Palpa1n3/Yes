@@ -20,6 +20,7 @@ import {
 } from '@shared/phone';
 import { md, plain } from './md';
 import { digestForAi, groupMessages, quickSummary, type PhoneMsg } from '@shared/messages';
+import { guardText, warningFor } from '@shared/injection';
 import { metresBetween, mountWorkMap, type WorkMap } from './workmap';
 import '@shared/ui-style.css';
 import '@shared/flat-backdrops.css';
@@ -979,6 +980,13 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
           S.newListItems.push(li);
         }
         results.push({ type: 'tool_result', tool_use_id: u.id, content: out.result });
+      }
+      // Messages, notifications, pages… are checked for hidden instructions before Claude reads
+      // them; anything found gets a warning in front (see shared/injection.ts).
+      for (const r of results) {
+        if (typeof r.content !== 'string') continue;
+        const g = guardText(r.content);
+        r.content = g.flags.length ? `${warningFor('content', g.flags)}\n${g.text}` : g.text;
       }
       messages.push({ role: 'user', content: results });
       activity = 'Working on it…';
