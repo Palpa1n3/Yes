@@ -10,6 +10,9 @@ import type {
 
 type Awaitable<T> = T | Promise<T>;
 
+/** Channels with a handler or listener in main (for the start-up health check). */
+export const handledChannels = new Set<string>();
+
 /** Typed wrapper around ipcMain.handle: channel name decides args and return type. */
 export function handle<C extends InvokeChannel>(
   channel: C,
@@ -17,6 +20,7 @@ export function handle<C extends InvokeChannel>(
 ): void {
   ipcMain.removeHandler(channel);
   ipcMain.handle(channel, (_event, ...args) => fn(...(args as InvokeMap[C]['args'])));
+  handledChannels.add(channel);
 }
 
 /** Typed wrapper around ipcMain.on for fire-and-forget channels. */
@@ -27,6 +31,7 @@ export function on<C extends SendChannel>(
 ): void {
   ipcMain.removeAllListeners(channel);
   ipcMain.on(channel, (_event, ...args) => fn(getWindow(), ...(args as SendMap[C])));
+  handledChannels.add(channel);
 }
 
 /** Typed push from main to renderer. */

@@ -20,6 +20,8 @@ export interface MainContext {
   audit: AuditLog;
   /** Claude spending (Settings › AI › Spending). */
   usage: UsageTracker;
+  /** The phone link's state, for the start-up health check (set once it's registered). */
+  phoneLink?: () => { wanted: boolean; running: boolean; error: string | null };
   /** Shut down / restart / sleep with a countdown (set once ready). */
   power?: {
     schedule(

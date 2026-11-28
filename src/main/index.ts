@@ -11,6 +11,7 @@ import {
   clipboard,
   desktopCapturer,
   powerMonitor,
+  safeStorage,
 } from 'electron';
 import os from 'node:os';
 import { join } from 'node:path';
@@ -30,6 +31,11 @@ import { sessionGuard } from './services/session-guard';
 import { describeRecovery } from '@shared/session';
 import { SettingsStore } from './services/settings-store';
 import { TelemetryService } from './services/telemetry';
+import { runHealthChecks } from './services/health-check';
+import { SecretStore } from './services/secret-store';
+import { handledChannels } from './ipc/handle';
+import { healthVerdict, rollBackNow } from '@shared/update-health';
+import { FAILS_BEFORE_ROLLBACK } from '@shared/rollback';
 import { TimerService, describeDuration } from './services/timer-service';
 import { WinProcessReader } from './services/win-processes';
 import { ArcTray, resourcePath } from './tray';
@@ -41,6 +47,8 @@ let rendererReady = false;
 let hintedTray = false;
 let timersLoaded = false;
 let startOkTimer: ReturnType<typeof setTimeout> | null = null;
+/** This start's health check found a key part broken: it doesn't count as a working start. */
+let healthFailed = false;
 let recoveryTold = false;
 const pending: AppCommand[] = [];
 
@@ -367,15 +375,10 @@ function createWindow(): BrowserWindow {
       ctx.audit.add('action', text, false);
       setTimeout(() => ctx.command({ type: 'notice', text }), 3000);
     }
-    // A minute up with the window loaded: this version works.
-    if (!startOkTimer)
-      startOkTimer = setTimeout(() => {
-        try {
-          bootGuard().markOk();
-        } catch {
-          /* not fatal */
-        }
-      }, 60_000);
+    // A minute up with the window loaded: check the key parts work (not just that it opened).
+    // All critical checks pass: this version works. Otherwise the start doesn't count, and after
+    // an update the last allowed failing start rolls back straight away.
+    if (!startOkTimer) startOkTimer = setTimeout(() => void startHealthCheck(), 60_000);
     for (const c of pending.splice(0)) emit(win, IPC.app.onCommand, c);
     if (!timersLoaded) {
       timersLoaded = true;
@@ -592,8 +595,9 @@ if (!app.requestSingleInstanceLock()) {
     } catch {
       /* not fatal */
     }
-    // A clean quit counts as a good start (only crashes and hangs count against a version).
-    if (app.isPackaged)
+    // A clean quit counts as a good start (only crashes, hangs and failed health checks count
+    // against a version).
+    if (app.isPackaged && !healthFailed)
       try {
         bootGuard().markOk();
       } catch {
@@ -614,4 +618,89 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
   });
+}
+
+/** The start-up health check (safety gate 3): see services/health-check.ts. */
+async function startHealthCheck(): Promise<void> {
+  const version = app.getVersion();
+  let verdict: ReturnType<typeof healthVerdict>;
+  try {
+    const checks = await runHealthChecks({
+      userData: app.getPath('userData'),
+      settings: () => settings.get(),
+      handled: () => handledChannels,
+      window: () => {
+        const w = ctx.getWindow();
+        return w && !w.isDestroyed()
+          ? { alive: true, crashed: w.webContents.isCrashed(), url: w.webContents.getURL() }
+          : null;
+      },
+      encryption: () => Promise.resolve(safeStorage.isEncryptionAvailable()),
+      unlocks: async (file) => (await new SecretStore(file, safeStorage).get()) !== null,
+      ...(ctx.phoneLink ? { phoneLink: ctx.phoneLink } : {}),
+      recentErrors: () => errors.recentErrors(Math.round(process.uptime() * 1000)),
+    });
+    verdict = healthVerdict(checks, version);
+  } catch (err) {
+    errors.add('warn', 'health', `Health check couldn't run: ${String(err)}`);
+    return;
+  }
+  const guard = app.isPackaged ? bootGuard() : null;
+  const before = guard?.read() ?? null;
+  try {
+    guard?.recordHealth(
+      verdict.ok,
+      [...verdict.criticalFailed, ...verdict.minorFailed].map((c) => c.id),
+    );
+  } catch {
+    /* not fatal */
+  }
+  if (verdict.ok) {
+    try {
+      guard?.markOk();
+    } catch {
+      /* not fatal */
+    }
+    if (verdict.minorFailed.length) errors.add('warn', 'health', verdict.text);
+    // Just updated: say the new version checked out.
+    if (before?.from && !before.health)
+      ctx.audit.add('action', `Updated to ${version}. ${verdict.text}`, true);
+    return;
+  }
+  healthFailed = true;
+  errors.add('error', 'health', verdict.text);
+  ctx.audit.add('action', verdict.text, false);
+  ctx.notify(verdict.text);
+  ctx.command({ type: 'notice', text: verdict.text });
+  if (
+    guard &&
+    before &&
+    rollBackNow(
+      {
+        from: before.from,
+        failsBefore: before.fails,
+        rollingBackFrom: before.rollingBackFrom ?? null,
+        version,
+      },
+      verdict,
+      FAILS_BEFORE_ROLLBACK,
+    ) &&
+    before.from
+  ) {
+    const target = before.from;
+    errors.add(
+      'warn',
+      'update',
+      `Version ${version} failed its health check twice: going back to ${target}.`,
+    );
+    const r = await rollBack({
+      userData: app.getPath('userData'),
+      guard,
+      current: version,
+      target,
+      quit: () => ctx.quit(),
+    });
+    ctx.audit.add('action', r.message, r.ok);
+    if (!r.ok) errors.add('error', 'update', r.message);
+  }
 }

@@ -1,7 +1,7 @@
 {
   "name": "arc",
   "productName": "ARC",
-  "version": "0.99.2",
+  "version": "0.99.3",
   "description": "Holographic desktop AI assistant",
   "main": "./out/main/index.js",
   "private": true,

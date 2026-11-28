@@ -151,8 +151,17 @@ meanwhile. PIN authentication stays; no biometrics.
   notice. Already in place: volume and file-move checks (0.86) and the Cyberpunk mod footprint
   check (drift). Tests: tests/intended.test.ts, tests/main/projectUpdate.test.ts,
   tests/main/notes.test.ts.
-- ⬜ Automated post-update health checks beyond successful application startup (key features
-  exercised after an update; failures count towards rollback).
+- ✅ Automated post-update health checks beyond successful application startup (key features
+  exercised after an update; failures count towards rollback). **0.99.3:** a minute after each
+  start, `services/health-check.ts` checks (read-only): saved data parses (every backed-up file
+  and chat), settings loaded, the window's key channels have handlers (`handledChannels` in
+  ipc/handle.ts), the window is alive and not crashed, Windows encryption works; and as warnings:
+  each saved key still unlocks, the phone link is up when switched on, no errors since starting.
+  `shared/update-health.ts` `healthVerdict`. A critical failure means the start doesn't count as
+  working (not even on a clean quit), is reported (notice, action history, error log) and is saved
+  in boot.json; on the last allowed failing start after an update (`rollBackNow`) Alton rolls back
+  straight away instead of waiting for the next start. Tests: tests/update-health.test.ts,
+  tests/main/health-check.test.ts.
 - ⬜ Stronger prompt injection protection enforced at the tool and permission level (content from
   outside can't unlock risky tools: after untrusted content is read, risky actions need the user's
   explicit approval, whatever the model says).

@@ -422,6 +422,11 @@ const { ipcRenderer } = require('electron');
     } else if (!on && server.running) server.stop();
   };
   void apply(ctx.settings.get().phoneAccess);
+  ctx.phoneLink = () => ({
+    wanted: ctx.settings.get().phoneAccess,
+    running: server.running,
+    error,
+  });
   ctx.settings.subscribe((next, prev) => {
     if (next.phoneAccess !== prev.phoneAccess) void apply(next.phoneAccess);
   });

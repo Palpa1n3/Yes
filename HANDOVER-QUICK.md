@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.99.2, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.99.3, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,12 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.99.3** Gate 3, health checks: index.ts `startHealthCheck()` at the 60 s mark (replaces the
+  plain markOk) → `runHealthChecks` (services/health-check.ts; KEY_CHANNELS, SECRET_FILES) →
+  `healthVerdict`; ok → markOk, else `healthFailed` (clean quit no longer marks ok), notice +
+  audit, and `rollBackNow` → `rollBack`. BootRecord `health`, `BootGuard.recordHealth`.
+  `ctx.phoneLink` set in ipc/remote.ts. NB `src/shared/health.ts` is the older PC-temperature
+  alerts, not this. Next: gate 4 (tool-level prompt-injection protection).
 - **0.99.2** Gate 2, intended vs actual: `shared/intended.ts`; project-update.ts: `git status
 --porcelain` must be clean, `plannedChanges(root, projectDir)` before robocopy, `git diff
 --cached --name-status` after add, compared non-strictly; a mismatch runs `git reset -q` and

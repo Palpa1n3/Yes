@@ -42,6 +42,17 @@ export class BootGuard {
         at: Number(j.at) || 0,
         skip: Array.isArray(j.skip) ? j.skip.filter((x): x is string => typeof x === 'string') : [],
         rollingBackFrom: typeof j.rollingBackFrom === 'string' ? j.rollingBackFrom : null,
+        ...(j.health && typeof j.health === 'object'
+          ? {
+              health: {
+                at: Number(j.health.at) || 0,
+                ok: j.health.ok === true,
+                failed: Array.isArray(j.health.failed)
+                  ? j.health.failed.filter((x): x is string => typeof x === 'string')
+                  : [],
+              },
+            }
+          : {}),
       };
     } catch {
       return null;
@@ -67,6 +78,12 @@ export class BootGuard {
   markOk(): void {
     const r = this.read();
     if (r && !r.ok) this.write({ ...r, ok: true, fails: 0 });
+  }
+
+  /** Save this start's health check result. */
+  recordHealth(ok: boolean, failed: string[]): void {
+    const r = this.read();
+    if (r) this.write({ ...r, health: { at: Date.now(), ok, failed: failed.slice(0, 10) } });
   }
 
   /** The version this one was updated from (to go back to), if known. */

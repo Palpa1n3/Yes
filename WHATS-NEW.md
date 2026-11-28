@@ -3,6 +3,31 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.99.3: Alton checks itself after every start
+
+Safety gate, item 3 of 6.
+
+- **Before, a new version counted as "working" once its window had been open for a minute.** Now
+  Alton actually checks the important parts at that point:
+  - your saved data (settings, notes, chats…) reads back properly;
+  - settings are loaded;
+  - chat, notes and settings are connected up inside the app;
+  - the window hasn't crashed;
+  - Windows encryption for your saved keys works.
+- **Warnings only:** a saved key that won't unlock, the phone link being down while it's switched
+  on, or errors logged since starting.
+- **If something important is broken after an update:**
+  - that start doesn't count as working;
+  - you get a notice saying what broke;
+  - on the second broken start, Alton goes back to the previous version straight away (it used to
+    wait for another restart).
+- Your current data passes: I checked all 24 saved files on this PC without changing anything.
+
+**What to test**
+
+1. Open Alton after this update and wait a minute. Settings › Privacy › Action history should say
+   "Updated to 0.99.3. Health check for 0.99.3: all … checks passed." (or name what didn't).
+
 ## 0.99.2: Alton checks its own automatic changes
 
 Safety gate, item 2 of 6.

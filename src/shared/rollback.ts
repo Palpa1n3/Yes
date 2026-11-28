@@ -16,6 +16,8 @@ export interface BootRecord {
   skip: string[];
   /** Set while rolling back, so it's tried once per broken version. */
   rollingBackFrom?: string | null;
+  /** The last start-up health check of this version (shared/update-health.ts). */
+  health?: { at: number; ok: boolean; failed: string[] };
 }
 
 /** Is version `a` newer than `b` (x.y.z)? */
