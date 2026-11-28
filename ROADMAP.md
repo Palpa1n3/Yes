@@ -240,7 +240,17 @@ meanwhile. PIN authentication stays; no biometrics.
   stops at the first failure with the useful lines); "diff"; "discard". Counts as risky after
   outside content (gate 4). Tried for real on this PC: copy, edit, diff, all three checks passed
   in 53 s, copy deleted, real node_modules intact.
-- ⬜ Automated regression testing.
+- ✅ Automated regression testing. **1.6.0:** `shared/regression.ts` + `services/regression.ts`
+  `RegressionWatch` + the `self_test` tool. Once a day, while the PC has been idle for 10
+  minutes, a fresh copy of the project's last commit (its own DevSandbox, separate from chat's)
+  runs typecheck, lint and every test in full; vitest's JSON report gives results test by test
+  (`parseVitestJson`), stored per commit (regression.json, last 30) and compared with the run
+  before (`compareRuns`: new failures, fixed, still failing, typecheck/lint newly broken). A
+  regression is logged as an error (a "Regression since" cause in the self-diagnosis, so it
+  becomes a high-priority improvement idea), noticed and audited. In the development copy,
+  "check" now reports `newFailures` against the last self-test, so a change is judged by
+  "nothing new broke"; committed code (no changes) runs without asking, changed code still asks.
+  First real run on this PC: commit 1b5475b, 792 of 792 tests passed.
 - ⬜ Approval-based code modifications.
 - ⬜ Development roadmap management (partly there: Notes › "Alton roadmap").
 - ⬜ Automatic documentation.

@@ -199,6 +199,16 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'self_test',
+    description:
+      'Your (Alton\'s) automatic regression tests: once a day, while the PC is idle, a fresh copy of your project\'s last commit is fully checked (typecheck, lint, every test) and compared with the run before, so anything that used to work and now fails is caught and named. action "status" (latest results and the last week), "run" (now; about a minute). Read-only for the real project.',
+    input_schema: {
+      type: 'object',
+      properties: { action: { type: 'string', enum: ['status', 'run'] } },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'dev_sandbox',
     description:
       'Your (Alton\'s) development copy: a separate copy of your own project where you can try a change and test it, without touching the real project. action "start" (a fresh copy from the last commit), "read" with path (from/to lines), "edit" with path, find (exact text, once in the file) and replace, "write" with path and content (whole file), "delete" with path, "check" (runs the typecheck, lint and tests there; asks the user first), "diff" (what changed), "discard". Only source, tests and notes can change (not dependencies, build or release setup, or secrets). Use for an accepted improvement idea or a fix the user wants: make the change, check it, fix what fails, then show the user the diff in plain words. Nothing reaches the real project from here.',

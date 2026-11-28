@@ -72,6 +72,11 @@ const CAUSES: Array<[RegExp, string, ErrorGroup['severity']?]> = [
     'low',
   ],
   [
+    /Regression since/i,
+    'Something that used to work stopped working after a change (the daily self-test caught it): a bug to fix.',
+    'high',
+  ],
+  [
     /Uncaught|unhandledRejection|Unhandled/i,
     'An unexpected crash inside Alton: a bug to fix.',
     'high',

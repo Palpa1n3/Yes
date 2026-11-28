@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **1.5.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **1.6.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,12 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **1.6.0** Phase 3.5 regression testing: `shared/regression.ts` (`parseVitestJson`,
+  `compareRuns`, `describeRun`, `newAgainstBaseline`), `services/regression.ts`
+  `RegressionWatch` (regression.json; own sandbox root dev-sandbox-selftest); DevSandbox
+  `check({all})` returns `tests` + `commit` (vitest JSON to <root>/last-tests.json), approval
+  only when files changed; tool `self_test`; assistant.ts runs it every 30 min when due and idle
+  ≥ 10 min (powerMonitor). Next: 3.6 approval-based code modifications.
 - **1.5.0** Phase 3.4 sandbox: `services/dev-sandbox.ts` `DevSandbox` (start = git clone
   --local --no-hardlinks into userData/dev-sandbox + node_modules junction; read/edit/write/delete
   via `blockedPath`; check = `SANDBOX_CHECKS` through cmd.exe, approval once per copy; diff;

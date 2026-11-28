@@ -67,11 +67,15 @@ describe('Alton’s development copy', () => {
     expect(r.ok).toBe(true);
     expect(r.checks.map((c) => c.name)).toEqual(['Typecheck', 'Lint', 'Tests']);
     expect(approve).toHaveBeenCalledTimes(1);
-    expect(calls.filter((c) => c.startsWith('cmd.exe'))).toEqual([
+    const cmds = calls.filter((c) => c.startsWith('cmd.exe'));
+    expect(cmds.slice(0, 2)).toEqual([
       'cmd.exe /d /s /c npm run -s typecheck',
       'cmd.exe /d /s /c npx eslint .',
-      'cmd.exe /d /s /c npx vitest run',
     ]);
+    // The tests also write their JSON report, outside the copy.
+    expect(cmds[2]).toMatch(
+      /^cmd\.exe \/d \/s \/c npx vitest run --reporter=default --reporter=json --outputFile=".*last-tests\.json"$/,
+    );
     await sb.tool({ action: 'check' });
     expect(approve).toHaveBeenCalledTimes(1);
 
@@ -104,10 +108,18 @@ describe('Alton’s development copy', () => {
     ]);
     expect(r.checks[1]?.summary).toMatch(/TS2322/);
 
+    // Changed code needs the user's OK; "no" means nothing runs.
     const no = setup(vi.fn(async () => false));
     await no.sb.start();
+    no.sb.edit('src/shared/a.ts', '1', '2');
     expect(await no.sb.check()).toEqual({ error: "The user didn't allow running the checks." });
     expect(no.calls.some((c) => c.startsWith('cmd.exe'))).toBe(false);
+
+    // The project's own committed code (nothing changed) runs without asking.
+    const clean = setup(vi.fn(async () => false));
+    await clean.sb.start();
+    expect(await clean.sb.check()).toMatchObject({ ok: true });
+    expect(clean.approve).not.toHaveBeenCalled();
   });
 
   it('needs an Alton project, and a copy before anything else', async () => {

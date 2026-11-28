@@ -27,6 +27,7 @@ const lstatOk = (p: string): boolean => {
 };
 import { dirname, join, resolve } from 'node:path';
 import { SANDBOX_CHECKS, applyEdit, blockedPath, checkSummary } from '@shared/sandbox-rules';
+import { newAgainstBaseline, parseVitestJson, type TestRun } from '@shared/regression';
 import { isAltonProject, run as defaultRun, type Run } from './project-update';
 
 export interface SandboxCheck {
@@ -34,6 +35,15 @@ export interface SandboxCheck {
   ok: boolean;
   summary: string;
   ms: number;
+}
+
+export interface CheckResult {
+  ok: boolean;
+  checks: SandboxCheck[];
+  /** Test by test (from vitest's JSON report), when the tests ran. */
+  tests: { total: number; passed: number; failed: string[] } | null;
+  /** The commit the copy started from. */
+  commit: string;
 }
 
 export class DevSandbox {
@@ -154,9 +164,10 @@ export class DevSandbox {
   }
 
   /** Run the project's own checks in the copy (asks the user first, once per copy). */
-  async check(): Promise<{ ok: boolean; checks: SandboxCheck[] } | { error: string }> {
+  async check(o: { all?: boolean } = {}): Promise<CheckResult | { error: string }> {
     if (!this.dir) return { error: 'No development copy yet: use action "start" first.' };
-    if (!this.allowedToRun) {
+    // Only changed code needs the user's OK; the project's own committed code doesn't.
+    if (!this.allowedToRun && this.changed.size > 0) {
       const ok = await this.d.approve(
         'Let Alton run its checks on its changed copy?',
         `Alton changed ${this.changed.size} file${this.changed.size === 1 ? '' : 's'} in a separate copy of its project (${[...this.changed].slice(0, 6).join(', ') || 'none yet'}). Running the typecheck, lint and tests runs that changed code on this PC with your permissions. Your real project isn't touched.`,
@@ -165,9 +176,16 @@ export class DevSandbox {
       this.allowedToRun = true;
     }
     const checks: SandboxCheck[] = [];
+    const report = join(this.d.root, 'last-tests.json');
+    rmSync(report, { force: true });
     for (const c of SANDBOX_CHECKS) {
       const t = this.d.now?.() ?? Date.now();
-      const r = await this.exec()('cmd.exe', ['/d', '/s', '/c', c.command], {
+      // The tests also write a JSON report (outside the copy, so it never shows in the diff).
+      const command =
+        c.name === 'Tests'
+          ? `${c.command} --reporter=default --reporter=json --outputFile="${report}"`
+          : c.command;
+      const r = await this.exec()('cmd.exe', ['/d', '/s', '/c', command], {
         cwd: this.dir,
         timeout: c.timeoutMs,
         env: { ...process.env, CI: '1', FORCE_COLOR: '0' },
@@ -178,10 +196,34 @@ export class DevSandbox {
         summary: checkSummary(r.out),
         ms: (this.d.now?.() ?? Date.now()) - t,
       });
-      if (r.code !== 0) break; // later checks would only repeat the failure
+      // Later checks would mostly repeat the failure (unless every result is wanted).
+      if (r.code !== 0 && !o.all) break;
     }
     this.lastChecks = checks;
-    return { ok: checks.length === SANDBOX_CHECKS.length && checks.every((c) => c.ok), checks };
+    let tests: CheckResult['tests'] = null;
+    try {
+      if (existsSync(report)) tests = parseVitestJson(readFileSync(report, 'utf8'));
+    } catch {
+      tests = null;
+    }
+    return {
+      ok: checks.length === SANDBOX_CHECKS.length && checks.every((c) => c.ok),
+      checks,
+      tests,
+      commit: await this.head(),
+    };
+  }
+
+  /** The commit the copy is at. */
+  async head(): Promise<string> {
+    if (!this.dir) return '';
+    const r = await this.exec()('git', ['rev-parse', 'HEAD'], { cwd: this.dir, timeout: 30_000 });
+    return r.code === 0 ? r.out.trim().slice(0, 40) : '';
+  }
+
+  /** Files changed in this copy so far. */
+  changes(): number {
+    return this.changed.size;
   }
 
   /** What changed in the copy, against the project's last commit. */
@@ -229,7 +271,7 @@ export class DevSandbox {
   }
 
   /** The dev_sandbox tool. */
-  async tool(input: unknown): Promise<unknown> {
+  async tool(input: unknown, baseline?: () => TestRun | null): Promise<unknown> {
     const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
     const s = (k: string): string => (typeof o[k] === 'string' ? (o[k] as string) : '');
     try {
@@ -244,8 +286,17 @@ export class DevSandbox {
           return { result: this.edit(s('path'), s('find'), s('replace')) };
         case 'delete':
           return { result: this.remove(s('path')) };
-        case 'check':
-          return await this.check();
+        case 'check': {
+          const r = await this.check();
+          if ('error' in r || !r.tests) return r;
+          // Judged against the last self-test: failures that were already there don't count.
+          const base = baseline?.() ?? null;
+          return {
+            ...r,
+            newFailures: newAgainstBaseline(base, r.tests.failed),
+            ...(base ? { alreadyFailingBefore: base.tests?.failed.length ?? 0 } : {}),
+          };
+        }
         case 'diff':
           return await this.diff();
         case 'discard':

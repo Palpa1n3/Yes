@@ -3,6 +3,26 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.6.0: Alton tests itself every day
+
+Phase 3 (self-development), item 5.
+
+- **Once a day, while you're away from the PC** (10 minutes without the mouse or keyboard), Alton
+  makes a fresh copy of its latest version and runs every check on it: the typecheck, lint and
+  all ~800 tests. Your real project isn't touched, and it never runs while you're using the PC.
+- **It compares each test with the day before.** If something that used to work now fails, you
+  get a notice saying exactly which test broke and between which versions. It also becomes a
+  top-priority idea in "what would you improve?".
+- **Changes Alton tries in its development copy are judged the same way:** only failures that
+  weren't already there count against the change.
+- Ask **"how did your self-test go?"** for the latest result and the last week.
+- First real run: **792 of 792 tests passed.**
+
+**What to test**
+
+1. Ask Alton "run your self-test now". After about a minute it should report all tests passing.
+2. Ask "how did your self-test go?"
+
 ## 1.5.0: Alton can try out changes to itself safely
 
 Phase 3 (self-development), item 4. You didn't pick an option, so I went with the one I

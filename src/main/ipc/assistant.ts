@@ -2,11 +2,12 @@ import { registerPower } from './power';
 import { messageBrief } from '@shared/brain';
 import { factsAbout, findMentions, whosWho } from '@shared/knowledge';
 import { KnowledgeService } from '../services/knowledge';
-import { app, safeStorage } from 'electron';
+import { app, powerMonitor, safeStorage } from 'electron';
 import { diagnose, parseLogLine, type Diagnosis } from '@shared/self-diagnosis';
 import type { CodeFacts } from '@shared/proposals';
 import { ProposalStore } from '../services/proposals';
 import { DevSandbox } from '../services/dev-sandbox';
+import { RegressionWatch } from '../services/regression';
 import { bootGuard } from '../services/rollback';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
@@ -112,6 +113,36 @@ export function registerAssistantIpc(
     approve: (title, detail) => ctx.askApproval?.(title, detail) ?? Promise.resolve(false),
   });
   app.on('will-quit', () => void sandbox.discard());
+  // Daily self-test of the project's last commit, in its own copy (regressions get reported,
+  // and the log entry feeds the diagnosis and improvement ideas).
+  const regression = new RegressionWatch({
+    file: join(userData, 'regression.json'),
+    sandbox: () =>
+      new DevSandbox({
+        root: join(userData, 'dev-sandbox-selftest'),
+        projectDir: () => getSettings().projectDir || getSettings().sourceDir,
+        approve: async () => false, // never needed: only committed code runs here
+      }),
+  });
+  const selfTestResult = (text: string, broke: boolean): void => {
+    ctx.audit.add('action', text, !broke);
+    if (broke) {
+      ctx.errors.add('error', 'regression', text);
+      ctx.notify(text);
+    } else ctx.errors.add('info', 'selftest', text);
+  };
+  const dailySelfTest = (): void => {
+    const s = getSettings();
+    if (!(s.projectDir || s.sourceDir) || !regression.due()) return;
+    // Only while the PC is idle (10 minutes without input), so it never slows anything down.
+    if (powerMonitor.getSystemIdleTime() < 600) return;
+    void regression
+      .tool({ action: 'run' }, selfTestResult)
+      .catch((err: unknown) =>
+        ctx.errors.add('warn', 'selftest', `Self-test failed: ${String(err)}`),
+      );
+  };
+  setInterval(dailySelfTest, 30 * 60_000).unref?.();
   // Learn lasting facts from chats once they go quiet (Claude only, can be switched off).
   const learner = new MemoryLearner({
     client: async () => {
@@ -308,7 +339,8 @@ export function registerAssistantIpc(
         read_arc_source: (input) => source.tool(input),
         analyze_arc_code: (input) => source.analyze(input),
         diagnose_alton: () => selfDiagnosis(),
-        dev_sandbox: (input) => sandbox.tool(input),
+        dev_sandbox: (input) => sandbox.tool(input, () => regression.last()),
+        self_test: (input) => regression.tool(input, selfTestResult),
         improvement_ideas: (input) =>
           ideas.tool(input, () => ({ diagnosis: selfDiagnosis(), code: codeFacts() })),
         get_recent_crashes: (input) => recentCrashes(input),
