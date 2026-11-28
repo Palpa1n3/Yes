@@ -270,7 +270,14 @@ meanwhile. PIN authentication stays; no biometrics.
   which aren't planned yet). Updating this file goes through the development copy and the
   owner's approval like any other change. On the real file: 33 of 59 items done, Phase 3 current;
   the two open wishes (speaker recognition, a native phone app) aren't planned.
-- ⬜ Automatic documentation.
+- ✅ Automatic documentation. **1.9.0:** `shared/auto-docs.ts` + the `update_docs` tool.
+  CODEBASE.md (every area and file: its purpose from its opening comment or its first export's
+  doc comment, lines, how many files use it, how many tests cover it) and TOOLS.md (all 80
+  tools, from their definitions), both written from the code. "status" says which are out of
+  date (`docStale` ignores the version line); "update" writes fresh ones into the development
+  copy, then the usual check and approval. Both are in .prettierignore so formatting never makes
+  them look stale. First versions committed with 1.9.0 (370 files, 63 still without a purpose
+  comment).
 - ⬜ Performance benchmarking.
 
 ## Phase 4: Persistent agents (after Phase 3; same go-ahead)

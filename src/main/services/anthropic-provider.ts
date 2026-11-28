@@ -68,6 +68,7 @@ const ACTIVITY_TEXT: Record<string, string> = {
   self_test: 'Testing myself…',
   apply_self_change: 'Updating my code…',
   alton_roadmap: 'Checking my plan…',
+  update_docs: 'Writing my documentation…',
   start_background_research: 'Starting background research…',
   look_at_all_screens: 'Looking at all your screens…',
 };
@@ -75,7 +76,7 @@ const ACTIVITY_TEXT: Record<string, string> = {
 /** Thrown when the network is unreachable, so the caller can fall back to the mock. */
 export class OfflineError extends Error {}
 
-const TOOLS: Anthropic.Beta.BetaTool[] = [
+export const TOOLS: Anthropic.Beta.BetaTool[] = [
   {
     name: 'launch_app',
     description:

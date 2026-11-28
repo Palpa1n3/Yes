@@ -10,6 +10,7 @@ import { DevSandbox } from '../services/dev-sandbox';
 import { RegressionWatch } from '../services/regression';
 import { SelfChange } from '../services/self-change';
 import { parseRoadmap, roadmapStatus, wishesVsPlan } from '@shared/dev-roadmap';
+import { docStale, renderCodebaseDoc, renderToolsDoc } from '@shared/auto-docs';
 import { bootGuard } from '../services/rollback';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,7 +34,12 @@ import type { ScreenWatch } from '../services/screen-watch';
 import type { EmailService } from '../services/email';
 import { MAX_ATTACHMENTS } from '@shared/attachments';
 import { MockProvider, type AIProvider } from '../services/ai-provider';
-import { AnthropicProvider, OfflineError, localTimeText } from '../services/anthropic-provider';
+import {
+  AnthropicProvider,
+  OfflineError,
+  TOOLS,
+  localTimeText,
+} from '../services/anthropic-provider';
 import { OllamaProvider, localModels } from '../services/ollama-provider';
 import { AppRegistry } from '../services/app-registry';
 import Anthropic from '@anthropic-ai/sdk';
@@ -352,6 +358,40 @@ export function registerAssistantIpc(
         dev_sandbox: (input) => sandbox.tool(input, () => regression.last()),
         self_test: (input) => regression.tool(input, selfTestResult),
         apply_self_change: (input) => selfChange.tool(input),
+        update_docs: async (input) => {
+          const dir = getSettings().projectDir || getSettings().sourceDir;
+          if (!dir) return { error: 'Set the Alton project folder first.' };
+          const { files, map } = source.codeMap();
+          const version = app.getVersion();
+          const fresh = {
+            'CODEBASE.md': renderCodebaseDoc(map, files, version),
+            'TOOLS.md': renderToolsDoc(TOOLS, version),
+          };
+          const saved = (f: string): string | null => {
+            try {
+              return readFileSync(join(dir, f), 'utf8');
+            } catch {
+              return null;
+            }
+          };
+          const stale = Object.keys(fresh).filter((f) =>
+            docStale(saved(f), fresh[f as keyof typeof fresh]),
+          );
+          if ((input as { action?: unknown } | null)?.action !== 'update')
+            return {
+              outOfDate: stale,
+              upToDate: Object.keys(fresh).filter((f) => !stale.includes(f)),
+            };
+          if (!stale.length) return { result: 'The docs are already up to date.' };
+          if (!sandbox.current()) {
+            const s = await sandbox.start();
+            if (!s.ok) return { error: s.message };
+          }
+          for (const f of stale) sandbox.write(f, fresh[f as keyof typeof fresh]);
+          return {
+            result: `Wrote ${stale.join(' and ')} in the development copy. Next: dev_sandbox "check", then apply_self_change with message "Update the docs" (the user approves).`,
+          };
+        },
         alton_roadmap: (input) => {
           const dir = getSettings().projectDir || getSettings().sourceDir;
           let md: string;

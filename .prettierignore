@@ -3,3 +3,7 @@ node_modules
 package-lock.json
 dist
 docs
+
+# Written by Alton from its own code (shared/auto-docs.ts)
+CODEBASE.md
+TOOLS.md

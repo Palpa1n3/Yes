@@ -3,6 +3,23 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.9.0: Alton writes its own documentation
+
+Phase 3 (self-development), item 8.
+
+- **Two new documents in the project, written by Alton from its own code:**
+  - **CODEBASE.md:** every part of Alton (370 files) with what it does, how big it is, how much
+    depends on it, and how many tests check it.
+  - **TOOLS.md:** everything Alton can do in chat (80 tools), in its own words.
+- **They stay accurate.** Ask "are your docs up to date?". If the code has changed, "update your
+  docs" writes fresh ones in its development copy and asks you to approve them, like any change.
+- Because they're generated from the code, they can't drift out of date without Alton noticing.
+
+**What to test**
+
+1. Open CODEBASE.md or TOOLS.md in the project on GitHub, and have a look.
+2. Ask Alton "are your docs up to date?" It should say yes.
+
 ## 1.8.0: Alton knows its own plan
 
 Phase 3 (self-development), item 7.

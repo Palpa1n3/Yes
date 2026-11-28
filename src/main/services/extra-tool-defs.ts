@@ -199,6 +199,16 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'update_docs',
+    description:
+      'Your (Alton\'s) own documentation, written automatically from your code: CODEBASE.md (every area and file, what it does, size, what depends on it, test coverage) and TOOLS.md (everything you can do, from your tool definitions). action "status" (default): which are out of date. action "update": writes fresh ones into your development copy; then check it and apply it with apply_self_change (the user approves).',
+    input_schema: {
+      type: 'object',
+      properties: { action: { type: 'string', enum: ['status', 'update'] } },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'alton_roadmap',
     description:
       'Your (Alton\'s) development plan, from ROADMAP.md in your project: the phases, what\'s done (✅), part-done (🔶) and still to do (⬜), the phase you\'re on and the next items; plus improvement ideas the user accepted, and wishes from the Notes "Alton roadmap" list that the plan doesn\'t cover yet. action "status" (default), "phase" with name (one phase\'s items), "wishes" (each wish: planned as which item, or not planned). To change ROADMAP.md (tick an item, add a planned item), edit it in dev_sandbox and apply it with the user\'s approval.',
