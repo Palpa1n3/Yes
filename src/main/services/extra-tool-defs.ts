@@ -178,6 +178,27 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'pc_lights',
+    description:
+      'Control the lights inside/on the PC itself (RGB: motherboard, RAM, fans, GPU, keyboard, mouse… whatever OpenRGB sees). Not room lights: those go through the smart home. If the user just says "the lights" and it isn\'t clear which, ask. action: "on" (back to how they were), "off", "color" with color (a name like purple / warm white, or #rrggbb), "brightness" with brightness 1–100, "effect" with effect (rainbow, breathing, flashing, static, wave, or a mode name), "devices" (list them), "profiles" / "profile" with profile (the user\'s saved OpenRGB profiles). Optional device: which light ("RAM", "motherboard", "mouse"…); all by default. Needs OpenRGB\'s SDK server running.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['on', 'off', 'color', 'brightness', 'effect', 'devices', 'profiles', 'profile'],
+        },
+        color: { type: 'string' },
+        brightness: { type: 'number' },
+        effect: { type: 'string' },
+        device: { type: 'string' },
+        profile: { type: 'string' },
+      },
+      required: ['action'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'analyze_arc_code',
     description:
       'Analyse your own (Alton\'s) source code as a whole, read-only. action "overview": the areas, biggest files, code with no tests, and TODO/FIXME notes. action "symbol" with name: where a function/class/type/constant is defined and every place it\'s used (file:line). action "file" with path (e.g. src/main/services/email.ts): its exports and imports, what imports it, everything a change to it would affect, and the tests that cover it. Use before explaining how something works, finding a bug\'s cause, or planning a change; then read_arc_source for the actual lines.',

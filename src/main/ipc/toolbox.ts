@@ -1,7 +1,8 @@
 import { phoneMessages } from '../services/phone-messages';
 import { digestForAi, groupMessages, quickSummary } from '@shared/messages';
+import { PcLights } from '../services/openrgb';
 import { app, safeStorage, shell } from 'electron';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -302,7 +303,34 @@ export function registerToolbox(
     return false;
   });
 
+  // PC lighting through OpenRGB; other lighting apps running may take some lights back.
+  const lights = new PcLights({
+    rivals: () =>
+      new Promise<string[]>((resolve) => {
+        execFile(
+          'tasklist',
+          ['/fo', 'csv', '/nh'],
+          { windowsHide: true, timeout: 8000 },
+          (err, out) => {
+            if (err) return resolve([]);
+            const names = new Set(
+              String(out)
+                .split(String.fromCharCode(10))
+                .map((l) => (l.split('","')[0] ?? '').replace(/^"/, '').toLowerCase()),
+            );
+            const found: string[] = [];
+            if (names.has('armourycrate.exe') || names.has('lightingservice.exe'))
+              found.push('Armoury Crate');
+            if (names.has('icue.exe')) found.push('iCUE');
+            if (names.has('signalrgb.exe')) found.push('SignalRGB');
+            resolve(found);
+          },
+        );
+      }),
+  });
+
   return {
+    pc_lights: (raw) => lights.tool(raw),
     organize_folder: async (raw) => {
       const which = String(input(raw).folder ?? 'downloads').toLowerCase();
       const dir = folders()[which];

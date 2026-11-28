@@ -259,3 +259,15 @@ meanwhile. PIN authentication stays; no biometrics.
 - ⬜ Interface consistency.
 - ⬜ Error handling and recovery testing.
 - ⬜ Final bug fixes.
+
+## Requests along the way
+
+- ✅ PC lights (asked 28 Nov 2026). **1.3.0:** the `pc_lights` tool through OpenRGB's SDK server
+  (`services/openrgb.ts`, a small client for its protocol on 127.0.0.1:6742 only; `shared/lights.ts`):
+  on (back to each device's effect from before Alton changed it), off (the device's own Off mode,
+  else black), any colour (names, #hex, rgb()), brightness, effects (rainbow, breathing,
+  flashing, static, wave → the device's own modes), one device by everyday name or all, saved
+  OpenRGB profiles. Warns when Armoury Crate / iCUE / SignalRGB are also running (they can take
+  lights back). On this PC OpenRGB currently sees the ASUS TUF B850 motherboard; the RAM, SSD,
+  mouse and other lights are under Armoury Crate and Synapse. Tests: tests/lights.test.ts,
+  tests/main/openrgb.test.ts (a fake OpenRGB server).

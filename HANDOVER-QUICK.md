@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **1.2.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **1.3.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,10 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **1.3.0** PC lights (owner request): `services/openrgb.ts` (`OpenRgbClient`: protocol 3,
+  packets 0/1/40/50/150/152/1050/1100/1101; `parseController` keeps raw modes for UPDATE_MODE;
+  `PcLights.tool`), `shared/lights.ts`; extra tool `pc_lights` registered in ipc/toolbox.ts
+  (rival lighting apps via tasklist). Next: Phase 3.3 improvement proposals.
 - **1.2.0** Phase 3.2 code analysis: `shared/code-map.ts` (`buildCodeMap`, `resolveImport`,
   `dependents`, `testsFor`, `findSymbol`, `overview`); `SourceReader.codeMap()/analyze()`; extra
   tool `analyze_arc_code` (overview / symbol / file). Next: 3.3 improvement proposals.

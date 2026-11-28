@@ -3,6 +3,32 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.3.0: Alton controls your PC lights
+
+You asked for this one.
+
+- **Say "turn my PC lights off", "make them purple", "RAM lights blue", "dim them to 30%",
+  "rainbow effect", or "lights back on".** "On" puts them back the way they were before Alton
+  changed them.
+- It works through **OpenRGB**, which is already running on your PC with its SDK server on, so
+  there's nothing to set up. It also uses your saved OpenRGB profiles ("load my Evening profile").
+- **On your PC right now** OpenRGB only sees your **ASUS TUF B850 motherboard** lights. Your RAM,
+  SSD, mouse and other lights are being run by **Armoury Crate** and **Razer Synapse**, so Alton
+  can't reach those yet. To let Alton control everything:
+  1. In Armoury Crate, turn off Aura Sync / lighting control (or uninstall Armoury Crate's
+     lighting part).
+  2. Run OpenRGB once as administrator and press Rescan Devices, so it finds the RAM and the rest.
+  3. Keep OpenRGB's SDK server on, and set OpenRGB to start with Windows.
+- If another lighting app takes some lights back, Alton tells you which one.
+- "The lights" on their own could mean your room lights (smart home), so Alton asks if it isn't
+  clear.
+
+**What to test**
+
+1. Say "turn my PC lights red". The motherboard lights should go red.
+2. Say "lights off", then "lights back on".
+3. Say "rainbow effect".
+
 ## 1.2.0: Alton understands its own code
 
 Phase 3 (self-development), item 2.
