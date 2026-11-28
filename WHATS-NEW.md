@@ -3,6 +3,32 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.5.0: Alton can try out changes to itself safely
+
+Phase 3 (self-development), item 4. You didn't pick an option, so I went with the one I
+recommended: **a separate copy, with your approval**.
+
+- **Alton now has a development copy of itself:** a separate copy of its project in its own data
+  folder, never your real project folder. It can:
+  - make a change there;
+  - run its own checks (typecheck, lint and all the tests);
+  - fix what fails;
+  - then show you exactly what changed.
+- **It asks you first** before running the checks on changed code, because that code runs on your
+  PC.
+- **What it can't touch, even in the copy:** dependencies, the build and release setup, the
+  Android project, and anything with keys or passwords. Only source, tests and notes.
+- **Nothing reaches your real project yet.** Putting an approved change into the real project
+  (and pushing it) is the next part of Phase 3, with your approval.
+- I tried it for real: it made a copy, changed a file, and passed all its checks in under a
+  minute, then deleted the copy. Your project and its files were untouched.
+
+**What to test**
+
+1. Ask Alton "make a development copy and run your checks". You'll get an Approve card; after
+   about a minute it should say all checks passed.
+2. Ask it to "discard the development copy".
+
 ## 1.4.0: Alton suggests how to improve itself
 
 Phase 3 (self-development), item 3.

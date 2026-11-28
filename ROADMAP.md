@@ -229,7 +229,17 @@ meanwhile. PIN authentication stays; no biometrics.
   when there are new ideas. Suggestions only: nothing is changed. First ideas on this PC: move
   the voice audio off the deprecated ScriptProcessorNode (158 warnings), tests for the Cyberpunk
   mod tool, toolbox and Vortex sync, and splitting the 8,381-line phone app.
-- ⬜ Sandboxed development and testing.
+- ✅ Sandboxed development and testing. **1.5.0:** `services/dev-sandbox.ts` +
+  `shared/sandbox-rules.ts` + the `dev_sandbox` tool (the owner's choice: a separate copy, with
+  approval). "start" makes a local `git clone` of the project's last commit in
+  userData/dev-sandbox (node_modules linked by a junction, removed as a link before the copy is
+  deleted); read / edit (exact find-and-replace, once) / write / delete only inside the copy, and
+  only source, tests and .md notes (`blockedPath`: never package files, lockfiles, .npmrc,
+  .github, scripts, android, build or test config, .git, node_modules, secrets); "check" runs
+  the project's own typecheck, lint and tests there (fixed commands; asks the user once per copy;
+  stops at the first failure with the useful lines); "diff"; "discard". Counts as risky after
+  outside content (gate 4). Tried for real on this PC: copy, edit, diff, all three checks passed
+  in 53 s, copy deleted, real node_modules intact.
 - ⬜ Automated regression testing.
 - ⬜ Approval-based code modifications.
 - ⬜ Development roadmap management (partly there: Notes › "Alton roadmap").

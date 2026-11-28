@@ -6,6 +6,7 @@ import { app, safeStorage } from 'electron';
 import { diagnose, parseLogLine, type Diagnosis } from '@shared/self-diagnosis';
 import type { CodeFacts } from '@shared/proposals';
 import { ProposalStore } from '../services/proposals';
+import { DevSandbox } from '../services/dev-sandbox';
 import { bootGuard } from '../services/rollback';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
@@ -104,6 +105,13 @@ export function registerAssistantIpc(
     }
   };
   const ideas = new ProposalStore(join(userData, 'proposals.json'));
+  // Alton's development copy of its own project (never the real folder).
+  const sandbox = new DevSandbox({
+    root: join(userData, 'dev-sandbox'),
+    projectDir: () => getSettings().projectDir || getSettings().sourceDir,
+    approve: (title, detail) => ctx.askApproval?.(title, detail) ?? Promise.resolve(false),
+  });
+  app.on('will-quit', () => void sandbox.discard());
   // Learn lasting facts from chats once they go quiet (Claude only, can be switched off).
   const learner = new MemoryLearner({
     client: async () => {
@@ -300,6 +308,7 @@ export function registerAssistantIpc(
         read_arc_source: (input) => source.tool(input),
         analyze_arc_code: (input) => source.analyze(input),
         diagnose_alton: () => selfDiagnosis(),
+        dev_sandbox: (input) => sandbox.tool(input),
         improvement_ideas: (input) =>
           ideas.tool(input, () => ({ diagnosis: selfDiagnosis(), code: codeFacts() })),
         get_recent_crashes: (input) => recentCrashes(input),

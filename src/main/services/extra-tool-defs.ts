@@ -199,6 +199,28 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'dev_sandbox',
+    description:
+      'Your (Alton\'s) development copy: a separate copy of your own project where you can try a change and test it, without touching the real project. action "start" (a fresh copy from the last commit), "read" with path (from/to lines), "edit" with path, find (exact text, once in the file) and replace, "write" with path and content (whole file), "delete" with path, "check" (runs the typecheck, lint and tests there; asks the user first), "diff" (what changed), "discard". Only source, tests and notes can change (not dependencies, build or release setup, or secrets). Use for an accepted improvement idea or a fix the user wants: make the change, check it, fix what fails, then show the user the diff in plain words. Nothing reaches the real project from here.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['start', 'read', 'edit', 'write', 'delete', 'check', 'diff', 'discard'],
+        },
+        path: { type: 'string' },
+        find: { type: 'string' },
+        replace: { type: 'string' },
+        content: { type: 'string' },
+        from: { type: 'number' },
+        to: { type: 'number' },
+      },
+      required: ['action'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'improvement_ideas',
     description:
       'Your (Alton\'s) ideas for improving yourself, made from your own error log and code: fixes for recurring problems, tests for untested parts, unfinished TODOs, very large files. action "list" (open ideas), "refresh" (look again now), "accept" / "dismiss" / "done" with id. Suggestions only: nothing is changed. Use when the user asks what you\'d improve, or whether anything about you needs fixing. Explain each idea simply and let the user pick; a dismissed idea isn\'t suggested again.',

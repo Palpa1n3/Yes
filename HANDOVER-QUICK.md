@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **1.4.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **1.5.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,12 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **1.5.0** Phase 3.4 sandbox: `services/dev-sandbox.ts` `DevSandbox` (start = git clone
+  --local --no-hardlinks into userData/dev-sandbox + node_modules junction; read/edit/write/delete
+  via `blockedPath`; check = `SANDBOX_CHECKS` through cmd.exe, approval once per copy; diff;
+  discard unlinks the junction first and refuses to delete if it can't), `shared/sandbox-rules.ts`;
+  tool `dev_sandbox` (assistant.ts; discarded on quit); tool-guard: `check` is risky after outside
+  content. Next: 3.5 automated regression testing, then 3.6 approval-based modifications.
 - **1.4.0** Phase 3.3 improvement proposals: `shared/proposals.ts` (`propose`, `ideaId`,
   `sortProposals`), `services/proposals.ts` `ProposalStore` (proposals.json, weekly `due()`),
   tool `improvement_ideas`; assistant.ts `selfDiagnosis()` / `codeFacts()` shared with

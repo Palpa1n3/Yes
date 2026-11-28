@@ -64,6 +64,7 @@ const ACTIVITY_TEXT: Record<string, string> = {
   analyze_arc_code: 'Reading my code…',
   pc_lights: 'Changing the lights…',
   improvement_ideas: 'Thinking about how to improve…',
+  dev_sandbox: 'Working on my development copy…',
   start_background_research: 'Starting background research…',
   look_at_all_screens: 'Looking at all your screens…',
 };
