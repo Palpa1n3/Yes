@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.96.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.97.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.97** Confidence: `shared/confidence.ts` (`changingFacts`, `checkFirstNote`, `CERTAINTY_RULE`);
+  anthropic-provider adds `checkFirstNote(userText)` to the per-message system block; the phone's
+  `ask()` too; `buildSystemPrompt` includes `CERTAINTY_RULE`. command-executor `findStartApp` returns
+  `{ambiguous}` for a loose name fitting several apps (launch_app asks). Next: predictive help, then
+  finishing the central engine (last Phase 2 items).
 - **0.96** Model choice: `shared/model-pick.ts` (`complexity`, `NEEDS_MORE`=3, `pickModel`); settings
   `autoModel` (default true) and `autoModelTop` (default Sonnet); anthropic-provider `deps.pickModel`
   used for non-research sends; Settings › AI toggle + top-model select (the single-model select shows

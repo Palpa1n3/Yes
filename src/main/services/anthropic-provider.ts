@@ -3,6 +3,7 @@
  *  (Approve / Cancel, activity log) before its result goes back to the model. */
 import { describeSchedule, describeStep, type Routine } from '@shared/routines';
 import { guardToolResult } from '@shared/injection';
+import { checkFirstNote } from '@shared/confidence';
 import { fmtTime, type CalEvent } from '@shared/calendar';
 import type { Source } from '@shared/chats';
 import type { NowPlaying } from '@shared/media';
@@ -1005,6 +1006,8 @@ export class AnthropicProvider implements AIProvider {
         content: [
           `Current local date and time (from this computer's clock): ${localTimeText(now)}.`,
           this.deps.context?.() ?? '',
+          // Facts that change (prices, opening times, latest…): check first, say where from.
+          checkFirstNote(userText),
           research ? RESEARCH_NOTE : '',
           changed
             ? `Your instructions have been updated. From now on, follow these instead of the earlier ones:\n\n${current}`

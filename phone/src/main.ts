@@ -21,6 +21,7 @@ import {
 import { md, plain } from './md';
 import { digestForAi, groupMessages, quickSummary, type PhoneMsg } from '@shared/messages';
 import { guardText, warningFor } from '@shared/injection';
+import { checkFirstNote } from '@shared/confidence';
 import { metresBetween, mountWorkMap, type WorkMap } from './workmap';
 import '@shared/ui-style.css';
 import '@shared/flat-backdrops.css';
@@ -842,7 +843,8 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
   const live = (): void => renderMsgs(activity);
   // One system prompt for the whole reply: it includes the time, and a slow tool (reading the
   // shift app) can cross a minute. A changed prompt makes the API reject the earlier thinking.
-  const system = systemText();
+  const lastUser = [...chat.messages].reverse().find((x) => x.role === 'user')?.text ?? '';
+  const system = [systemText(), checkFirstNote(lastUser)].filter(Boolean).join(' ');
   try {
     for (let step = 0; step < 6; step++) {
       const stream = client.messages.stream(

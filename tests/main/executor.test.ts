@@ -7,6 +7,7 @@ import { AppRegistry, DEFAULT_APPS } from '../../src/main/services/app-registry'
 import {
   createExecutor,
   expandPath,
+  findStartApp,
   matchStartApp,
   toWebUrl,
   type ExecutorDeps,
@@ -162,6 +163,19 @@ describe('web actions', () => {
 });
 
 describe('helpers', () => {
+  it('asks instead of guessing when a loose name fits several apps', () => {
+    const apps: StartApp[] = [
+      { name: 'Word', appId: 'w' },
+      { name: 'Office Word', appId: 'ow' },
+      { name: 'Office Excel', appId: 'oe' },
+      { name: 'Steam', appId: 's' },
+    ];
+    expect(findStartApp(apps, 'office')).toEqual({ ambiguous: ['Office Word', 'Office Excel'] });
+    expect(findStartApp(apps, 'word')).toEqual({ app: { name: 'Word', appId: 'w' } });
+    expect(findStartApp(apps, 'excel')).toEqual({ app: { name: 'Office Excel', appId: 'oe' } });
+    expect(matchStartApp(apps, 'office')).toBeUndefined();
+  });
+
   it('matchStartApp prefers exact names and skips uninstallers', () => {
     expect(matchStartApp(START_APPS, 'spotify')?.appId).toMatch(/SpotifyMusic/);
     expect(matchStartApp(START_APPS, 'chrome')?.name).toBe('Google Chrome');

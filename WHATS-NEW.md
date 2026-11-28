@@ -3,6 +3,25 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.97.0: Alton checks before it's sure
+
+Phase 2, item 7.
+
+- **Facts that change get checked.** Prices, what's in stock, "the latest version", opening times,
+  scores, release dates, train delays, whether a site is down: Alton now looks these up on the web
+  first and tells you where the answer came from, instead of answering from memory. Weather, your
+  calendar, shifts and email still come from Alton's own tools.
+- **It says when it isn't sure,** and won't make up numbers, names, links or quotes.
+- **It asks when a request is unclear and it matters.** For example "open office" when you have
+  Word, Excel and PowerPoint now gets "More than one app matches: … Which one?" instead of opening
+  whichever came first.
+- Works the same on the phone.
+
+**What to test**
+
+1. Ask "how much is a Steam Deck?": the answer should mention where the price came from.
+2. Ask Alton to open something vague that matches several apps: it should ask which one.
+
 ## 0.96.0: the right model for each message
 
 Phase 2, item 6.

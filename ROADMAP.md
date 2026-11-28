@@ -108,7 +108,13 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
   pictures; everyday requests score low). Below 3 → Haiku; 3 or more → the "strongest model it may
   use" (Sonnet by default). Settings › AI › "Choose the model for each message" (on by default);
   Saver mode still forces Haiku; research chats keep their own model; spending limits apply.
-- ⬜ Confidence assessment and information verification.
+- ✅ Confidence assessment and information verification. **0.97:** `shared/confidence.ts`: a
+  message about facts that change (prices/stock, latest versions/news, opening times, results,
+  release dates, travel, rates, outages) gets a note to check with a web search first and say where
+  the answer came from (not for things Alton has its own tools for: weather, calendar, shifts,
+  email, time); a standing rule in every chat (PC and phone): say when unsure, never invent facts,
+  numbers, names, links or quotes, ask when a request is ambiguous and it matters. Launching apps:
+  a loose name that fits several installed apps now asks "Which one?" instead of opening the first.
 
 ## Safety gate (must be done and tested before Phase 3 or Phase 4 starts)
 

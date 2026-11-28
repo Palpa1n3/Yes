@@ -106,17 +106,34 @@ export function expandPath(p: string, env: ExecutorDeps['env']): string {
 }
 
 /** Best Start-menu match: exact name, then starts-with, then whole-word contains. */
-export function matchStartApp(apps: StartApp[], query: string): StartApp | undefined {
+/** The installed app a name means: an exact name wins; a looser match ("office" for "Office
+ *  Word") only when exactly one app fits, otherwise the candidates (so Alton asks instead of
+ *  guessing). */
+export function findStartApp(
+  apps: StartApp[],
+  query: string,
+): { app: StartApp } | { ambiguous: string[] } | null {
   const q = norm(query);
-  if (!q) return undefined;
+  if (!q) return null;
   const named = apps.map((a) => ({ a, n: norm(a.name) }));
   const ignore = /uninstall|readme|help|documentation|website|release notes/;
   const ok = named.filter(({ n }) => !ignore.test(n));
-  return (
-    ok.find(({ n }) => n === q)?.a ??
-    ok.find(({ n }) => n.startsWith(`${q} `))?.a ??
-    ok.find(({ n }) => ` ${n} `.includes(` ${q} `))?.a
-  );
+  const exact = ok.find(({ n }) => n === q);
+  if (exact) return { app: exact.a };
+  for (const tier of [
+    ok.filter(({ n }) => n.startsWith(`${q} `)),
+    ok.filter(({ n }) => ` ${n} `.includes(` ${q} `)),
+  ]) {
+    const names = [...new Set(tier.map(({ a }) => a.name))];
+    if (names.length === 1 && tier[0]) return { app: tier[0].a };
+    if (names.length > 1) return { ambiguous: names.slice(0, 5) };
+  }
+  return null;
+}
+
+export function matchStartApp(apps: StartApp[], query: string): StartApp | undefined {
+  const r = findStartApp(apps, query);
+  return r && 'app' in r ? r.app : undefined;
 }
 
 /** Turn "github.com" or "https://x" into a safe http(s) URL, or null. */
@@ -317,6 +334,15 @@ export function createExecutor(
           if (entry) {
             const r = await launchEntry(entry);
             return r.ok ? done('success', `Opened ${entry.name}.`) : done('failed', r.reason);
+          }
+          // Several installed apps fit a loose name: ask instead of guessing.
+          if (deps.platform === 'win32') {
+            const found = findStartApp(await startApps(), target);
+            if (found && 'ambiguous' in found)
+              return done(
+                'failed',
+                `More than one app matches “${target}”: ${found.ambiguous.join(', ')}. Which one?`,
+              );
           }
           // Not in apps.json: look it up among installed apps.
           const name = await launchFromStartMenu(target);
