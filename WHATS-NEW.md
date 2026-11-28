@@ -3,6 +3,23 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.98.0: Alton offers what you usually do
+
+Phase 2, item 8.
+
+- **"You usually open Spotify around now. Want me to open it?"** If you open an app at about the
+  same time on most days (4 of the last 7), and haven't yet today, Alton offers it with a one-tap
+  **Open** button.
+- It stays out of the way: not while you're in a full-screen game, not in your quiet hours, at most
+  every few hours, and it ignores background helpers.
+- It adds to the suggestions Alton already made (rain on the way, important email, apps you open
+  together, stalled goals, evening wrap-up).
+- Your current habits aren't regular enough for it yet, so you'll only see it once a real pattern
+  builds up.
+
+**What to test:** nothing to do now. Over the next week, if you open the same app at the same time
+most days, the offer should appear.
+
 ## 0.97.0: Alton checks before it's sure
 
 Phase 2, item 7.

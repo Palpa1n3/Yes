@@ -322,6 +322,7 @@ export function registerIpc(ctx: MainContext): void {
         errorWindow: !!f && isErrorWindow(f),
         recentErrors: ctx.errors.recentErrors(),
         workflow: awareness.habits.workflow(known),
+        usualApp: awareness.habits.usual(),
         staleGoal: notes.staleGoal(),
       };
     },

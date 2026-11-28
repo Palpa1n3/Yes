@@ -102,7 +102,12 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
   most every 3 h; background work, paused at the spending limit). Chat always gets a short "who's
   who", and a `look_up` tool gives everything known about a name (other names work: "Fives" →
   Will).
-- ⬜ Predictive assistance.
+- ✅ Predictive assistance. Alton already offered suggestions (rain, important email, apps opened
+  together → a routine, stalled goals, evening wrap-up, error windows). **0.98:** it now
+  anticipates: an app opened at about this time (±20 min) on 4 of the last 7 days and not yet
+  today gets "You usually open X around now. Want me to open it?" with a one-tap Open (not over
+  full-screen apps, background helpers skipped, at most every 3 h, quiet hours respected). Together
+  with the "right now" picture (0.92), chat can also answer "anything I should know?".
 - ✅ Automatic AI model selection. **0.96:** `shared/model-pick.ts`: each chat message gets a
   complexity score (length, code/error logs, planning/comparing/explaining/writing words, PDFs and
   pictures; everyday requests score low). Below 3 → Haiku; 3 or more → the "strongest model it may

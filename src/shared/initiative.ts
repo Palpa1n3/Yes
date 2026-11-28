@@ -9,7 +9,7 @@ import type { RawIntent, SystemStats } from './types';
 import type { WeatherData } from './weather';
 
 export type SuggestionKind =
-  'memory' | 'rain' | 'email' | 'evening' | 'error' | 'bugs' | 'workflow' | 'goal';
+  'memory' | 'rain' | 'email' | 'evening' | 'error' | 'bugs' | 'workflow' | 'goal' | 'usual';
 
 export interface Suggestion {
   id: string;
@@ -39,6 +39,38 @@ export interface InitiativeInput {
   workflow?: { apps: string[]; minute: number } | null;
   /** Goals with no progress for a while. */
   staleGoal?: { title: string; days: number } | null;
+  /** An app the user usually opens around this time and hasn't yet today. */
+  usualApp?: { app: string; days: number } | null;
+}
+
+/** The first time each app was opened on each day (see main/services/habits.ts). */
+export interface DayOpen {
+  app: string;
+  day: string;
+  minute: number;
+}
+
+/** An app opened at about this time (±20 min) on at least 4 of the last 7 days, and not opened
+ *  yet today: worth offering. Background helpers (updaters, pickers) are skipped. */
+export function usualNow(opens: DayOpen[], now: Date): { app: string; days: number } | null {
+  const minute = now.getHours() * 60 + now.getMinutes();
+  const dayKey = (d: Date): string =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = dayKey(now);
+  const last7 = new Set(
+    Array.from({ length: 7 }, (_, k) => dayKey(new Date(now.getTime() - (k + 1) * 86_400_000))),
+  );
+  const helper =
+    /host|helper|setup|update|install|wix|svc|service|broker|tray|ipn|powershell|cmd|conhost|explorer|search/i;
+  const openedToday = new Set(opens.filter((o) => o.day === today).map((o) => o.app));
+  const byApp = new Map<string, Set<string>>();
+  for (const o of opens)
+    if (last7.has(o.day) && Math.abs(o.minute - minute) <= 20 && !helper.test(o.app))
+      byApp.set(o.app, (byApp.get(o.app) ?? new Set()).add(o.day));
+  const best = [...byApp.entries()]
+    .filter(([app, days]) => days.size >= 4 && !openedToday.has(app))
+    .sort((a, b) => b[1].size - a[1].size)[0];
+  return best ? { app: best[0], days: best[1].size } : null;
 }
 
 /** Cooldown per kind before the same sort of suggestion can come again. */
@@ -51,6 +83,7 @@ export const COOLDOWN_MS: Record<SuggestionKind, number> = {
   bugs: 12 * 3600_000,
   workflow: 7 * 24 * 3600_000,
   goal: 3 * 24 * 3600_000,
+  usual: 3 * 3600_000,
 };
 
 /** Minimum gap between any two suggestions. */
@@ -234,6 +267,19 @@ export function goalRule(i: InitiativeInput): Suggestion | null {
   };
 }
 
+/** "You usually open Spotify around now": offered with a one-tap Open. */
+export function usualAppRule(i: InitiativeInput): Suggestion | null {
+  const u = i.usualApp;
+  if (!u || i.foreground?.fullscreen) return null;
+  return {
+    id: `usual-${u.app.toLowerCase()}-${i.now.toDateString()}`,
+    kind: 'usual',
+    text: `You usually open ${u.app} around now. Want me to open it?`,
+    action: { label: `Open ${u.app}`, intent: { action: 'launch_app', target: u.app } },
+    at: i.now.getTime(),
+  };
+}
+
 /** Rules in priority order. */
 export const RULES = [
   errorDialogRule,
@@ -243,5 +289,6 @@ export const RULES = [
   bugRule,
   eveningRule,
   workflowRule,
+  usualAppRule,
   goalRule,
 ];

@@ -2,6 +2,7 @@
  *  automating), plus "remind me when I open X" reminders. Stored on this PC only. */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { usualNow } from '@shared/initiative';
 
 export interface FirstOpen {
   app: string;
@@ -79,6 +80,11 @@ export class Habits {
     } catch {
       /* fresh */
     }
+  }
+
+  /** An app usually opened around now that hasn't been opened yet today. */
+  usual(): { app: string; days: number } | null {
+    return usualNow(this.opens, this.now());
   }
 
   /** The app in front changed. Returns reminders that are now due (and removes them). */
