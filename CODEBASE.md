@@ -1,24 +1,24 @@
 # Alton codebase
 
-Written automatically by Alton from its own code (version 1.9.0); don't edit by hand.
-370 source files, 75,840 lines, 147 test files.
+Written automatically by Alton from its own code (version 1.10.0); don't edit by hand.
+372 source files, 76,117 lines, 149 test files.
 
 ## src/main: PC app: main process (services, system access, IPC)
 
 | File | What it does | Lines | Used by | Tests |
 | --- | --- | ---: | ---: | ---: |
 | `compact.ts` | Compact mode: the main window collapses into a Spotlight-style pill near the top of the current display, pinned always-on-top. | 54 | 2 | 3 |
-| `context.ts` | Everything main-process modules share. | 73 | 33 | 3 |
+| `context.ts` | Everything main-process modules share. | 75 | 33 | 3 |
 | `desk-icons.ts` | Small taskbar icons drawn in code (no image files): the overlay badge dots and the thumbnail toolbar buttons. | 101 | 1 | 1 |
 | `desk-state.ts` | Small bits of live state the desktop widget and taskbar need, reported by the parts of the app that know them (the renderer, Agent Mode, the updater). | 14 | 5 | 1 |
 | `desk.ts` | The desktop widget, the taskbar strip and the taskbar features (thumbnail toolbar, jump list, overlay badge, progress bar, live tray tooltip), all from one snapshot of what's go… | 600 | 2 | 1 |
 | `holo.ts` | Notifications in Alton's own holographic style: small glowing cards that slide in at the bottom-right of the desktop widget's screen, stack, and fade after a few seconds. | 109 | 7 | 1 |
 | `hotkey.ts` | Registers the show/hide shortcut. | 49 | 3 | 3 |
-| `index.ts` | — | 707 | 0 | 0 |
+| `index.ts` | — | 732 | 0 | 0 |
 | `ipc/agent.ts` | — | 537 | 1 | 0 |
 | `ipc/app.ts` | — | 97 | 1 | 0 |
 | `ipc/approval.ts` | A generic Approve / Deny card for risky steps that aren't ordinary actions (moving files, posting to Discord…). | 33 | 1 | 0 |
-| `ipc/assistant.ts` | — | 672 | 1 | 0 |
+| `ipc/assistant.ts` | — | 689 | 1 | 0 |
 | `ipc/awareness.ts` | The app in front, first-opens per day (habits) and app-triggered reminders. | 112 | 1 | 0 |
 | `ipc/calendar.ts` | — | 68 | 1 | 0 |
 | `ipc/chats.ts` | — | 89 | 1 | 0 |
@@ -53,7 +53,7 @@ Written automatically by Alton from its own code (version 1.9.0); don't edit by 
 | `services/agent-input-win.ts` | Windows mouse + keyboard for Agent Mode: one long-lived PowerShell process with a small C# helper (user32 SendInput / SetCursorPos). | 221 | 3 | 5 |
 | `services/agent-runner.ts` | Agent Mode: Claude operates the PC with the computer toolset (screenshots, mouse, keyboard) until the task is done, the step limit is reached, or the user stops it. | 806 | 2 | 5 |
 | `services/ai-provider.ts` | AI provider abstraction. | 630 | 3 | 23 |
-| `services/anthropic-provider.ts` | Claude via the Anthropic Messages API, with ARC's actions as tools. | 1527 | 3 | 19 |
+| `services/anthropic-provider.ts` | Claude via the Anthropic Messages API, with ARC's actions as tools. | 1528 | 3 | 19 |
 | `services/app-registry.ts` | App registry: userData/apps.json, seeded with defaults on first run. | 188 | 3 | 2 |
 | `services/calendar.ts` | Reads a calendar from its private iCal address (fetched in main; the address is a secret), expands repeating events into the coming fortnight, refreshes every 10 minutes and rai… | 225 | 2 | 1 |
 | `services/chat-store.ts` | Saved chats: userData/chats/index.json (titles, order, active chat) plus one messages file per chat. | 375 | 4 | 3 |
@@ -67,7 +67,7 @@ Written automatically by Alton from its own code (version 1.9.0); don't edit by 
 | `services/diagnostics.ts` | Self-debugging: an error/warning log (main + renderer) and read-only access to ARC's own source folder, so Claude can explain problems and draft fixes. | 374 | 3 | 6 |
 | `services/download-mode.ts` | Download mode: give Steam the connection. | 135 | 2 | 4 |
 | `services/email.ts` | Any email provider over IMAP (Gmail, Yahoo, iCloud, BT, your own domain…; see shared/mail-servers.ts). | 181 | 5 | 19 |
-| `services/extra-tool-defs.ts` | Descriptions of the local tools added in batch 6 (handled by the `extra` map in main). | 478 | 1 | 19 |
+| `services/extra-tool-defs.ts` | Descriptions of the local tools added in batch 6 (handled by the `extra` map in main). | 488 | 1 | 19 |
 | `services/fish-tts.ts` | Text-to-speech with Fish Audio (POST https://api.fish.audio/v1/tts). | 87 | 2 | 1 |
 | `services/foreground-watch.ts` | The app in front (Windows): a long-lived PowerShell reads the foreground window's process, title and whether it fills the screen every 2 s, printing a JSON line on change. | 140 | 2 | 1 |
 | `services/gaming-sessions.ts` | Gaming performance: while gaming mode is on, sample CPU/GPU load and temperatures every 15 s; when it ends, keep a summary (last 30 sessions) for "how did my game run?". | 132 | 3 | 4 |
@@ -92,12 +92,13 @@ Written automatically by Alton from its own code (version 1.9.0); don't edit by 
 | `services/ollama-provider.ts` | Offline AI: a language model running on this PC through Ollama (ollama.com). | 95 | 1 | 1 |
 | `services/openrgb.ts` | PC lighting through OpenRGB's SDK server (OpenRGB › SDK Server › Start server; it listens on 127.0.0.1:6742). | 467 | 1 | 1 |
 | `services/os-launch.ts` | Real OS bindings for the executor (Electron main process). | 80 | 1 | 0 |
+| `services/perf-tracker.ts` | Records Alton's own performance per version (userData/perf.json; shared/perf.ts) and says when a version is clearly slower than the one before. | 80 | 2 | 4 |
 | `services/phone-messages.ts` | Phone messages on the PC: the phone sends each new message here (POST /api/phone-messages). | 170 | 5 | 3 |
 | `services/phone-status.ts` | The phone's latest status (battery, unread messages, next payday), from its sync. | 37 | 3 | 2 |
 | `services/plugins.ts` | Plugins: JSON files in userData/plugins. | 98 | 1 | 1 |
 | `services/project-update.ts` | "Update Alton from my phone": unpack an Alton zip over the project folder, then git add, commit and push. | 208 | 3 | 4 |
 | `services/proposals.ts` | Alton's improvement ideas for itself (userData/proposals.json): made weekly from its own diagnosis and code map, then accepted, dismissed or marked done by the person. | 105 | 1 | 0 |
-| `services/regression.ts` | Daily self-test (Phase 3, item 5): a fresh copy of the project's last commit (its own DevSandbox, separate from the one chat uses), every check run in full, the result recorded … | 115 | 1 | 1 |
+| `services/regression.ts` | Daily self-test (Phase 3, item 5): a fresh copy of the project's last commit (its own DevSandbox, separate from the one chat uses), every check run in full, the result recorded … | 122 | 1 | 1 |
 | `services/remote-page.ts` | The phone app (one self-contained page, served by RemoteServer). | 6 | 1 | 2 |
 | `services/remote-server.ts` | Phone companion: a small web app served on the home network (off by default). | 412 | 2 | 2 |
 | `services/rollback.ts` | Going back to the previous version when an update is broken. | 207 | 3 | 0 |
@@ -343,6 +344,7 @@ Written automatically by Alton from its own code (version 1.9.0); don't edit by 
 | `model-pick.ts` | Picking the Claude model for each message: the cheap, fast one for everyday requests, a stronger one (up to the user's chosen ceiling) when the message needs more thought. | 53 | 1 | 21 |
 | `money.ts` | Money helpers for the phone app: payslip vs rota, a real take-home rate from past payslips, subscriptions and repeat payments, spending by category, and price watching. | 276 | 1 | 1 |
 | `notes.ts` | Lists (shopping, to-do…), quick notes, and things ARC has been asked to remember. | 154 | 11 | 42 |
+| `perf.ts` | Performance benchmarking (Phase 3, item 9): Alton records how fast it really is in use, per version (start-up time, time to the first word of a reply, full reply time, memory an… | 130 | 1 | 5 |
 | `personalities.ts` | Personality is data, not code. | 264 | 14 | 75 |
 | `phone.ts` | The phone-only app (works with the PC off): the sync format shared with the PC, and the links that hand an action to the phone's own apps (Messages, WhatsApp, Phone, Mail, Maps,… | 415 | 3 | 6 |
 | `preview.ts` | Picture cards for the pages and products a research answer links to. | 44 | 5 | 71 |
@@ -355,7 +357,7 @@ Written automatically by Alton from its own code (version 1.9.0); don't edit by 
 | `rollback.ts` | Rolling back a broken update: watching the first starts of a new version, and the facts needed to put the previous one back. | 94 | 2 | 1 |
 | `routines.ts` | Routines: a named list of steps run in order with one phrase ("work mode") or a click. | 482 | 13 | 40 |
 | `sandbox-rules.ts` | What Alton may change in its development copy (Phase 3, item 4). | 74 | 1 | 4 |
-| `self-diagnosis.ts` | Self-diagnosis (Phase 3, item 1): Alton reads its own error log and works out what's actually wrong. | 188 | 3 | 2 |
+| `self-diagnosis.ts` | Self-diagnosis (Phase 3, item 1): Alton reads its own error log and works out what's actually wrong. | 193 | 3 | 2 |
 | `session.ts` | Noticing that Alton didn't close properly last time (a power cut, Windows crashing, or Alton itself crashing), and what was interrupted. | 58 | 2 | 1 |
 | `settings.ts` | Pure validation for stored settings: unknown keys dropped, wrong types replaced by defaults, so a hand-edited or corrupted settings.json can't break the app. | 288 | 1 | 17 |
 | `shiftChart.ts` | Shift charts as SVG markup (shared by the PC and the phone app): a week timeline with each shift as a bar, and hours (and pay) per week. | 147 | 2 | 2 |

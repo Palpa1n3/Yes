@@ -12,6 +12,7 @@ const DAY = 86_400_000;
 export class RegressionWatch {
   private runs: TestRun[] = [];
   private running = false;
+  private checksMs: Array<{ name: string; ms: number }> | null = null;
 
   constructor(
     private readonly d: {
@@ -32,6 +33,11 @@ export class RegressionWatch {
 
   private now(): number {
     return this.d.now?.() ?? Date.now();
+  }
+
+  /** How long each check took in the last run (for performance). */
+  lastChecks(): Array<{ name: string; ms: number }> | null {
+    return this.checksMs;
   }
 
   last(): TestRun | null {
@@ -55,6 +61,7 @@ export class RegressionWatch {
       if (!s.ok) return { error: s.message };
       const r = await sb.check({ all: true });
       if ('error' in r) return r;
+      this.checksMs = r.checks.map((c) => ({ name: c.name, ms: c.ms }));
       const run: TestRun = {
         at: this.now(),
         commit: r.commit,

@@ -201,7 +201,7 @@ meanwhile. PIN authentication stays; no biometrics.
   run. Tests: tests/agent-resume.test.ts, tests/main/agent.test.ts.
 - ✅ PIN authentication retained; biometrics excluded.
 
-## Phase 3: Self-development (started 28 Nov 2026 with the owner's go-ahead)
+## Phase 3: Self-development (done, 1.1.0–1.10.0; started 28 Nov 2026 with the owner's go-ahead)
 
 - ✅ Self-diagnosis and error analysis (partly there: Alton reads its own errors and code).
   **1.1.0:** `shared/self-diagnosis.ts` + the `diagnose_alton` tool: reads the whole error log
@@ -278,9 +278,16 @@ meanwhile. PIN authentication stays; no biometrics.
   copy, then the usual check and approval. Both are in .prettierignore so formatting never makes
   them look stale. First versions committed with 1.9.0 (370 files, 63 still without a purpose
   comment).
-- ⬜ Performance benchmarking.
+- ✅ Performance benchmarking. **1.10.0:** `shared/perf.ts` + `services/perf-tracker.ts`
+  (userData/perf.json) + the `alton_performance` tool. Recorded in real use, per version:
+  start-up (process start → window loaded), time to the first word and the whole reply (plain
+  Claude replies only, no tool steps), memory and idle CPU every 15 minutes; medians and 90th
+  percentiles; each version compared with the previous one (slower = 25%+ worse, 5+ samples
+  each). A slowdown is logged ("Performance: … is slower than …", a medium cause in the
+  self-diagnosis), so it becomes an improvement idea. Also shows the last self-test's check
+  durations. The older `run_benchmark` stays for the PC's own speed.
 
-## Phase 4: Persistent agents (after Phase 3; same go-ahead)
+## Phase 4: Persistent agents (next: waiting for the owner's go-ahead)
 
 - ⬜ Multiple simultaneous background tasks.
 - ⬜ Pause, resume, edit and cancel tasks.

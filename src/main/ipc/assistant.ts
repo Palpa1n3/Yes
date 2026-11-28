@@ -358,6 +358,11 @@ export function registerAssistantIpc(
         dev_sandbox: (input) => sandbox.tool(input, () => regression.last()),
         self_test: (input) => regression.tool(input, selfTestResult),
         apply_self_change: (input) => selfChange.tool(input),
+        alton_performance: (input) =>
+          ctx.perf.tool(input, () => {
+            const last = regression.lastChecks();
+            return last ? last.map((c) => ({ name: c.name, ms: c.ms })) : null;
+          }),
         update_docs: async (input) => {
           const dir = getSettings().projectDir || getSettings().sourceDir;
           if (!dir) return { error: 'Set the Alton project folder first.' };
@@ -558,6 +563,11 @@ export function registerAssistantIpc(
 
     let text = '';
     const run = async (p: AIProvider): Promise<void> => {
+      // Timings for Alton's performance record: only plain Claude replies (no tool steps,
+      // which wait on the user or the PC).
+      const t0 = Date.now();
+      let firstWord = 0;
+      let usedTools = false;
       for await (const chunk of p.send(chat.history, {
         systemPrompt: systemPrompt(),
         signal: ctrl.signal,
@@ -566,8 +576,15 @@ export function registerAssistantIpc(
         ...(attachments.length ? { attachments } : {}),
       })) {
         if (ctrl.signal.aborted) break;
-        if (chunk.type === 'text') text += chunk.delta;
+        if (chunk.type === 'text') {
+          text += chunk.delta;
+          if (!firstWord && !usedTools && chunk.delta.trim()) firstWord = Date.now() - t0;
+        } else if (chunk.type === 'intent' || chunk.type === 'activity') usedTools = true;
         out({ ...chunk, responseId });
+      }
+      if (p === chat.claude && !usedTools && !ctrl.signal.aborted && firstWord) {
+        ctx.perf.record('firstWordMs', firstWord);
+        ctx.perf.record('replyMs', Date.now() - t0);
       }
     };
 

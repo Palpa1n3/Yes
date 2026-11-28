@@ -72,6 +72,11 @@ const CAUSES: Array<[RegExp, string, ErrorGroup['severity']?]> = [
     'low',
   ],
   [
+    /^Performance: .* is slower than/i,
+    'This version of Alton is clearly slower than the one before in real use: worth finding what changed.',
+    'medium',
+  ],
+  [
     /Regression since/i,
     'Something that used to work stopped working after a change (the daily self-test caught it): a bug to fix.',
     'high',

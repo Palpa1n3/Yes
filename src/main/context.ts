@@ -20,6 +20,8 @@ export interface MainContext {
   audit: AuditLog;
   /** Claude spending (Settings › AI › Spending). */
   usage: UsageTracker;
+  /** Alton's own speed per version (start-up, replies, memory, CPU). */
+  perf: import('./services/perf-tracker').PerfTracker;
   /** The phone link's state, for the start-up health check (set once it's registered). */
   phoneLink?: () => { wanted: boolean; running: boolean; error: string | null };
   /** Shut down / restart / sleep with a countdown (set once ready). */

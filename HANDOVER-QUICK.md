@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **1.9.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **1.10.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **1.10.0** Phase 3.9 performance (Phase 3 done): `shared/perf.ts` (`addSample`, `summarise`,
+  `compareVersions`, `slowdownText`), `services/perf-tracker.ts` on `ctx.perf` (index.ts: startup
+  on first did-finish-load, memory/CPU every 15 min, slowdown → errors log); assistant.ts times
+  plain Claude replies; RegressionWatch `lastChecks()`; tool `alton_performance`. Phase 4 waits
+  for the owner's go-ahead (as Phase 3 did).
 - **1.9.0** Phase 3.8 docs: `shared/auto-docs.ts` (`purposeOf`, `renderCodebaseDoc`,
   `renderToolsDoc`, `docStale`); tool `update_docs` (assistant.ts; `TOOLS` now exported from
   anthropic-provider); CODEBASE.md + TOOLS.md generated and in .prettierignore. Regenerate them

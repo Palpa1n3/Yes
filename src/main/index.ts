@@ -32,6 +32,7 @@ import { describeRecovery } from '@shared/session';
 import { SettingsStore } from './services/settings-store';
 import { TelemetryService } from './services/telemetry';
 import { runHealthChecks } from './services/health-check';
+import { PerfTracker } from './services/perf-tracker';
 import { SecretStore } from './services/secret-store';
 import { handledChannels } from './ipc/handle';
 import { healthVerdict, rollBackNow } from '@shared/update-health';
@@ -105,6 +106,10 @@ const ctx: MainContext = {
     notices.length = Math.min(notices.length, 20);
   },
   shifts: new ShiftStore(join(app.getPath('userData'), 'shifts.json')),
+  perf: new PerfTracker({
+    file: join(app.getPath('userData'), 'perf.json'),
+    version: () => app.getVersion(),
+  }),
   usage: new UsageTracker({
     file: join(app.getPath('userData'), 'usage.json'),
     budget: () => settings.get().monthlyBudget,
@@ -360,6 +365,8 @@ function createWindow(): BrowserWindow {
 
   // Deliver anything queued (hotkey notices etc.) once the UI can receive it.
   win.webContents.on('did-finish-load', () => {
+    // How long this start took, from the process starting to the window being ready.
+    if (!rendererReady) ctx.perf.record('startupMs', Math.round(process.uptime() * 1000));
     rendererReady = true;
     // Once per run: say if the last session ended badly, and what was interrupted.
     if (lastSession && !recoveryTold) {
@@ -704,3 +711,21 @@ async function startHealthCheck(): Promise<void> {
     if (!r.ok) errors.add('error', 'update', r.message);
   }
 }
+
+// Alton's own memory and CPU every 15 minutes (performance per version); a clear slowdown
+// against the previous version goes in the log, where the self-diagnosis turns it into an idea.
+setInterval(() => {
+  try {
+    const m = app.getAppMetrics();
+    const mem = m.reduce((n, p) => n + (p.memory?.workingSetSize ?? 0), 0) / 1024;
+    const cpu = m.reduce((n, p) => n + (p.cpu?.percentCPUUsage ?? 0), 0);
+    if (mem > 0) ctx.perf.record('memoryMB', Math.round(mem));
+    if (powerMonitor.getSystemIdleTime() > 60) ctx.perf.record('cpuPct', Math.round(cpu * 10) / 10);
+    ctx.perf.save();
+    const slow = ctx.perf.slowdown();
+    if (slow) errors.add('warn', 'perf', slow);
+  } catch {
+    /* not fatal */
+  }
+}, 15 * 60_000).unref?.();
+app.on('will-quit', () => ctx.perf.save());

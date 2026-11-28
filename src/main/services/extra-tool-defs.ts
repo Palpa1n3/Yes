@@ -199,6 +199,16 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'alton_performance',
+    description:
+      'How fast you (Alton) are, measured in real use for each version: start-up time, time to the first word of a reply and the whole reply (plain replies only), memory and CPU while idle; typical (median) and slow (90th percentile) values, compared with the previous version (slower = 25% or more worse, with at least 5 samples each), plus how long the last self-test\'s checks took. Optional against: a version to compare with. Use for "are you slower than before?" or before and after a performance change. (run_benchmark is for the PC\'s own speed.)',
+    input_schema: {
+      type: 'object',
+      properties: { against: { type: 'string' } },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'update_docs',
     description:
       'Your (Alton\'s) own documentation, written automatically from your code: CODEBASE.md (every area and file, what it does, size, what depends on it, test coverage) and TOOLS.md (everything you can do, from your tool definitions). action "status" (default): which are out of date. action "update": writes fresh ones into your development copy; then check it and apply it with apply_self_change (the user approves).',

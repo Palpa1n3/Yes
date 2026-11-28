@@ -3,6 +3,37 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.10.0: Alton keeps an eye on its own speed (Phase 3 complete)
+
+Phase 3 (self-development), item 9, the last one. **Phase 3 is finished.**
+
+- **Alton now measures how fast it really is while you use it,** for each version:
+  - how long it takes to start;
+  - how quickly Claude's replies start and finish;
+  - how much memory and CPU it uses.
+- **Each new version is compared with the one before.** If an update makes Alton clearly slower
+  (25% or more), it notices, notes it in its log, and it shows up in "what would you improve?".
+- Ask **"are you slower than before?"** or **"how fast are you?"**. ("How fast is my PC?" still
+  benchmarks the PC itself.)
+- The numbers build up as you use it, so the first comparison appears after this version and
+  the next one have both been used for a while.
+
+**Phase 3 in short:** Alton can now
+
+1. diagnose itself;
+2. understand its own code;
+3. suggest improvements;
+4. try changes in a safe copy;
+5. test itself daily;
+6. apply changes only with your approval;
+7. track its plan;
+8. write its own docs;
+9. watch its speed.
+
+**What to test**
+
+1. Use Alton normally for a day, then ask "how fast are you?"
+
 ## 1.9.0: Alton writes its own documentation
 
 Phase 3 (self-development), item 8.
