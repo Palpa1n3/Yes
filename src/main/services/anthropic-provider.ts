@@ -60,6 +60,7 @@ const ACTIVITY_TEXT: Record<string, string> = {
   get_optimization_tips: 'Checking the PC…',
   check_minecraft_mods: 'Checking your mods…',
   run_self_test: 'Running my tests…',
+  diagnose_alton: 'Checking myself…',
   start_background_research: 'Starting background research…',
   look_at_all_screens: 'Looking at all your screens…',
 };

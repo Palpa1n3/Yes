@@ -178,6 +178,12 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'diagnose_alton',
+    description:
+      "Diagnose yourself (Alton): reads your whole error log, groups repeated errors into distinct problems with counts, when they started and last happened, a likely cause, and whether they've stopped since the last update; adds the start-up health check. Use when the user says Alton isn't working right, asks what's wrong with you, or before proposing a fix. Read-only. Then read_arc_source to find the cause in the code if needed.",
+    input_schema: none,
+  },
+  {
     name: 'run_self_test',
     description:
       "Run your own (ARC's) automated test suite from the source folder and report what passes or fails. Use when debugging yourself or checking a fix the user applied. Takes up to a few minutes.",

@@ -16,6 +16,8 @@ export interface BootRecord {
   skip: string[];
   /** Set while rolling back, so it's tried once per broken version. */
   rollingBackFrom?: string | null;
+  /** When this version first started. */
+  since?: number;
   /** The last start-up health check of this version (shared/update-health.ts). */
   health?: { at: number; ok: boolean; failed: string[] };
 }
@@ -57,6 +59,7 @@ export function onBoot(
         fails: 0,
         ok: false,
         at: now,
+        since: now,
         skip: rec.skip,
         rollingBackFrom: null,
       },

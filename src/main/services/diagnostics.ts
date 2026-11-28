@@ -50,6 +50,27 @@ export class ErrorLog {
       .length;
   }
 
+  /** Every entry in the log file (and the previous one), oldest first; an entry's extra lines
+   *  (stack traces) stay with it. */
+  history(): string[] {
+    if (!this.file) return [...this.lines];
+    const out: string[] = [];
+    for (const f of [`${this.file}.old`, this.file]) {
+      let text: string;
+      try {
+        text = existsSync(f) ? readFileSync(f, 'utf8') : '';
+      } catch {
+        continue;
+      }
+      for (const raw of text.split(/\r?\n/)) {
+        if (!raw.trim()) continue;
+        if (/^\d{4}-\d{2}-\d{2}T/.test(raw) || !out.length) out.push(raw);
+        else out[out.length - 1] += `\n${raw}`;
+      }
+    }
+    return out.filter((l) => l.trim());
+  }
+
   tail(n = 80): string[] {
     return this.lines.slice(-Math.max(1, Math.min(MAX_LINES, n)));
   }

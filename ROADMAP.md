@@ -201,9 +201,18 @@ meanwhile. PIN authentication stays; no biometrics.
   run. Tests: tests/agent-resume.test.ts, tests/main/agent.test.ts.
 - ✅ PIN authentication retained; biometrics excluded.
 
-## Phase 3: Self-development (gate done in code: waiting for the owner to check the gate items in the real app and say go)
+## Phase 3: Self-development (started 28 Nov 2026 with the owner's go-ahead)
 
-- ⬜ Self-diagnosis and error analysis (partly there: Alton reads its own errors and code).
+- ✅ Self-diagnosis and error analysis (partly there: Alton reads its own errors and code).
+  **1.1.0:** `shared/self-diagnosis.ts` + the `diagnose_alton` tool: reads the whole error log
+  (`ErrorLog.history()`, current + previous file, stack traces kept with their entry), groups
+  repeats into distinct problems (`signature` strips blob ids, uuids, build hashes, numbers,
+  paths), counts them with first/last seen and the first stack frame, explains known causes
+  (security policy, network, Claude key/limits, locked files, full drive, memory, deprecations,
+  uncaught crashes), ranks by severity, and marks problems not seen since this version first
+  started (`BootRecord.since`) as probably fixed; adds the start-up health check. Read-only.
+  On this PC's real log it found 213 entries → one live minor issue (ScriptProcessorNode
+  deprecated, the voice audio) and the old image-policy error correctly marked fixed.
 - ⬜ Source code analysis.
 - ⬜ Autonomous improvement proposals.
 - ⬜ Sandboxed development and testing.

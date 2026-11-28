@@ -3,6 +3,8 @@ import { messageBrief } from '@shared/brain';
 import { factsAbout, findMentions, whosWho } from '@shared/knowledge';
 import { KnowledgeService } from '../services/knowledge';
 import { app, safeStorage } from 'electron';
+import { diagnose, parseLogLine } from '@shared/self-diagnosis';
+import { bootGuard } from '../services/rollback';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
 import { buildSystemPrompt } from '@shared/personalities';
@@ -255,6 +257,18 @@ export function registerAssistantIpc(
             : 'The log is empty: no errors or warnings since ARC started.';
         },
         read_arc_source: (input) => source.tool(input),
+        diagnose_alton: () => {
+          const boot = app.isPackaged ? bootGuard().read() : null;
+          return diagnose({
+            version: app.getVersion(),
+            lines: ctx.errors
+              .history()
+              .map(parseLogLine)
+              .filter((l): l is NonNullable<typeof l> => !!l),
+            ...(boot?.since ? { updatedAt: boot.since } : {}),
+            health: boot?.health ? { ok: boot.health.ok, failed: boot.health.failed } : null,
+          });
+        },
         get_recent_crashes: (input) => recentCrashes(input),
         ...games.tools,
         ...power.tools,

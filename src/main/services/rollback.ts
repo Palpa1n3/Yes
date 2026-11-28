@@ -42,6 +42,7 @@ export class BootGuard {
         at: Number(j.at) || 0,
         skip: Array.isArray(j.skip) ? j.skip.filter((x): x is string => typeof x === 'string') : [],
         rollingBackFrom: typeof j.rollingBackFrom === 'string' ? j.rollingBackFrom : null,
+        ...(typeof j.since === 'number' ? { since: j.since } : {}),
         ...(j.health && typeof j.health === 'object'
           ? {
               health: {

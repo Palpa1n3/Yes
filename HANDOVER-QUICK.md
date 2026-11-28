@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **1.0.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **1.1.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,9 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **1.1.0** Phase 3.1 self-diagnosis: `shared/self-diagnosis.ts` (`parseLogLine`, `signature`,
+  `groupErrors`, `diagnose`); `ErrorLog.history()`; `BootRecord.since`; extra tool
+  `diagnose_alton` (assistant.ts). Phase 3 versions are 1.x. Next: 3.2 source code analysis.
 - **1.0.0** Gate 6 (gate complete): shared/agent.ts `IrreversibleStep`, `priorStep`,
   `SavedAgentTask.irreversible`, `resumeTask` lists them; agent-runner `started()` / `finished()` /
   `settle()`, `opts.prior`, confirm_action refuses done repeats, `guardButton` returns the label

@@ -3,6 +3,28 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.1.0: Alton diagnoses itself
+
+Phase 3 (self-development), item 1.
+
+- **Ask "what's wrong with you?" or "is anything broken?"** Alton now reads its whole error log,
+  not just today's. It:
+  - groups the same error repeated many times into one problem, with how often it happened and
+    when it started and stopped;
+  - says the likely cause in plain words (blocked content, the internet, the Claude key or limits,
+    a locked file, a full drive…);
+  - points out problems that have stopped since the last update, as probably fixed;
+  - includes the start-up health check from 1.0.0.
+- It only reads. Nothing is changed. Fixing things comes in the next items, always with your
+  approval.
+- On your PC right now: one minor thing (the voice audio uses an older browser feature that will
+  be removed one day), and the old "image blocked" error from 22 Nov correctly shows as fixed.
+
+**What to test**
+
+1. Ask Alton "diagnose yourself". It should give a short summary and the minor voice-audio
+   warning.
+
 ## 1.0.0: safe carrying on after a restart (safety gate complete)
 
 Safety gate, item 6 of 6. **All six safety items you asked for are now built and have tests.**
