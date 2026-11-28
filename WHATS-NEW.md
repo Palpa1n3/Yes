@@ -3,6 +3,41 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.99.4: hidden instructions can't make Alton act
+
+Safety gate, item 4 of 6.
+
+Alton already spotted instructions hidden in emails, web pages and documents, and told the AI not
+to follow them. That still depended on the AI listening. **Now Alton enforces it itself, whatever
+the AI says.**
+
+- **In chat:** once Alton has read anything from outside (an email, a web page, a document, your
+  screen, messages, the clipboard), anything risky in that message and the next two needs your
+  **Approve** on a card first. That covers:
+  - posting to Discord or texting;
+  - opening links;
+  - shutting down or sleep timers;
+  - moving files or closing apps;
+  - routines and scheduled tasks;
+  - saving or deleting memories;
+  - buying, or changing mods.
+
+  If you say no or don't answer, it doesn't happen. Ordinary things like volume, timers and notes
+  aren't affected.
+
+- **In Agent Mode:** before clicking, Alton now reads the button under the pointer itself. If it
+  says Send, Pay, Buy, Place order, Delete, Submit, Install, Accept or similar, it asks you first,
+  unless you approved that exact step a moment ago. Pressing Enter on such a button counts too.
+- I tested the button reading on your PC. It worked, and nothing was clicked.
+
+**What to test**
+
+1. Ask Alton to read your latest email and then open a link from it. You should get an
+   **Approve / Deny** card before the link opens.
+2. Ask for something ordinary straight after ("set volume to 30"). No card.
+3. Optional: start an Agent Mode shopping task with "find" only. If it tries to press "Buy it now",
+   it has to ask you.
+
 ## 0.99.3: Alton checks itself after every start
 
 Safety gate, item 3 of 6.

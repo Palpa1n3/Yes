@@ -162,9 +162,22 @@ meanwhile. PIN authentication stays; no biometrics.
   in boot.json; on the last allowed failing start after an update (`rollBackNow`) Alton rolls back
   straight away instead of waiting for the next start. Tests: tests/update-health.test.ts,
   tests/main/health-check.test.ts.
-- ⬜ Stronger prompt injection protection enforced at the tool and permission level (content from
+- ✅ Stronger prompt injection protection enforced at the tool and permission level (content from
   outside can't unlock risky tools: after untrusted content is read, risky actions need the user's
-  explicit approval, whatever the model says).
+  explicit approval, whatever the model says). **0.99.4:** `shared/tool-guard.ts`. Chat: the
+  provider tracks outside content (`OutsideContent`: emails, documents, clipboard, files,
+  calendar, messages, logs, past chats, the screen, and Claude's own web search/fetch) for that
+  turn and the next two; meanwhile every risky tool (`riskyTool`, input-aware: posting/sending,
+  opening links or searches, power and shutdown timers, moving files, closing apps, routines and
+  schedules, paid research, saving or deleting memories, buying, changing mods) waits for main's
+  Approve / Deny card (`ctx.askApproval`); "no", no answer or no way to ask refuses it. An approved
+  action is marked so the window doesn't ask twice. Agent Mode: before a click (or Enter/Space)
+  the input helper reads the UI Automation element there (`labelAt`/`focused`); a button like
+  Send, Pay, Buy, Place order, Delete, Submit, Install, Accept… needs the user's OK unless a
+  confirm_action was approved just before (90 s / 4 actions); "no" stops that step. Limits: Agent
+  Mode typing a line break into a message box isn't a button press and still relies on
+  confirm_action. Tests: tests/tool-guard.test.ts, tests/main/anthropic.test.ts,
+  tests/main/agent.test.ts.
 - ⬜ Optional encrypted backups to a separate storage location (another drive or folder, encrypted
   with a key only on this PC, restorable).
 - ⬜ Safe task resumption that prevents duplicate irreversible actions (resumed tasks know which

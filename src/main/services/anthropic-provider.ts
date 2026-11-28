@@ -3,6 +3,12 @@
  *  (Approve / Cancel, activity log) before its result goes back to the model. */
 import { describeSchedule, describeStep, type Routine } from '@shared/routines';
 import { guardToolResult } from '@shared/injection';
+import {
+  DENIED_AFTER_OUTSIDE,
+  OutsideContent,
+  outsideApproval,
+  riskyTool,
+} from '@shared/tool-guard';
 import { checkFirstNote } from '@shared/confidence';
 import { fmtTime, type CalEvent } from '@shared/calendar';
 import type { Source } from '@shared/chats';
@@ -851,6 +857,9 @@ export interface AnthropicDeps {
   onUsage?(model: string, usage: import('@shared/usage').Usage, feature: string): void;
   /** A tool brought back outside content that looks like instructions to an AI. */
   onInjection?(tool: string, flags: string[]): void;
+  /** The user's Approve / Deny (main's approval card). Without it, risky tools after outside
+   *  content are refused. */
+  approve?(title: string, detail: string): Promise<boolean>;
   /** Injectable for tests. */
   createClient?(apiKey: string): Pick<Anthropic, 'beta' | 'models'>;
 }
@@ -863,6 +872,8 @@ export class AnthropicProvider implements AIProvider {
   private system: string | null = null;
   /** The instructions most recently given (frozen ones, or the last appended update). */
   private lastSystem: string | null = null;
+  /** Outside content read recently: risky tools then need the user's OK (shared/tool-guard.ts). */
+  private readonly outside = new OutsideContent();
 
   constructor(private readonly deps: AnthropicDeps) {}
 
@@ -885,6 +896,7 @@ export class AnthropicProvider implements AIProvider {
 
   reset(): void {
     this.transcript = [];
+    this.outside.reset();
     this.system = null;
     this.lastSystem = null;
   }
@@ -975,6 +987,7 @@ export class AnthropicProvider implements AIProvider {
       };
     }
     this.deps.warm?.();
+    this.outside.newTurn();
     // Defensive: never send a history the API would reject (e.g. a tool call with no result).
     this.transcript = repairTranscript(this.transcript);
     const start = this.transcript.length;
@@ -1094,6 +1107,8 @@ export class AnthropicProvider implements AIProvider {
           throw err;
         }
 
+        // Claude's own web search / fetch brought in outside content.
+        for (const b of message.content) if (b.type === 'server_tool_use') this.outside.saw(b.name);
         if (message.stop_reason === 'refusal') {
           this.transcript.length = start; // drop the declined turn
           yield {
@@ -1129,6 +1144,26 @@ export class AnthropicProvider implements AIProvider {
         this.transcript.push({ role: 'assistant', content: message.content });
         const results: ToolResult[] = [];
         for (const t of toolUses) {
+          // Reading outside content locks risky tools (this call's batch included).
+          this.outside.saw(t.name);
+          let approvedHere = false;
+          const risky = this.outside.active ? riskyTool(t.name, t.input) : null;
+          if (risky) {
+            const a = outsideApproval(risky, this.outside.sources());
+            yield { type: 'activity', text: 'Waiting for your OK…' };
+            const ok = (await this.deps.approve?.(a.title, a.detail).catch(() => false)) ?? false;
+            if (opts.signal?.aborted) return;
+            if (!ok) {
+              results.push({
+                type: 'tool_result',
+                tool_use_id: t.id,
+                is_error: true,
+                content: DENIED_AFTER_OUTSIDE,
+              });
+              continue;
+            }
+            approvedHere = true;
+          }
           const plan = toIntent(t.name, t.input);
           if ('error' in plan) {
             results.push({
@@ -1342,7 +1377,12 @@ export class AnthropicProvider implements AIProvider {
             continue;
           }
           // Show the action in ARC (card, approval, activity log) and wait for its outcome.
-          yield { type: 'intent', intent: plan.intent, toolUseId: t.id };
+          yield {
+            type: 'intent',
+            intent: plan.intent,
+            toolUseId: t.id,
+            ...(approvedHere ? { approved: true } : {}),
+          };
           const outcome: ToolOutcome = opts.runTool
             ? await opts.runTool(t.id, plan.intent)
             : { status: 'failed', message: 'Actions are unavailable.' };

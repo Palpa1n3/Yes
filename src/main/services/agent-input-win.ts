@@ -3,6 +3,7 @@
  *  each answers one line ("ok", "pos X Y" or "err …"). Coordinates are physical pixels. */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { EXTENDED_VK } from '@shared/agent';
+import type { UiPart } from '@shared/tool-guard';
 
 const CS = `
 using System;
@@ -52,6 +53,19 @@ Add-Type -TypeDefinition @'
 ${CS}
 '@
 [ArcInput]::SetProcessDPIAware() | Out-Null
+$uia = $true
+try { Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase } catch { $uia = $false }
+function Describe-Element($e, $depth) {
+  $parts = @()
+  $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+  $i = 0
+  while ($e -ne $null -and $i -lt $depth) {
+    $parts += ($e.Current.ControlType.ProgrammaticName + [char]9 + $e.Current.Name)
+    $e = $walker.GetParent($e)
+    $i++
+  }
+  return 'ui ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($parts -join [char]10)))
+}
 [Console]::Out.WriteLine('ready'); [Console]::Out.Flush()
 while ($true) {
   $line = [Console]::In.ReadLine()
@@ -64,6 +78,8 @@ while ($true) {
       'wheel' { [ArcInput]::Wheel([int]$a[1], [int]$a[2]); $r = 'ok' }
       'key' { [ArcInput]::Key([int]$a[1], $a[2] -eq 'down', $a[3] -eq '1'); $r = 'ok' }
       'type' { [ArcInput]::Type([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($a[1]))); $r = 'ok' }
+      'label' { if (-not $uia) { throw 'no ui automation' }; $pt = New-Object System.Windows.Point([double]$a[1], [double]$a[2]); $r = Describe-Element ([System.Windows.Automation.AutomationElement]::FromPoint($pt)) 3 }
+      'focus' { if (-not $uia) { throw 'no ui automation' }; $r = Describe-Element ([System.Windows.Automation.AutomationElement]::FocusedElement) 1 }
       'pos' { $p = New-Object ArcInput+POINT; [ArcInput]::GetCursorPos([ref]$p) | Out-Null; $r = "pos $($p.X) $($p.Y)" }
       default { $r = 'err unknown' }
     }
@@ -83,6 +99,10 @@ export interface InputBackend {
   key(vk: number, down: boolean): Promise<void>;
   type(text: string): Promise<void>;
   cursor(): Promise<{ x: number; y: number }>;
+  /** What's under a screen point: the element and up to two parents (UI Automation). */
+  labelAt?(x: number, y: number): Promise<UiPart[]>;
+  /** The element with keyboard focus. */
+  focused?(): Promise<UiPart[]>;
   close(): void;
 }
 
@@ -171,10 +191,30 @@ export class WinInput implements InputBackend {
     const [, x, y] = (await this.cmd('pos')).split(' ');
     return { x: Number(x), y: Number(y) };
   }
+  async labelAt(x: number, y: number): Promise<UiPart[]> {
+    return parseUi(await this.cmd(`label ${Math.round(x)} ${Math.round(y)}`));
+  }
+  async focused(): Promise<UiPart[]> {
+    return parseUi(await this.cmd('focus'));
+  }
   close(): void {
     this.proc?.stdin?.end();
     this.proc?.kill();
     this.proc = null;
     this.ready = null;
   }
+}
+
+/** "ui <base64>" → the element parts (type, name), nearest first. */
+export function parseUi(line: string): UiPart[] {
+  const b64 = line.startsWith('ui ') ? line.slice(3).trim() : '';
+  if (!b64) return [];
+  return Buffer.from(b64, 'base64')
+    .toString('utf8')
+    .split(String.fromCharCode(10))
+    .filter(Boolean)
+    .map((l) => {
+      const tab = l.indexOf(String.fromCharCode(9));
+      return tab < 0 ? { type: '', name: l } : { type: l.slice(0, tab), name: l.slice(tab + 1) };
+    });
 }

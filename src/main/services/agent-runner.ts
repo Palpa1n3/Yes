@@ -17,6 +17,13 @@ import {
   type AgentStatus,
 } from '@shared/agent';
 import type { InputBackend } from './agent-input-win';
+import {
+  APPROVAL_COVERS_ACTIONS,
+  APPROVAL_COVERS_MS,
+  clickTarget,
+  riskyButton,
+  type UiPart,
+} from '@shared/tool-guard';
 import { isStaleThinking, stripThinking } from './anthropic-provider';
 
 type Msg = Anthropic.Beta.BetaMessageParam;
@@ -231,6 +238,9 @@ export class AgentRunner {
   private stopped = false;
   private actions = 0;
   private qid = 0;
+  /** The last approved confirm_action: it covers the click that carries it out. */
+  private approvedAt = 0;
+  private approvedActions = 0;
 
   constructor(private readonly d: AgentDeps) {}
 
@@ -464,6 +474,10 @@ export class AgentRunner {
             const q = this.question('confirm', String(input.action ?? ''));
             const ok = await this.d.confirm(q);
             this.answered(ok ? 'Approved' : 'Denied');
+            if (ok) {
+              this.approvedAt = Date.now();
+              this.approvedActions = this.actions;
+            }
             results.push({
               ...base,
               content: ok
@@ -534,6 +548,39 @@ export class AgentRunner {
     }
   }
 
+  /** Enforced in Alton, not left to the AI: about to press a button that sends, pays, deletes,
+   *  installs…? Unless the user approved a step just before, ask them now; a "no" stops the step.
+   *  (Needs the input helper's UI Automation lookup; without it, confirm_action is the only check.) */
+  private async guardButton(how: 'click' | 'press'): Promise<void> {
+    const io = this.d.input;
+    if (how === 'click' ? !io.labelAt : !io.focused) return;
+    let parts: UiPart[];
+    try {
+      if (how === 'click') {
+        const c = await io.cursor();
+        parts = (await io.labelAt?.(c.x, c.y)) ?? [];
+      } else parts = (await io.focused?.()) ?? [];
+    } catch {
+      return; // the lookup failed: confirm_action still applies
+    }
+    const label = riskyButton(clickTarget(parts));
+    if (!label) return;
+    const covered =
+      this.approvedAt > 0 &&
+      Date.now() - this.approvedAt < APPROVAL_COVERS_MS &&
+      this.actions - this.approvedActions <= APPROVAL_COVERS_ACTIONS;
+    if (covered) return;
+    const q = this.question('confirm', `${how === 'click' ? 'Click' : 'Press'} “${label}”`);
+    const ok = await this.d.confirm(q);
+    this.answered(ok ? 'Approved' : 'Denied');
+    if (!ok)
+      throw new Error(
+        `Not done: the user didn't approve pressing “${label}”. Do not try another way to do the same thing; carry on without it or stop with agent_done.`,
+      );
+    this.approvedAt = Date.now();
+    this.approvedActions = this.actions;
+  }
+
   private async click(which: 'left' | 'right' | 'middle', times: number): Promise<void> {
     for (let i = 0; i < times; i++) {
       await this.d.input.button(which, true);
@@ -571,6 +618,7 @@ export class AgentRunner {
           const p = this.point(input.coordinate, size, screen);
           await io.move(p.x, p.y);
         }
+        if (name !== 'right_click') await this.guardButton('click');
         const which =
           name === 'right_click' ? 'right' : name === 'middle_click' ? 'middle' : 'left';
         const times = name === 'double_click' ? 2 : name === 'triple_click' ? 3 : 1;
@@ -645,6 +693,8 @@ export class AgentRunner {
         const esc = codes.includes(0x1b);
         const repeat =
           name === 'key' ? Math.max(1, Math.min(100, Number(input.repeat ?? 1) || 1)) : 1;
+        // Enter or Space on a focused Send / Pay / Delete… button is the same as clicking it.
+        if (codes.includes(0x0d) || codes.includes(0x20)) await this.guardButton('press');
         say(`Pressing ${combo}`);
         if (esc) this.d.escape?.(true);
         try {

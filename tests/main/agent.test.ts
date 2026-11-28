@@ -11,7 +11,7 @@ import {
   type AgentStatus,
 } from '@shared/agent';
 import { AgentRunner, pruneImages, type AgentDeps } from '../../src/main/services/agent-runner';
-import { WinInput, type InputBackend } from '../../src/main/services/agent-input-win';
+import { WinInput, parseUi, type InputBackend } from '../../src/main/services/agent-input-win';
 
 describe('agent phrases', () => {
   it('spots requests and pulls out the task', () => {
@@ -335,5 +335,83 @@ describe('pause and resume', () => {
       r.stop();
     }, 300);
     expect((await p).state).toBe('stopped');
+  });
+});
+
+describe('Agent Mode checks risky buttons itself', () => {
+  const withUi = (name: string) => {
+    const input = fakeInput();
+    input.labelAt = async () => [
+      { type: 'ControlType.Text', name },
+      { type: 'ControlType.Button', name },
+    ];
+    input.focused = async () => [{ type: 'ControlType.Button', name }];
+    return input;
+  };
+
+  it('asks before clicking “Buy it now”, and doesn’t click on “no”', async () => {
+    const { client, requests } = scripted([
+      [use('a', 'left_click', { coordinate: [640, 360] })],
+      [use('z', 'agent_done', { summary: 'stopped', success: false }, false)],
+    ]);
+    const input = withUi('Buy it now');
+    const confirm = vi.fn(async () => false);
+    await new AgentRunner(deps(client, input, { confirm })).run('find a ps5');
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ text: 'Click “Buy it now”' }));
+    expect(input.log).not.toContain('left down');
+    const res = (requests[1]?.messages.at(-1) as { content: Block[] }).content;
+    expect(res[0]).toMatchObject({
+      is_error: true,
+      content: expect.stringMatching(/didn't approve/),
+    });
+  });
+
+  it('a confirm_action approval just before covers the click; ordinary buttons aren’t asked', async () => {
+    const { client } = scripted([
+      [use('a', 'confirm_action', { action: 'Send the email to Sam' }, false)],
+      [use('b', 'left_click', { coordinate: [640, 360] })],
+      [use('z', 'agent_done', { summary: 'sent', success: true }, false)],
+    ]);
+    const input = withUi('Send');
+    const confirm = vi.fn(async () => true);
+    await new AgentRunner(deps(client, input, { confirm })).run('email sam');
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(input.log).toContain('left down');
+
+    const plain = scripted([
+      [use('a', 'left_click', { coordinate: [10, 10] })],
+      [use('z', 'agent_done', { summary: 'ok', success: true }, false)],
+    ]);
+    const c2 = vi.fn(async () => true);
+    const i2 = withUi('Search');
+    await new AgentRunner(deps(plain.client, i2, { confirm: c2 })).run('search');
+    expect(c2).not.toHaveBeenCalled();
+    expect(i2.log).toContain('left down');
+  });
+
+  it('checks Enter on a focused Delete button too', async () => {
+    const { client } = scripted([
+      [use('a', 'key', { text: 'Return' })],
+      [use('z', 'agent_done', { summary: 'ok', success: true }, false)],
+    ]);
+    const input = withUi('Delete');
+    const confirm = vi.fn(async () => false);
+    await new AgentRunner(deps(client, input, { confirm })).run('tidy');
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ text: 'Press “Delete”' }));
+    expect(input.log).not.toContain('key 13 down');
+  });
+});
+
+describe('the input helper’s UI Automation answer', () => {
+  it('reads element types and names, nearest first', () => {
+    const text =
+      ['ControlType.Text', 'Pay now'].join(String.fromCharCode(9)) +
+      String.fromCharCode(10) +
+      ['ControlType.Button', 'Pay now'].join(String.fromCharCode(9));
+    expect(parseUi(`ui ${Buffer.from(text, 'utf8').toString('base64')}`)).toEqual([
+      { type: 'ControlType.Text', name: 'Pay now' },
+      { type: 'ControlType.Button', name: 'Pay now' },
+    ]);
+    expect(parseUi('ui ')).toEqual([]);
   });
 });

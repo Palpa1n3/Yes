@@ -231,6 +231,8 @@ export function registerAssistantIpc(
         ctx.audit.add('action', text, false);
         ctx.errors.add('warn', 'safety', text);
       },
+      // Risky tools after outside content: the user's Approve / Deny card (enforced here, in main).
+      approve: (title, detail) => ctx.askApproval?.(title, detail) ?? Promise.resolve(false),
       extra: {
         look_up: (input) => {
           const q = String((input as { name?: unknown } | null)?.name ?? '').slice(0, 80);

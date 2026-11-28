@@ -607,3 +607,127 @@ const WX: WeatherData = {
   today: { max: 10, min: 3, rainChance: 70, sunrise: null, sunset: null },
   tomorrow: null,
 };
+
+describe('outside content can’t unlock risky tools (enforced in main)', () => {
+  const setup = (approve: (t: string, d: string) => Promise<boolean>, script: Final[]) => {
+    const f = fakeClient(script);
+    const post = vi.fn(() => ({ ok: true }));
+    const p = new AnthropicProvider({
+      getKey: async () => 'k',
+      model: () => 'claude-haiku-5-5',
+      systemPrompt: () => '',
+      info: () => null,
+      stats: snapshot,
+      apps: () => [],
+      createClient: () => f.client,
+      extra: { post_to_discord: post },
+      approve,
+    });
+    return { p, f, post };
+  };
+  const resultsOf = (f: ReturnType<typeof fakeClient>, i: number) =>
+    (f.calls[i]!['messages'] as Array<{ content: unknown }>).at(-1)!.content as Array<{
+      tool_use_id: string;
+      content: string;
+      is_error?: boolean;
+    }>;
+
+  it('asks before a risky tool once an email has been read, and refuses on “no”', async () => {
+    const approve = vi.fn(async () => false);
+    const { p, f, post } = setup(approve, [
+      {
+        content: [toolUse('a', 'get_emails', {}), toolUse('b', 'post_to_discord', { text: 'x' })],
+        stop_reason: 'tool_use',
+      },
+      { content: [text('I did not post it.')], stop_reason: 'end_turn' },
+    ]);
+    await collect(p, 'check my email');
+    expect(approve).toHaveBeenCalledWith(
+      'Alton wants to post a message to Discord',
+      expect.stringMatching(/content from outside \(email list\)/),
+    );
+    expect(post).not.toHaveBeenCalled();
+    const r = resultsOf(f, 1).find((x) => x.tool_use_id === 'b');
+    expect(r).toMatchObject({ is_error: true });
+    expect(r?.content).toMatch(/didn't approve/);
+  });
+
+  it('goes ahead on “yes”, and doesn’t ask when nothing from outside was read', async () => {
+    const approve = vi.fn(async () => true);
+    const { p, post } = setup(approve, [
+      {
+        content: [
+          { type: 'server_tool_use', id: 's1', name: 'web_fetch', input: {} },
+          toolUse('b', 'post_to_discord', { text: 'x' }),
+        ],
+        stop_reason: 'tool_use',
+      },
+      { content: [text('Posted.')], stop_reason: 'end_turn' },
+    ]);
+    await collect(p, 'post the page summary');
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect(post).toHaveBeenCalledTimes(1);
+
+    const fresh = setup(approve, [
+      { content: [toolUse('c', 'post_to_discord', { text: 'y' })], stop_reason: 'tool_use' },
+      { content: [text('Posted.')], stop_reason: 'end_turn' },
+    ]);
+    await collect(fresh.p, 'post hello to discord');
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect(fresh.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks an approved action so the window doesn’t ask twice; ordinary ones aren’t asked', async () => {
+    const { p } = setup(
+      async () => true,
+      [
+        {
+          content: [
+            toolUse('a', 'read_email', { uid: 1 }),
+            toolUse('b', 'open_url', { url: 'https://example.test' }),
+            toolUse('c', 'set_volume', { level: 20 }),
+          ],
+          stop_reason: 'tool_use',
+        },
+        { content: [text('Done.')], stop_reason: 'end_turn' },
+      ],
+    );
+    const out = await collect(p, 'open the link in that email', async () => ({
+      status: 'success',
+      message: 'ok',
+    }));
+    const intents = out.filter((c) => c.type === 'intent') as Array<{
+      intent: { action: string };
+      approved?: boolean;
+    }>;
+    expect(intents.map((i) => [i.intent.action, i.approved ?? false])).toEqual([
+      ['open_url', true],
+      ['set_volume', false],
+    ]);
+  });
+
+  it('refuses risky tools after outside content when there is no way to ask', async () => {
+    const f = fakeClient([
+      {
+        content: [
+          toolUse('a', 'search_documents', { query: 'x' }),
+          toolUse('b', 'forget', { text: 'x' }),
+        ],
+        stop_reason: 'tool_use',
+      },
+      { content: [text('ok')], stop_reason: 'end_turn' },
+    ]);
+    const p = new AnthropicProvider({
+      getKey: async () => 'k',
+      model: () => 'claude-haiku-5-5',
+      systemPrompt: () => '',
+      info: () => null,
+      stats: snapshot,
+      apps: () => [],
+      createClient: () => f.client,
+    });
+    await collect(p, 'find that doc');
+    const res = resultsOf(f, 1);
+    expect(res.find((r) => r.tool_use_id === 'b')).toMatchObject({ is_error: true });
+  });
+});

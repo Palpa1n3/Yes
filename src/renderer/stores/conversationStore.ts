@@ -633,7 +633,7 @@ export const useConversationStore = create<ConversationState>((set, get) => {
               });
             break;
           }
-          const confirm = needsConfirmation(cmd, persona().confirm);
+          const confirm = !chunk.approved && needsConfirmation(cmd, persona().confirm);
           const info: CommandInfo = {
             cmd,
             status: confirm ? 'awaiting' : 'pending',

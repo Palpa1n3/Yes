@@ -97,7 +97,14 @@ export interface RawIntent {
 export type StreamChunk =
   | { type: 'text'; responseId: string; delta: string }
   /** `toolUseId` is set when a real model asked for the action and is waiting for its result. */
-  | { type: 'intent'; responseId: string; intent: RawIntent; toolUseId?: string }
+  | {
+      type: 'intent';
+      responseId: string;
+      intent: RawIntent;
+      toolUseId?: string;
+      /** The user already approved it (Alton's approval card): don't ask again. */
+      approved?: boolean;
+    }
   /** Informational line for the transcript (e.g. "offline, using the mock"). */
   | { type: 'notice'; responseId: string; message: string }
   /** What the model is doing right now ("Searching the web…"). */
