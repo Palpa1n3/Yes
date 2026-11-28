@@ -122,7 +122,7 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
   numbers, names, links or quotes, ask when a request is ambiguous and it matters. Launching apps:
   a loose name that fits several installed apps now asks "Which one?" instead of opening the first.
 
-## Safety gate (next; must be done and tested before Phase 3 or Phase 4 starts)
+## Safety gate (done, 0.99.1–1.0.0; must be done and tested before Phase 3 or Phase 4 starts)
 
 Added by the owner on 27 Nov 2026. Phase 3 (self-development) and Phase 4 (persistent autonomous
 agents) stay switched off until every item here is implemented and has tests. Phase 2 carries on
@@ -188,11 +188,20 @@ meanwhile. PIN authentication stays; no biometrics.
   `alton-backup-key.json` beside the backups, so a new PC can restore with it. Restore checks
   everything before changing anything, backs up current data first, then restarts. Folders inside
   Alton's data are refused; the same drive gets a warning. Tests: tests/main/offsite.test.ts.
-- ⬜ Safe task resumption that prevents duplicate irreversible actions (resumed tasks know which
-  irreversible steps already happened and never repeat them).
+- ✅ Safe task resumption that prevents duplicate irreversible actions (resumed tasks know which
+  irreversible steps already happened and never repeat them). **1.0.0:** Agent Mode keeps a
+  write-ahead record of irreversible steps (`IrreversibleStep` in shared/agent.ts: each approved
+  confirm_action and each press of a Send / Pay / Delete… button is saved to agent-task.json as
+  "started" before it happens and "done" after). On resume (`opts.prior`): a confirm_action
+  matching a done step (`priorStep`, wording ≥ 0.6 alike) is refused without asking; one that was
+  only "started" asks with a "may already have happened" warning; a button pressed before always
+  needs a fresh OK with a warning (never covered by an earlier approval); the resume prompt lists
+  them. Already safe: routines record their run before starting (no repeat at start-up); a
+  scheduled Agent Mode timer is cleared before the task starts, and one overdue by 30+ min isn't
+  run. Tests: tests/agent-resume.test.ts, tests/main/agent.test.ts.
 - ✅ PIN authentication retained; biometrics excluded.
 
-## Phase 3: Self-development (blocked until the safety gate is done)
+## Phase 3: Self-development (gate done in code: waiting for the owner to check the gate items in the real app and say go)
 
 - ⬜ Self-diagnosis and error analysis (partly there: Alton reads its own errors and code).
 - ⬜ Source code analysis.
@@ -204,7 +213,7 @@ meanwhile. PIN authentication stays; no biometrics.
 - ⬜ Automatic documentation.
 - ⬜ Performance benchmarking.
 
-## Phase 4: Persistent agents (blocked until the safety gate is done)
+## Phase 4: Persistent agents (after Phase 3; same go-ahead)
 
 - ⬜ Multiple simultaneous background tasks.
 - ⬜ Pause, resume, edit and cancel tasks.

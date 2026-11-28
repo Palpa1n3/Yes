@@ -3,6 +3,27 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.0.0: safe carrying on after a restart (safety gate complete)
+
+Safety gate, item 6 of 6. **All six safety items you asked for are now built and have tests.**
+
+- **Agent Mode never repeats something it can't undo.** Before an irreversible step (one you
+  approved, or pressing a Send / Pay / Buy / Delete button), Alton saves "about to do this", then
+  "done" afterwards. If the PC restarts in the middle and you carry the task on:
+  - something already done is **refused**, with no question;
+  - something cut off part-way asks you first, warning that it may already have happened;
+  - a button like "Pay now" that was pressed before always needs your OK again.
+- Routines and scheduled tasks were already safe: they're marked as run before they start, so a
+  crash can't make them run twice.
+- **Why 1.0.0:** the safety gate is complete. Self-development (Phase 3) and persistent agents
+  (Phase 4) were waiting on it.
+
+**What to test**
+
+1. Nothing to do now. If Agent Mode is ever interrupted by a restart and you choose to carry on,
+   it should list the steps it already took and not redo them.
+2. Please try the "What to test" items for 0.99.1–0.99.5 below. They're what Phase 3 builds on.
+
 ## 0.99.5: encrypted backups on another drive
 
 Safety gate, item 5 of 6. Optional.

@@ -10,6 +10,8 @@ import {
   agentBusy,
   blockedCombo,
   looksLikeCardNumber,
+  priorStep,
+  type IrreversibleStep,
   parseCombo,
   shotSize,
   toScreen,
@@ -66,6 +68,8 @@ export interface AgentDeps {
   learn?(lesson: string): void;
   /** Spending: each request's token counts. */
   onUsage?(model: string, usage: import('@shared/usage').Usage): void;
+  /** Irreversible steps changed: save them now (before the step happens, and after). */
+  onIrreversible?(steps: IrreversibleStep[]): void;
   /** Wait before the next screenshot so the screen can settle (ms). */
   settleMs?: number;
 }
@@ -140,6 +144,8 @@ export interface AgentOptions {
   shopping?: boolean;
   /** Messages to sellers: send questions without asking ('allow'), ask each time, or never. */
   sellerMessages?: 'allow' | 'ask' | 'block';
+  /** Resuming after a restart: irreversible steps already taken (never repeated). */
+  prior?: IrreversibleStep[];
 }
 
 /** The shopping rules added to Agent Mode's instructions for a shopping task. */
@@ -241,6 +247,11 @@ export class AgentRunner {
   /** The last approved confirm_action: it covers the click that carries it out. */
   private approvedAt = 0;
   private approvedActions = 0;
+  /** Irreversible steps from before a restart, and this run's (saved as they happen). */
+  private prior: IrreversibleStep[] = [];
+  private irrev: IrreversibleStep[] = [];
+  /** An approved step not yet known to have happened. */
+  private pending: IrreversibleStep | null = null;
 
   constructor(private readonly d: AgentDeps) {}
 
@@ -303,6 +314,9 @@ export class AgentRunner {
     this.stopped = false;
     this.pauseWanted = false;
     this.actions = 0;
+    this.prior = opts.prior ?? [];
+    this.irrev = [...this.prior];
+    this.pending = null;
     this.status = {
       ...IDLE_AGENT,
       state: 'running',
@@ -456,6 +470,7 @@ export class AgentRunner {
           this.check();
           const input = (u.input ?? {}) as Record<string, unknown>;
           if (u.name === 'agent_done') {
+            this.settle();
             done = String(input.summary ?? 'Done.');
             if (typeof input.lesson === 'string' && input.lesson.trim())
               this.d.learn?.(input.lesson.trim().slice(0, 200));
@@ -471,12 +486,30 @@ export class AgentRunner {
                 : 'The user did not answer.',
             });
           } else if (u.name === 'confirm_action') {
-            const q = this.question('confirm', String(input.action ?? ''));
+            const action = String(input.action ?? '');
+            this.settle();
+            const before = priorStep(this.prior, { text: action });
+            if (before?.state === 'done') {
+              // Already done before the restart: never again, whatever the AI says.
+              this.set({}, `Refused to repeat: ${before.text}`);
+              results.push({
+                ...base,
+                content: `denied: this was already done before the restart ("${before.text}"). Never repeat it. Check the screen and carry on with the next step, or stop with agent_done.`,
+              });
+              continue;
+            }
+            const q = this.question(
+              'confirm',
+              before
+                ? `⚠ This may already have happened before the restart: ${action}. Do it again?`
+                : action,
+            );
             const ok = await this.d.confirm(q);
             this.answered(ok ? 'Approved' : 'Denied');
             if (ok) {
               this.approvedAt = Date.now();
               this.approvedActions = this.actions;
+              this.pending = this.started(action);
             }
             results.push({
               ...base,
@@ -551,9 +584,9 @@ export class AgentRunner {
   /** Enforced in Alton, not left to the AI: about to press a button that sends, pays, deletes,
    *  installs…? Unless the user approved a step just before, ask them now; a "no" stops the step.
    *  (Needs the input helper's UI Automation lookup; without it, confirm_action is the only check.) */
-  private async guardButton(how: 'click' | 'press'): Promise<void> {
+  private async guardButton(how: 'click' | 'press'): Promise<string | null> {
     const io = this.d.input;
-    if (how === 'click' ? !io.labelAt : !io.focused) return;
+    if (how === 'click' ? !io.labelAt : !io.focused) return null;
     let parts: UiPart[];
     try {
       if (how === 'click') {
@@ -561,16 +594,24 @@ export class AgentRunner {
         parts = (await io.labelAt?.(c.x, c.y)) ?? [];
       } else parts = (await io.focused?.()) ?? [];
     } catch {
-      return; // the lookup failed: confirm_action still applies
+      return null; // the lookup failed: confirm_action still applies
     }
     const label = riskyButton(clickTarget(parts));
-    if (!label) return;
+    if (!label) return null;
+    // Pressed before the restart: always ask, with a warning (never covered by an approval).
+    const before = priorStep(this.prior, { button: label });
     const covered =
+      !before &&
       this.approvedAt > 0 &&
       Date.now() - this.approvedAt < APPROVAL_COVERS_MS &&
       this.actions - this.approvedActions <= APPROVAL_COVERS_ACTIONS;
-    if (covered) return;
-    const q = this.question('confirm', `${how === 'click' ? 'Click' : 'Press'} “${label}”`);
+    if (covered) return label;
+    const q = this.question(
+      'confirm',
+      before
+        ? `⚠ “${label}” was already pressed before the restart${before.state === 'started' ? ' (it may not have gone through)' : ''}. Press it again?`
+        : `${how === 'click' ? 'Click' : 'Press'} “${label}”`,
+    );
     const ok = await this.d.confirm(q);
     this.answered(ok ? 'Approved' : 'Denied');
     if (!ok)
@@ -579,6 +620,32 @@ export class AgentRunner {
       );
     this.approvedAt = Date.now();
     this.approvedActions = this.actions;
+    return label;
+  }
+
+  /** Write-ahead record of an irreversible step: saved before it happens. */
+  private started(text: string, button?: string): IrreversibleStep {
+    const s: IrreversibleStep = {
+      text: text.slice(0, 300),
+      ...(button ? { button } : {}),
+      at: Date.now(),
+      state: 'started',
+    };
+    this.irrev = [...this.irrev, s].slice(-40);
+    this.d.onIrreversible?.(this.irrev);
+    return s;
+  }
+
+  private finished(s: IrreversibleStep): void {
+    s.state = 'done';
+    this.d.onIrreversible?.(this.irrev);
+  }
+
+  /** The approved step is over (the next one is being asked, the task ended, or its button was
+   *  pressed): count it as done. */
+  private settle(): void {
+    if (this.pending) this.finished(this.pending);
+    this.pending = null;
   }
 
   private async click(which: 'left' | 'right' | 'middle', times: number): Promise<void> {
@@ -618,12 +685,17 @@ export class AgentRunner {
           const p = this.point(input.coordinate, size, screen);
           await io.move(p.x, p.y);
         }
-        if (name !== 'right_click') await this.guardButton('click');
+        const pressed = name !== 'right_click' ? await this.guardButton('click') : null;
+        const step = pressed ? this.started(`Pressed “${pressed}”`, pressed) : null;
         const which =
           name === 'right_click' ? 'right' : name === 'middle_click' ? 'middle' : 'left';
         const times = name === 'double_click' ? 2 : name === 'triple_click' ? 3 : 1;
         say(name === 'right_click' ? 'Right-clicking' : times > 1 ? 'Double-clicking' : 'Clicking');
         await this.withMods(input.text, () => this.click(which, times));
+        if (step) {
+          this.finished(step);
+          this.settle();
+        }
         return 'OK';
       }
       case 'left_click_drag': {
@@ -694,7 +766,9 @@ export class AgentRunner {
         const repeat =
           name === 'key' ? Math.max(1, Math.min(100, Number(input.repeat ?? 1) || 1)) : 1;
         // Enter or Space on a focused Send / Pay / Delete… button is the same as clicking it.
-        if (codes.includes(0x0d) || codes.includes(0x20)) await this.guardButton('press');
+        const pressed =
+          codes.includes(0x0d) || codes.includes(0x20) ? await this.guardButton('press') : null;
+        const step = pressed ? this.started(`Pressed “${pressed}”`, pressed) : null;
         say(`Pressing ${combo}`);
         if (esc) this.d.escape?.(true);
         try {
@@ -708,6 +782,10 @@ export class AgentRunner {
           }
         } finally {
           if (esc) this.d.escape?.(false);
+        }
+        if (step) {
+          this.finished(step);
+          this.settle();
         }
         return 'OK';
       }

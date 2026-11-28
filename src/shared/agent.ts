@@ -1,5 +1,6 @@
 /** Agent Mode: Alton operates the PC (screen, mouse, keyboard) to finish a task.
  *  Shared bits: status, trigger phrases, key names → Windows virtual-key codes, safety checks. */
+import { similarity } from './memory-tidy';
 
 export type AgentState = 'idle' | 'running' | 'paused' | 'waiting' | 'done' | 'stopped' | 'error';
 
@@ -251,6 +252,43 @@ export interface SavedAgentTask {
   log: AgentLogItem[];
   startedAt: number;
   savedAt: number;
+  /** Irreversible steps (approved risky steps, presses of Send / Pay / Delete… buttons), saved
+   *  before each one happens ("started") and after ("done"), so a resumed task never repeats them. */
+  irreversible?: IrreversibleStep[];
+}
+
+export interface IrreversibleStep {
+  /** The step, as approved (confirm_action) or "Pressed “Send”". */
+  text: string;
+  /** The button's label, for presses. */
+  button?: string;
+  at: number;
+  /** started: about to happen when the task was cut off (may or may not have happened). */
+  state: 'started' | 'done';
+}
+
+/** How alike a step must be to one done before the restart to count as the same. */
+export const SAME_STEP = 0.6;
+
+/** The irreversible step from before the restart that this one repeats, if any. */
+export function priorStep(
+  prior: IrreversibleStep[] | undefined,
+  o: { text?: string; button?: string },
+): IrreversibleStep | null {
+  if (!prior?.length) return null;
+  const norm = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (o.button) {
+    const b = norm(o.button);
+    return [...prior].reverse().find((p) => p.button && norm(p.button) === b) ?? null;
+  }
+  const t = o.text ?? '';
+  if (!t.trim()) return null;
+  return (
+    [...prior]
+      .reverse()
+      .find((p) => !p.button && (norm(p.text) === norm(t) || similarity(p.text, t) >= SAME_STEP)) ??
+    null
+  );
 }
 
 /** The task to run when carrying on after a restart: the original, plus what was already done
@@ -260,11 +298,21 @@ export function resumeTask(s: SavedAgentTask): string {
     .map((l) => l.text)
     .filter((t) => !/^Task: /.test(t))
     .slice(-15);
+  const irrev = s.irreversible ?? [];
   return [
     s.task,
     '',
     `(This task was interrupted by a restart after step ${s.step}. What had been done so far:`,
     ...done.map((t) => `- ${t}`),
+    ...(irrev.length
+      ? [
+          'Irreversible steps already taken: NEVER repeat these (Alton will refuse to):',
+          ...irrev.map(
+            (i) =>
+              `- ${i.text}${i.state === 'started' ? ' (was starting when the task was cut off: it may or may not have happened; check the screen, and ask the user before trying it again)' : ''}`,
+          ),
+        ]
+      : []),
     'Look at the screen first: some of it may already be finished, and windows may have closed. Carry on from where it got to; don’t redo finished steps.)',
   ].join('\n');
 }

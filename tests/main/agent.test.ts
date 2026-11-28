@@ -415,3 +415,82 @@ describe('the input helper’s UI Automation answer', () => {
     expect(parseUi('ui ')).toEqual([]);
   });
 });
+
+describe('resuming after a restart never repeats irreversible steps', () => {
+  const withUi = (name: string) => {
+    const input = fakeInput();
+    input.labelAt = async () => [{ type: 'ControlType.Button', name }];
+    return input;
+  };
+
+  it('saves each irreversible step before it happens, and again once done', async () => {
+    const { client } = scripted([
+      [use('a', 'left_click', { coordinate: [640, 360] })],
+      [use('z', 'agent_done', { summary: 'ordered', success: true }, false)],
+    ]);
+    const input = withUi('Place order');
+    const saves: Array<{ state: string; clicked: boolean }> = [];
+    await new AgentRunner(
+      deps(client, input, {
+        confirm: async () => true,
+        onIrreversible: (steps) =>
+          saves.push({
+            state: steps.at(-1)?.state ?? '',
+            clicked: input.log.includes('left down'),
+          }),
+      }),
+    ).run('buy it');
+    expect(saves).toEqual([
+      { state: 'started', clicked: false },
+      { state: 'done', clicked: true },
+    ]);
+  });
+
+  it('refuses a step already done before the restart, without asking', async () => {
+    const { client, requests } = scripted([
+      [use('a', 'confirm_action', { action: 'Send the email to Sam' }, false)],
+      [use('z', 'agent_done', { summary: 'ok', success: true }, false)],
+    ]);
+    const confirm = vi.fn(async () => true);
+    await new AgentRunner(deps(client, fakeInput(), { confirm })).run('email sam', {
+      prior: [{ text: 'Send the email to Sam', at: 1, state: 'done' }],
+    });
+    expect(confirm).not.toHaveBeenCalled();
+    const res = (requests[1]?.messages.at(-1) as { content: Block[] }).content;
+    expect(res[0]).toMatchObject({
+      content: expect.stringMatching(/already done before the restart/),
+    });
+  });
+
+  it('asks, with a warning, about a step that was cut off part-way', async () => {
+    const { client } = scripted([
+      [use('a', 'confirm_action', { action: 'send the email to Sam now' }, false)],
+      [use('z', 'agent_done', { summary: 'ok', success: true }, false)],
+    ]);
+    const confirm = vi.fn(async () => false);
+    await new AgentRunner(deps(client, fakeInput(), { confirm })).run('email sam', {
+      prior: [{ text: 'Send the email to Sam', at: 1, state: 'started' }],
+    });
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ text: expect.stringMatching(/may already have happened/) }),
+    );
+  });
+
+  it('a button pressed before the restart always needs a fresh OK', async () => {
+    const { client } = scripted([
+      [use('a', 'confirm_action', { action: 'Pay for the PS5' }, false)],
+      [use('b', 'left_click', { coordinate: [640, 360] })],
+      [use('z', 'agent_done', { summary: 'ok', success: true }, false)],
+    ]);
+    const input = withUi('Pay now');
+    const confirm = vi.fn(async (q: { text: string }) => !/already pressed/.test(q.text));
+    await new AgentRunner(deps(client, input, { confirm })).run('pay', {
+      prior: [{ text: 'Pressed “Pay now”', button: 'Pay now', at: 1, state: 'done' }],
+    });
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(confirm.mock.calls[1]?.[0]).toMatchObject({
+      text: expect.stringMatching(/“Pay now” was already pressed before the restart/),
+    });
+    expect(input.log).not.toContain('left down');
+  });
+});

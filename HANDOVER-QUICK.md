@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.99.5, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **1.0.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,12 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **1.0.0** Gate 6 (gate complete): shared/agent.ts `IrreversibleStep`, `priorStep`,
+  `SavedAgentTask.irreversible`, `resumeTask` lists them; agent-runner `started()` / `finished()` /
+  `settle()`, `opts.prior`, confirm_action refuses done repeats, `guardButton` returns the label
+  and always asks for a button pressed before; ipc/agent.ts `savedTask.steps()` writes
+  agent-task.json immediately (`onIrreversible`), resume passes `prior`. Phase 3 waits for the
+  owner's go-ahead after they've checked the gate items in the app.
 - **0.99.5** Gate 5, encrypted offsite backups: services/offsite-backup.ts (`seal`/`open`
   AES-256-GCM "ALTB1", `bundle`/`unbundle` with SHA-256 + BACKUP_ITEMS-only paths, `wrapKey`
   scrypt N=2^15, `OffsiteBackup.run/newCode/restore/list`); ipc/offsite.ts (IPC.offsite.*,

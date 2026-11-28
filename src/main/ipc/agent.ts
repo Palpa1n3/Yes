@@ -13,6 +13,7 @@ import {
   type AgentQuestion,
   type AgentStatus,
   type SavedAgentTask,
+  type IrreversibleStep,
 } from '@shared/agent';
 import { readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import type { MainContext } from '../context';
@@ -267,6 +268,16 @@ export function registerAgentIpc(
   // The task in progress, saved as it runs (userData/agent-task.json).
   const savedFile = join(app.getPath('userData'), 'agent-task.json');
   let lastSavedStep = -1;
+  /** This task's irreversible steps (written to the file the moment they change). */
+  let irreversible: IrreversibleStep[] = [];
+  const writeSaved = (rec: SavedAgentTask): void => {
+    try {
+      writeFileSync(`${savedFile}.tmp`, JSON.stringify(rec));
+      renameSync(`${savedFile}.tmp`, savedFile);
+    } catch {
+      /* not fatal */
+    }
+  };
   const savedTask = {
     read: (): SavedAgentTask | null => {
       try {
@@ -280,22 +291,30 @@ export function registerAgentIpc(
       // A write per step (not per status change) is plenty.
       if (s.step === lastSavedStep) return;
       lastSavedStep = s.step;
-      const rec: SavedAgentTask = {
+      writeSaved({
         task: s.task,
         step: s.step,
         log: s.log.slice(-30),
         startedAt: s.startedAt,
         savedAt: Date.now(),
-      };
-      try {
-        writeFileSync(`${savedFile}.tmp`, JSON.stringify(rec));
-        renameSync(`${savedFile}.tmp`, savedFile);
-      } catch {
-        /* not fatal */
-      }
+        ...(irreversible.length ? { irreversible } : {}),
+      });
+    },
+    /** Write-ahead: an irreversible step is saved before it happens, then again once done. */
+    steps: (steps: IrreversibleStep[], s: AgentStatus): void => {
+      irreversible = steps.map((x) => ({ ...x }));
+      writeSaved({
+        task: s.task,
+        step: s.step,
+        log: s.log.slice(-30),
+        startedAt: s.startedAt,
+        savedAt: Date.now(),
+        irreversible,
+      });
     },
     clear: (): void => {
       lastSavedStep = -1;
+      irreversible = [];
       rmSync(savedFile, { force: true });
     },
   };
@@ -321,6 +340,7 @@ export function registerAgentIpc(
         runner.stop();
       }
     },
+    onIrreversible: (steps) => savedTask.steps(steps, runner.get()),
     lessons: () => extra.lessons(),
     learn: (l) => extra.learn(l),
     names: () => {
@@ -476,7 +496,7 @@ export function registerAgentIpc(
     const s = savedTask.read();
     if (!s || agentBusy(runner.get())) return runner.get();
     savedTask.clear();
-    return start(resumeTask(s));
+    return start(resumeTask(s), s.irreversible?.length ? { prior: s.irreversible } : {});
   });
   handle(IPC.agent.dismissInterrupted, () => {
     savedTask.clear();
