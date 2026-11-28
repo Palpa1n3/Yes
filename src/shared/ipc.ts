@@ -318,6 +318,14 @@ export const IPC = {
     restore: 'app:restore',
     plugins: 'app:plugins',
   },
+  offsite: {
+    status: 'offsite:status',
+    pickFolder: 'offsite:pick-folder',
+    run: 'offsite:run',
+    newCode: 'offsite:new-code',
+    restore: 'offsite:restore',
+    turnOff: 'offsite:turn-off',
+  },
 } as const;
 
 /** Request/response channels (ipcRenderer.invoke <-> ipcMain.handle). */
@@ -491,6 +499,15 @@ export interface InvokeMap {
   [IPC.app.backups]: { args: []; result: BackupInfo[] };
   [IPC.app.backupNow]: { args: []; result: BackupInfo[] };
   [IPC.app.restore]: { args: [name: string]; result: boolean };
+  [IPC.offsite.status]: { args: []; result: OffsiteStatus };
+  [IPC.offsite.pickFolder]: {
+    args: [];
+    result: { status: OffsiteStatus; result: OffsiteResult | null };
+  };
+  [IPC.offsite.run]: { args: []; result: { status: OffsiteStatus; result: OffsiteResult } };
+  [IPC.offsite.newCode]: { args: []; result: { status: OffsiteStatus; result: OffsiteResult } };
+  [IPC.offsite.restore]: { args: [file: string, code?: string]; result: OffsiteResult };
+  [IPC.offsite.turnOff]: { args: []; result: OffsiteStatus };
   [IPC.app.plugins]: { args: []; result: PluginInfo[] };
 }
 
@@ -924,6 +941,18 @@ export interface ArcAPI {
     exportMd(id: string): Promise<{ ok: boolean; message: string }>;
     onChange(cb: (s: ChatsState) => void): Unsubscribe;
   };
+  /** Encrypted backups to another drive or folder (Settings › Privacy › Backups). */
+  offsite: {
+    status(): Promise<OffsiteStatus>;
+    /** Choose the folder (then backs up straight away). */
+    pickFolder(): Promise<{ status: OffsiteStatus; result: OffsiteResult | null }>;
+    run(): Promise<{ status: OffsiteStatus; result: OffsiteResult }>;
+    /** A new key and recovery code. */
+    newCode(): Promise<{ status: OffsiteStatus; result: OffsiteResult }>;
+    /** Check a copy and put it back, then restart (current data is backed up first). */
+    restore(file: string, code?: string): Promise<OffsiteResult>;
+    turnOff(): Promise<OffsiteStatus>;
+  };
   app: {
     /** Tell main what Alton is doing (taskbar badge, desktop widget). */
     reportState(state: string): void;
@@ -1006,6 +1035,30 @@ export interface RemoteInfo {
   secureUrl?: string | null;
   /** Unencrypted home-Wi-Fi connections allowed too. */
   plainLan?: boolean;
+}
+
+/** An encrypted backup in the chosen folder. */
+export interface OffsiteCopy {
+  file: string;
+  day: string;
+  size: number;
+}
+
+export interface OffsiteResult {
+  ok: boolean;
+  message: string;
+  copy?: OffsiteCopy;
+  /** Only when a key is first made: write it down to restore on another PC. */
+  recoveryCode?: string;
+}
+
+export interface OffsiteStatus {
+  folder: string;
+  /** On the same drive as Alton's data (doesn't protect against that drive failing). */
+  sameDrive: boolean;
+  problem: string | null;
+  copies: OffsiteCopy[];
+  last: { at: number; ok: boolean; message: string } | null;
 }
 
 /** A copy of Alton's data in userData/backups. */

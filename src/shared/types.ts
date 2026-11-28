@@ -328,6 +328,8 @@ export interface Settings {
   sourceDir: string;
   /** The Alton project folder (with git) that the phone can update: unpack + commit + push. */
   projectDir: string;
+  /** Encrypted daily backups go here too, ideally another drive ('' = off). */
+  offsiteFolder: string;
 }
 
 export type AvatarStyle =
@@ -439,6 +441,7 @@ export const DEFAULT_SETTINGS: Settings = {
   holoNotifications: true,
   sourceDir: '',
   projectDir: '',
+  offsiteFolder: '',
   whisper: false,
   followUp: true,
   localModel: '',

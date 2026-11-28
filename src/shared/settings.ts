@@ -216,6 +216,7 @@ export function sanitizeSettings(raw: unknown): Settings {
       : d.avatar,
     sourceDir: str('sourceDir', 400).trim(),
     projectDir: str('projectDir', 400).trim(),
+    offsiteFolder: str('offsiteFolder', 400).trim(),
     whisper: bool('whisper'),
     phoneAccess: bool('phoneAccess'),
     phonePlainLan: bool('phonePlainLan'),

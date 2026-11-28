@@ -300,6 +300,14 @@ const api: ArcAPI = {
     restore: (n) => invoke(IPC.app.restore, n),
     plugins: () => invoke(IPC.app.plugins),
   },
+  offsite: {
+    status: () => invoke(IPC.offsite.status),
+    pickFolder: () => invoke(IPC.offsite.pickFolder),
+    run: () => invoke(IPC.offsite.run),
+    newCode: () => invoke(IPC.offsite.newCode),
+    restore: (f, c) => invoke(IPC.offsite.restore, f, c),
+    turnOff: () => invoke(IPC.offsite.turnOff),
+  },
 };
 
 contextBridge.exposeInMainWorld('arc', api);

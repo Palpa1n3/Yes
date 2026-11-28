@@ -456,6 +456,53 @@ export function installArcMock(): ArcAPI {
       restore: vi.fn(async () => true),
       plugins: vi.fn(async () => []),
     },
+    offsite: {
+      status: vi.fn(async () => ({
+        folder: '',
+        sameDrive: false,
+        problem: 'No folder chosen.',
+        copies: [],
+        last: null,
+      })),
+      pickFolder: vi.fn(async () => ({
+        status: {
+          folder: '',
+          sameDrive: false,
+          problem: 'No folder chosen.',
+          copies: [],
+          last: null,
+        },
+        result: null,
+      })),
+      run: vi.fn(async () => ({
+        status: {
+          folder: '',
+          sameDrive: false,
+          problem: 'No folder chosen.',
+          copies: [],
+          last: null,
+        },
+        result: { ok: false, message: '' },
+      })),
+      newCode: vi.fn(async () => ({
+        status: {
+          folder: '',
+          sameDrive: false,
+          problem: 'No folder chosen.',
+          copies: [],
+          last: null,
+        },
+        result: { ok: false, message: '' },
+      })),
+      restore: vi.fn(async () => ({ ok: false, message: '' })),
+      turnOff: vi.fn(async () => ({
+        folder: '',
+        sameDrive: false,
+        problem: 'No folder chosen.',
+        copies: [],
+        last: null,
+      })),
+    },
   };
   window.arc = api;
   return api;

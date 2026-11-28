@@ -3,6 +3,30 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.99.5: encrypted backups on another drive
+
+Safety gate, item 5 of 6. Optional.
+
+- **New in Settings › Privacy › "Encrypted backups elsewhere":** choose a folder, ideally on
+  another drive or a USB stick. Every day Alton saves an encrypted copy of your data there:
+  settings, notes, memories, routines, chats and so on.
+- **Only this PC can open them,** using a key Windows protects. When you first set it up you get a
+  **recovery code**. Write it down: it's the only way to open the backups on a new PC (for
+  example, if this one dies). Passwords and keys are never included.
+- **Every copy is checked after it's saved** (read back, unlocked and compared). The last 8 days
+  are kept.
+- **Restore** checks the whole backup before changing anything, saves your current data first,
+  then restarts Alton. On a new PC, type the recovery code next to Restore.
+- If you pick a folder on the same drive, Alton warns you that it won't help if that drive fails.
+
+**What to test**
+
+1. Settings › Privacy › Encrypted backups elsewhere › **Choose folder**. Pick a folder on another
+   drive or a USB stick. You should see your recovery code. Write it down, then tap "I've written
+   it down".
+2. That folder should now have "Alton backups" with an `.altonbak` file in it.
+3. Optional: tap **Restore** on today's copy. Alton should restart with everything as it was.
+
 ## 0.99.4: hidden instructions can't make Alton act
 
 Safety gate, item 4 of 6.

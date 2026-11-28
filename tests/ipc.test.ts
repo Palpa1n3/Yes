@@ -39,6 +39,7 @@ describe('IPC channel contract', () => {
         'mods',
         'network',
         'notes',
+        'offsite',
         'previews',
         'remote',
         'routines',

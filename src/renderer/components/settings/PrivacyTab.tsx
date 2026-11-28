@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ActionRecord } from '@shared/audit';
-import type { BackupInfo, RemoteInfo } from '@shared/ipc';
+import type { BackupInfo, OffsiteResult, OffsiteStatus, RemoteInfo } from '@shared/ipc';
 import { useSettingsStore } from '@renderer/stores/settingsStore';
 import type { Settings } from '@shared/types';
 import { Field, Section, Segmented, Toggle } from './controls';
@@ -98,6 +98,7 @@ export function PrivacyTab() {
       </Section>
       <PermissionsSection />
       <BackupsSection />
+      <OffsiteSection />
       <Section title="Emergency stop">
         <p className="py-1 text-[12px] text-text-muted">
           Press <kbd className="text-ice">Ctrl+Alt+Backspace</kbd> anywhere, or say “stop
@@ -230,6 +231,164 @@ function BackupsSection() {
             The first backup is made a minute after start.
           </li>
         )}
+      </ul>
+    </Section>
+  );
+}
+
+/** Encrypted backups to another drive or folder (optional). */
+function OffsiteSection() {
+  const [st, setSt] = useState<OffsiteStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<OffsiteResult | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
+  useEffect(() => void window.arc.offsite.status().then(setSt), []);
+  const act = async (
+    fn: () => Promise<{ status: OffsiteStatus; result: OffsiteResult | null }>,
+  ): Promise<void> => {
+    setBusy(true);
+    try {
+      const r = await fn();
+      setSt(r.status);
+      setMsg(r.result);
+      if (r.result?.recoveryCode) setCode(r.result.recoveryCode);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Section title="Encrypted backups elsewhere">
+      <p className="py-1 text-[12px] text-text-muted">
+        Optional. Every day Alton also saves an encrypted copy of the same data to a folder you
+        choose: best on another drive or a USB stick, so a dead drive doesn’t take your data with
+        it. Only this PC can unlock them, or another PC with your recovery code. Keys and passwords
+        are never included. Each copy is checked after it’s saved; the last 8 are kept.
+      </p>
+      {st?.folder ? (
+        <p className="py-1 font-mono text-[12px] text-text-primary/90">{st.folder}</p>
+      ) : null}
+      {st?.sameDrive ? (
+        <p className="py-1 text-[12px] text-amber">
+          That folder is on the same drive as Alton’s data. It still helps if files get damaged, but
+          not if the drive fails: another drive is better.
+        </p>
+      ) : null}
+      {st?.problem ? <p className="py-1 text-[12px] text-amber">{st.problem}</p> : null}
+      <div className="flex flex-wrap gap-1.5 py-1">
+        <button
+          type="button"
+          className="hud-button"
+          disabled={busy}
+          onClick={() => void act(() => window.arc.offsite.pickFolder())}
+        >
+          {st?.folder ? 'Change folder' : 'Choose folder'}
+        </button>
+        {st?.folder ? (
+          <>
+            <button
+              type="button"
+              className="hud-button"
+              disabled={busy}
+              onClick={() => void act(() => window.arc.offsite.run())}
+            >
+              {busy ? 'Working…' : 'Back up now'}
+            </button>
+            <button
+              type="button"
+              className="hud-button"
+              disabled={busy}
+              title="Makes a new key and recovery code; older copies still need the old code"
+              onClick={() => void act(() => window.arc.offsite.newCode())}
+            >
+              New recovery code
+            </button>
+            <button
+              type="button"
+              className="hud-button"
+              disabled={busy}
+              onClick={() => void window.arc.offsite.turnOff().then(setSt)}
+            >
+              Turn off
+            </button>
+          </>
+        ) : null}
+      </div>
+      {code ? (
+        <div className="my-1 rounded-[6px] border border-amber/60 p-2 text-[12px]">
+          <p className="text-text-primary">
+            Your recovery code. Write it down and keep it somewhere safe (not on this PC). It’s the
+            only way to open these backups on another PC, and it won’t be shown again.
+          </p>
+          <p
+            className="py-1.5 font-mono text-[14px] tracking-wider text-ice"
+            aria-label="Recovery code"
+          >
+            {code}
+          </p>
+          <button type="button" className="hud-button" onClick={() => setCode(null)}>
+            I’ve written it down
+          </button>
+        </div>
+      ) : null}
+      {msg ? (
+        <p className={`py-1 text-[12px] ${msg.ok ? 'text-text-muted' : 'text-amber'}`}>
+          {msg.message}
+        </p>
+      ) : st?.last ? (
+        <p className={`py-1 text-[12px] ${st.last.ok ? 'text-text-muted' : 'text-amber'}`}>
+          Last: {st.last.message}
+        </p>
+      ) : null}
+      <ul className="space-y-1 py-1" aria-label="Encrypted backups">
+        {st?.copies.map((c) => (
+          <li key={c.file} className="flex flex-wrap items-center gap-2 text-[12px]">
+            <span className="flex-1 text-text-primary/90">
+              {c.day}{' '}
+              <span className="text-text-muted">· {(c.size / 1024 ** 2).toFixed(1)} MB</span>
+            </span>
+            {confirm === c.file ? (
+              <>
+                <input
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  placeholder="Recovery code (only on a new PC)"
+                  aria-label="Recovery code for restoring"
+                  className="h-7 w-56 rounded-[6px] border border-line bg-panel-raised px-2 font-mono text-[12px] text-text-primary focus:border-accent focus:outline-none"
+                />
+                <button
+                  type="button"
+                  className="hud-button !border-alert/70 !text-alert"
+                  disabled={busy}
+                  onClick={() => {
+                    setBusy(true);
+                    void window.arc.offsite
+                      .restore(c.file, typed.trim() || undefined)
+                      .then((r) => setMsg(r))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  Restore &amp; restart
+                </button>
+                <button type="button" className="hud-button" onClick={() => setConfirm(null)}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="hud-button"
+                onClick={() => {
+                  setTyped('');
+                  setConfirm(c.file);
+                }}
+              >
+                Restore
+              </button>
+            )}
+          </li>
+        ))}
       </ul>
     </Section>
   );

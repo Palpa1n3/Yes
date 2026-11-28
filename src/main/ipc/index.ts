@@ -14,6 +14,7 @@ import type { MainContext } from '../context';
 import { SkillRegistry, systemReportSkill } from '../services/skills';
 import { toWebUrl } from '../services/command-executor';
 import { registerAppIpc } from './app';
+import { registerOffsiteIpc } from './offsite';
 import { registerAssistantIpc } from './assistant';
 import { registerCommandsIpc } from './commands';
 import { registerInfoIpc } from './info';
@@ -283,6 +284,7 @@ export function registerIpc(ctx: MainContext): void {
   registerVoiceIpc(ctx);
   registerSettingsIpc(ctx);
   registerAppIpc(ctx);
+  registerOffsiteIpc(ctx);
   registerUpdatesIpc(ctx);
   const agent = registerAgentIpc(ctx, {
     lessons: () =>

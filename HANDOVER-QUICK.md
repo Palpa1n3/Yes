@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.99.4, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.99.5, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.99.5** Gate 5, encrypted offsite backups: services/offsite-backup.ts (`seal`/`open`
+  AES-256-GCM "ALTB1", `bundle`/`unbundle` with SHA-256 + BACKUP_ITEMS-only paths, `wrapKey`
+  scrypt N=2^15, `OffsiteBackup.run/newCode/restore/list`); ipc/offsite.ts (IPC.offsite.*,
+  daily at +3 min and every 4 h); setting `offsiteFolder`; UI `OffsiteSection` in PrivacyTab.
+  Next: gate 6 (safe task resumption), then 1.0.0.
 - **0.99.4** Gate 4, tool-level injection guard: `shared/tool-guard.ts` (`UNTRUSTED_TOOLS`,
   `riskyTool`, `OutsideContent` with OUTSIDE_TURNS=3, `outsideApproval`, `clickTarget`,
   `riskyButton`). anthropic-provider: `outside.newTurn()` per send, `saw()` for each tool use and

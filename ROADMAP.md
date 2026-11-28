@@ -178,8 +178,16 @@ meanwhile. PIN authentication stays; no biometrics.
   Mode typing a line break into a message box isn't a button press and still relies on
   confirm_action. Tests: tests/tool-guard.test.ts, tests/main/anthropic.test.ts,
   tests/main/agent.test.ts.
-- ⬜ Optional encrypted backups to a separate storage location (another drive or folder, encrypted
-  with a key only on this PC, restorable).
+- ✅ Optional encrypted backups to a separate storage location (another drive or folder, encrypted
+  with a key only on this PC, restorable). **0.99.5:** `services/offsite-backup.ts` +
+  `ipc/offsite.ts`, Settings › Privacy › "Encrypted backups elsewhere". Daily (and Back up now):
+  the BACKUP_ITEMS files (never *.bin keys) bundled with per-file SHA-256, gzipped, AES-256-GCM
+  into `<folder>/Alton backups/alton-YYYY-MM-DD.altonbak`; each copy is read back, decrypted and
+  hash-checked before it replaces the old one; 8 kept. The random key is stored encrypted by
+  Windows (offsite-key.bin, safeStorage). A recovery code, shown once, wraps the key (scrypt) in
+  `alton-backup-key.json` beside the backups, so a new PC can restore with it. Restore checks
+  everything before changing anything, backs up current data first, then restarts. Folders inside
+  Alton's data are refused; the same drive gets a warning. Tests: tests/main/offsite.test.ts.
 - ⬜ Safe task resumption that prevents duplicate irreversible actions (resumed tasks know which
   irreversible steps already happened and never repeat them).
 - ✅ PIN authentication retained; biometrics excluded.
