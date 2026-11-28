@@ -220,7 +220,15 @@ meanwhile. PIN authentication stays; no biometrics.
   tests that cover it (`testsFor`), where a name is defined and used (`findSymbol`), and an
   overview (areas, biggest files, untested code, TODOs). On this project: 359 files, 73,642 lines,
   136 test files, mapped in about 0.25 s.
-- ⬜ Autonomous improvement proposals.
+- ✅ Autonomous improvement proposals. **1.4.0:** `shared/proposals.ts` + `services/proposals.ts`
+  (userData/proposals.json) + the `improvement_ideas` tool. Weekly (and on "refresh"), Alton
+  turns its own diagnosis and code map into ideas: fixes for recurring or serious log problems
+  (one-off blips skipped), tests for untested code over 300 lines, real `// TODO:` notes, and
+  splitting files over 2,000 lines; each with why, files, effort and priority. Stable ids, so
+  an idea (even a dismissed one) is never suggested twice; accept / dismiss / done. A notice
+  when there are new ideas. Suggestions only: nothing is changed. First ideas on this PC: move
+  the voice audio off the deprecated ScriptProcessorNode (158 warnings), tests for the Cyberpunk
+  mod tool, toolbox and Vortex sync, and splitting the 8,381-line phone app.
 - ⬜ Sandboxed development and testing.
 - ⬜ Automated regression testing.
 - ⬜ Approval-based code modifications.

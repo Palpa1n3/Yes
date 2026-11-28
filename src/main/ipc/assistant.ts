@@ -3,7 +3,9 @@ import { messageBrief } from '@shared/brain';
 import { factsAbout, findMentions, whosWho } from '@shared/knowledge';
 import { KnowledgeService } from '../services/knowledge';
 import { app, safeStorage } from 'electron';
-import { diagnose, parseLogLine } from '@shared/self-diagnosis';
+import { diagnose, parseLogLine, type Diagnosis } from '@shared/self-diagnosis';
+import type { CodeFacts } from '@shared/proposals';
+import { ProposalStore } from '../services/proposals';
 import { bootGuard } from '../services/rollback';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
@@ -80,6 +82,28 @@ export function registerAssistantIpc(
   // source shipped inside the app (resources/source), or the project itself when developing.
   const bundledSource = app.isPackaged ? join(process.resourcesPath, 'source') : app.getAppPath();
   const source = new SourceReader(() => getSettings().sourceDir || bundledSource);
+  /** Alton's own diagnosis (log + start-up check), for diagnose_alton and improvement ideas. */
+  const selfDiagnosis = (): Diagnosis => {
+    const boot = app.isPackaged ? bootGuard().read() : null;
+    return diagnose({
+      version: app.getVersion(),
+      lines: ctx.errors
+        .history()
+        .map(parseLogLine)
+        .filter((l): l is NonNullable<typeof l> => !!l),
+      ...(boot?.since ? { updatedAt: boot.since } : {}),
+      health: boot?.health ? { ok: boot.health.ok, failed: boot.health.failed } : null,
+    });
+  };
+  /** The code's shape (when the source is there), for improvement ideas. */
+  const codeFacts = (): CodeFacts | null => {
+    try {
+      return source.analyze({ action: 'overview' }) as CodeFacts;
+    } catch {
+      return null;
+    }
+  };
+  const ideas = new ProposalStore(join(userData, 'proposals.json'));
   // Learn lasting facts from chats once they go quiet (Claude only, can be switched off).
   const learner = new MemoryLearner({
     client: async () => {
@@ -130,6 +154,23 @@ export function registerAssistantIpc(
   };
   setTimeout(tidy, 2 * 60_000).unref?.();
   setInterval(tidy, 24 * 3600_000).unref?.();
+  // Once a week: Alton looks at its own log and code and notes ideas to improve itself
+  // (suggestions only; nothing changes without the user).
+  const weeklyIdeas = (): void => {
+    if (!ideas.due()) return;
+    try {
+      const fresh = ideas.refresh(selfDiagnosis(), codeFacts());
+      if (fresh.length) {
+        const text = `${getSettings().assistantName} has ${fresh.length} new idea${fresh.length === 1 ? '' : 's'} to improve itself. Ask “what would you improve?” to see ${fresh.length === 1 ? 'it' : 'them'}.`;
+        ctx.audit.add('memory', text);
+        ctx.notify(text);
+      }
+    } catch (err) {
+      ctx.errors.add('warn', 'ideas', `Improvement ideas failed: ${String(err)}`);
+    }
+  };
+  setTimeout(weeklyIdeas, 15 * 60_000).unref?.();
+  setInterval(weeklyIdeas, 24 * 3600_000).unref?.();
   // Memory learning is background work: paused at the monthly limit (Settings › AI › Spending).
   extra.chats.onSaved = (id) => {
     if (!ctx.usage.blocked('memory')) learner.schedule(id);
@@ -258,18 +299,9 @@ export function registerAssistantIpc(
         },
         read_arc_source: (input) => source.tool(input),
         analyze_arc_code: (input) => source.analyze(input),
-        diagnose_alton: () => {
-          const boot = app.isPackaged ? bootGuard().read() : null;
-          return diagnose({
-            version: app.getVersion(),
-            lines: ctx.errors
-              .history()
-              .map(parseLogLine)
-              .filter((l): l is NonNullable<typeof l> => !!l),
-            ...(boot?.since ? { updatedAt: boot.since } : {}),
-            health: boot?.health ? { ok: boot.health.ok, failed: boot.health.failed } : null,
-          });
-        },
+        diagnose_alton: () => selfDiagnosis(),
+        improvement_ideas: (input) =>
+          ideas.tool(input, () => ({ diagnosis: selfDiagnosis(), code: codeFacts() })),
         get_recent_crashes: (input) => recentCrashes(input),
         ...games.tools,
         ...power.tools,

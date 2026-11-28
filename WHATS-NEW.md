@@ -3,6 +3,31 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.4.0: Alton suggests how to improve itself
+
+Phase 3 (self-development), item 3.
+
+- **Once a week Alton looks at its own error log and code and writes down ideas to improve
+  itself:**
+  - fixes for problems that keep happening;
+  - tests for big parts nothing checks;
+  - notes it left unfinished;
+  - files that have got too big.
+    Each idea says why it matters and how big a job it is.
+- **Ask "what would you improve?"** You'll get the list. Accept the ones you like and dismiss the
+  rest; a dismissed idea never comes back. You'll get a notice when there are new ones.
+- These are only suggestions. Alton changes nothing by itself; making approved changes safely is
+  the next part of Phase 3.
+- Its first ideas for itself:
+  - update the voice audio, which uses an old browser feature (158 warnings);
+  - add tests for the Cyberpunk mod tool, the toolbox and Vortex sync;
+  - split up the very large phone app file.
+
+**What to test**
+
+1. Ask Alton "what would you improve about yourself?"
+2. Dismiss one idea, then ask again. It shouldn't come back.
+
 ## 1.3.0: Alton controls your PC lights
 
 You asked for this one.

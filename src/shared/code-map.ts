@@ -76,7 +76,8 @@ export function buildCodeMap(files: SourceFile[]): CodeMap {
     const lines = f.text.split('\n');
     const todos = lines
       .map((t, i) => ({ line: i + 1, text: t.trim() }))
-      .filter((l) => /\b(TODO|FIXME|HACK|XXX)\b/.test(l.text))
+      // A real note in a comment ("// TODO: …", "/* FIXME(…)"), not the word in text or code.
+      .filter((l) => /(\/\/|\/\*+|^\*)\s*(TODO|FIXME|HACK|XXX)\s*[:(]/.test(l.text))
       .slice(0, 20);
     modules.set(f.path, {
       path: f.path,

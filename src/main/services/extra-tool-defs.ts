@@ -199,6 +199,19 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'improvement_ideas',
+    description:
+      'Your (Alton\'s) ideas for improving yourself, made from your own error log and code: fixes for recurring problems, tests for untested parts, unfinished TODOs, very large files. action "list" (open ideas), "refresh" (look again now), "accept" / "dismiss" / "done" with id. Suggestions only: nothing is changed. Use when the user asks what you\'d improve, or whether anything about you needs fixing. Explain each idea simply and let the user pick; a dismissed idea isn\'t suggested again.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['list', 'refresh', 'accept', 'dismiss', 'done'] },
+        id: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'analyze_arc_code',
     description:
       'Analyse your own (Alton\'s) source code as a whole, read-only. action "overview": the areas, biggest files, code with no tests, and TODO/FIXME notes. action "symbol" with name: where a function/class/type/constant is defined and every place it\'s used (file:line). action "file" with path (e.g. src/main/services/email.ts): its exports and imports, what imports it, everything a change to it would affect, and the tests that cover it. Use before explaining how something works, finding a bug\'s cause, or planning a change; then read_arc_source for the actual lines.',
