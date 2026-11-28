@@ -159,4 +159,28 @@ describe('memory clean-up', () => {
     expect(n.state().memoryArchive).toHaveLength(0);
     expect(n.undoMemoryTidy()).toBe(0);
   });
+
+  it('stops a tidy-up that would take out too much at once, changing nothing', () => {
+    const DAY = 86_400_000;
+    let now = 10 * DAY;
+    const n = new NotesStore({ now: () => now });
+    for (const t of [
+      'Dentist appointment at 9:00 tomorrow.',
+      'Football practice starts at 18:30 tomorrow.',
+      'Parcel from Argos arrives tomorrow morning.',
+      'Haircut booked for 14:00 tomorrow.',
+      'Cinema with Sam at 20:00 tomorrow.',
+      'They live in Neath.',
+      'Their favourite game is Cyberpunk 2077.',
+      'They drive a blue Corsa.',
+    ])
+      n.remember(t);
+    const before = n.state().memories.length;
+    now = 20 * DAY;
+    const r = n.tidyMemories();
+    expect(r.merged + r.outOfDate).toBe(0);
+    expect(r.stopped).toMatch(/more than it's allowed to at once\. Nothing was changed\./);
+    expect(n.state().memories).toHaveLength(before);
+    expect(n.state().memoryArchive ?? []).toHaveLength(0);
+  });
 });

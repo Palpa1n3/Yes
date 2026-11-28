@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.99.1, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.99.2, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,11 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.99.2** Gate 2, intended vs actual: `shared/intended.ts`; project-update.ts: `git status
+--porcelain` must be clean, `plannedChanges(root, projectDir)` before robocopy, `git diff
+--cached --name-status` after add, compared non-strictly; a mismatch runs `git reset -q` and
+  returns ok:false. notes-store `tidyMemories()` returns `stopped` (over a third, or a mismatch;
+  restores); assistant.ts audits + notifies. Next: gate 3 (post-update health checks).
 - **0.99.1** Gate 1, shared spending: `SyncToPc.usage` (phone DayUsage[], last 40 days, sent when
   changed) → `/api/import` → `UsageTracker.setPhoneDays` (validated, stored in usage-phone.json,
   replace-not-add; `summary()`/`blocked()` use `withPhoneDays`). `/api/sync` sends

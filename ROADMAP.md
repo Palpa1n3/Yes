@@ -139,9 +139,18 @@ meanwhile. PIN authentication stays; no biometrics.
   The PC's limit applies to both once set; the phone's spending bar shows "(PC + phone)". Per-task
   caps are for Agent Mode, which only runs on the PC. Tests: tests/shared-budget.test.ts,
   tests/main/usage.test.ts, tests/main/phoneApi.test.ts.
-- ⬜ Verification of intended versus actual changes during Alton's own automated operations (each
+- ✅ Verification of intended versus actual changes during Alton's own automated operations (each
   automated job states what it means to change, and the result is compared; mismatches stop it and
-  are reported).
+  are reported). **0.99.2:** `shared/intended.ts` (`compareChanges`: unexpected / missing /
+  different; `describeMismatch`; `parseGitChanges`; `idChanges`). "Update Alton from my phone"
+  (the job Phase 3 builds on) won't start with uncommitted work in the project, lists the files the
+  zip will add or change before copying (`plannedChanges`), and compares that with what git staged
+  before committing: anything else unstages, stops and reports, with nothing committed or pushed.
+  The daily memory tidy-up checks that exactly the planned memories went (else puts everything
+  back) and never takes out more than a third at once; a stop goes to the action history and a
+  notice. Already in place: volume and file-move checks (0.86) and the Cyberpunk mod footprint
+  check (drift). Tests: tests/intended.test.ts, tests/main/projectUpdate.test.ts,
+  tests/main/notes.test.ts.
 - ⬜ Automated post-update health checks beyond successful application startup (key features
   exercised after an update; failures count towards rollback).
 - ⬜ Stronger prompt injection protection enforced at the tool and permission level (content from

@@ -117,7 +117,10 @@ export function registerAssistantIpc(
   // passed (archived; undo in Notes › Memory).
   const tidy = (): void => {
     const r = extra.notes.tidyMemories();
-    if (r.merged || r.outOfDate)
+    if (r.stopped) {
+      ctx.audit.add('memory', r.stopped);
+      ctx.notify(r.stopped);
+    } else if (r.merged || r.outOfDate)
       ctx.audit.add(
         'memory',
         `Tidied memories: merged ${r.merged}, retired ${r.outOfDate} out of date (undo in Notes › Memory)`,

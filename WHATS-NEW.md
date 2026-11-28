@@ -3,6 +3,31 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.99.2: Alton checks its own automatic changes
+
+Safety gate, item 2 of 6.
+
+- **Before an automatic job changes anything, it says what it means to change.** Afterwards Alton
+  compares that with what really changed. If they don't match, the job stops and tells you.
+- **"Update Alton from my phone"** (what self-development will build on later):
+  - it won't start if the project folder on the PC has changes that aren't committed yet, so your
+    own work never gets swept into an update;
+  - it lists exactly which files the zip adds or changes, then checks what's about to be committed
+    against that list;
+  - if anything else changed (say, a file was deleted), it stops and undoes the staging, and
+    **nothing is committed or pushed**.
+- **The daily memory tidy-up** checks it removed exactly the memories it planned to, and puts
+  everything back if not. It also never removes more than a third of your memories in one go.
+  If it stops, you'll see a notice, and the reason goes in the action history.
+- These join the checks Alton already did: volume, moved files, and Cyberpunk mod files.
+
+**What to test**
+
+1. Nothing needs doing. Next time you update from the phone, the log should include "Planned: …
+   files" and "Checked: only the planned files changed".
+2. Optional: edit any file in the project on the PC without committing, then try the phone update.
+   It should refuse and name that file.
+
 ## 0.99.1: one spending limit for the PC and the phone
 
 Safety gate, item 1 of 6.

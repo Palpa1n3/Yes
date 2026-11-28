@@ -18,6 +18,7 @@ import {
   type ArchivedMemory,
 } from '@shared/notes';
 import { SAME_THING, planTidy, similarity, tidyCount } from '@shared/memory-tidy';
+import { compareChanges, describeMismatch, idChanges, type Change } from '@shared/intended';
 
 const str = (v: unknown, n = 300): string =>
   typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
@@ -202,9 +203,19 @@ export class NotesStore {
 
   /** Merge memories that say the same thing and retire ones about a moment that has passed.
    *  What's taken out is archived (undo puts it back). Returns how many of each. */
-  tidyMemories(): { merged: number; outOfDate: number } {
+  tidyMemories(): { merged: number; outOfDate: number; stopped?: string } {
     const plan = planTidy(this.s.memories, this.now());
     if (!tidyCount(plan)) return { merged: 0, outOfDate: 0 };
+    // A tidy-up never takes out more than a third of what Alton remembers in one go.
+    const total = this.s.memories.length;
+    if (tidyCount(plan) > Math.max(3, Math.floor(total / 3)))
+      return {
+        merged: 0,
+        outOfDate: 0,
+        stopped: `Memory tidy-up stopped: it planned to take out ${tidyCount(plan)} of ${total} memories, more than it's allowed to at once. Nothing was changed.`,
+      };
+    const beforeMemories = this.s.memories;
+    const beforeIds = beforeMemories.map((m) => m.id);
     const batch = `t${this.now().toString(36)}`;
     const removedAt = this.now();
     const out = new Map<string, ArchivedMemory['why']>();
@@ -214,6 +225,23 @@ export class NotesStore {
       .filter((m) => out.has(m.id))
       .map((m) => ({ ...m, removedAt, why: out.get(m.id) ?? 'merged', batch }));
     this.s.memories = this.s.memories.filter((m) => !out.has(m.id));
+    // Check: exactly the planned memories went, and nothing else.
+    const intended: Change[] = [...out.keys()].map((target) => ({ target, op: 'delete' }));
+    const check = compareChanges(
+      intended,
+      idChanges(
+        beforeIds,
+        this.s.memories.map((m) => m.id),
+      ),
+    );
+    if (!check.ok || archived.length !== out.size) {
+      this.s.memories = beforeMemories;
+      return {
+        merged: 0,
+        outOfDate: 0,
+        stopped: `${describeMismatch('Memory tidy-up', check)} Everything was put back.`,
+      };
+    }
     this.s.memoryArchive = [...(this.s.memoryArchive ?? []), ...archived].slice(-200);
     this.changed();
     return {
