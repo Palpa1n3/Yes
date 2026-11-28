@@ -128,8 +128,17 @@ Added by the owner on 27 Nov 2026. Phase 3 (self-development) and Phase 4 (persi
 agents) stay switched off until every item here is implemented and has tests. Phase 2 carries on
 meanwhile. PIN authentication stays; no biometrics.
 
-- ⬜ Shared API spending limits across desktop and mobile (one monthly limit and per-task caps
-  covering the PC and the phone app's own Claude use).
+- ✅ Shared API spending limits across desktop and mobile (one monthly limit and per-task caps
+  covering the PC and the phone app's own Claude use). **0.99.1:** the phone sends its daily Claude
+  costs with each sync (`SyncToPc.usage`); the PC keeps them (`usage-phone.json`, replaced each
+  time, never added twice) and counts them in the month's total, the 80%/100% warnings and the
+  at-limit action (`UsageTracker.setPhoneDays`, `shared/usage.ts` `withPhoneDays`). The PC sends
+  back the shared total, limit and action (`SyncFromPc.budget`); between syncs the phone adds what
+  it has spent since (`sharedMonth`) and applies the same rule before each Claude request
+  (`budgetBlock`: "pause everything" stops phone chat; "pause background" stops phone research).
+  The PC's limit applies to both once set; the phone's spending bar shows "(PC + phone)". Per-task
+  caps are for Agent Mode, which only runs on the PC. Tests: tests/shared-budget.test.ts,
+  tests/main/usage.test.ts, tests/main/phoneApi.test.ts.
 - ⬜ Verification of intended versus actual changes during Alton's own automated operations (each
   automated job states what it means to change, and the result is compared; mismatches stop it and
   are reported).

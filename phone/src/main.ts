@@ -166,14 +166,17 @@ import {
 } from '@shared/shifts';
 import {
   addUsage,
+  budgetBlock,
   budgetCrossed,
   costOf,
   fmtUsd,
   budgetFromGbp,
   budgetInGbp,
+  sharedMonth,
   spendLevel,
   summarise,
   type DayUsage,
+  type SharedBudget,
 } from '@shared/usage';
 import {
   APP_TOOLS,
@@ -225,6 +228,8 @@ interface State {
   usage: DayUsage[];
   /** Monthly limit in dollars for a warning (0 = none). */
   budget: number;
+  /** The PC's shared spending figures at the last sync (one limit for both). */
+  sharedBudget: SharedBudget | null;
   /** Saved prompts from the PC (/fix, /summarize...). */
   prompts: SavedPrompt[];
   /** Chats with a message waiting for signal. */
@@ -437,6 +442,7 @@ const DEFAULTS: State = {
   newNotes: [],
   usage: [],
   budget: 0,
+  sharedBudget: null,
   prompts: DEFAULT_PROMPTS,
   queue: [],
   saver: false,
@@ -698,6 +704,17 @@ function applyFromPc(d: SyncFromPc): void {
     chats: mergeChatHistory(S.chats, d.chats),
     pcUrl: d.pcUrl || S.pcUrl,
     macs: d.macs?.length ? d.macs : S.macs,
+    sharedBudget: d.budget
+      ? {
+          month: Math.max(0, Number(d.budget.month) || 0),
+          budget: Math.max(0, Number(d.budget.budget) || 0),
+          action: ['warn', 'pause-background', 'pause-all'].includes(d.budget.action)
+            ? d.budget.action
+            : 'warn',
+          phoneMonthAtSync: summarise(S.usage, 0).month,
+          at: Date.now(),
+        }
+      : S.sharedBudget,
     goals: d.goals ?? S.goals,
     shifts: d.shifts?.length ? mergeShifts(S.shifts, cleanShifts(d.shifts)) : S.shifts,
     notes: [...S.newNotes, ...(d.notes ?? S.notes)],
@@ -825,7 +842,32 @@ function buildHistory(chat: PhoneChat, images: string[]): Anthropic.MessageParam
   });
 }
 
+/** This month's Claude spending and limit. Shared with the PC once it has synced (the PC's limit,
+ *  when set, applies to both); otherwise this phone's own. */
+function spendNow(): {
+  month: number;
+  budget: number;
+  action: SharedBudget['action'];
+  shared: boolean;
+} {
+  const own = summarise(S.usage, S.budget).month;
+  const sb = S.sharedBudget;
+  if (sb && sb.budget > 0)
+    return { month: sharedMonth(sb, own), budget: sb.budget, action: sb.action, shared: true };
+  return { month: own, budget: S.budget, action: 'warn', shared: !!sb };
+}
+
 async function ask(chat: PhoneChat, images: string[]): Promise<void> {
+  {
+    const sp = spendNow();
+    const stop = budgetBlock(sp.month, sp.budget, sp.action, research ? 'research' : 'chat');
+    if (stop) {
+      chat.messages.push({ role: 'assistant', text: stop, at: Date.now() });
+      save();
+      renderMsgs();
+      return;
+    }
+  }
   const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true, maxRetries: 2 });
   const messages = buildHistory(chat, images);
   const reply: PhoneMessage = {
@@ -880,15 +922,16 @@ async function ask(chat: PhoneChat, images: string[]): Promise<void> {
       });
       const msg = await stream.finalMessage();
       {
-        const before = summarise(S.usage, S.budget).month;
+        const before = spendNow();
         S.usage = addUsage(S.usage, costOf(model(), msg.usage), research ? 'research' : 'chat');
-        const crossed = budgetCrossed(before, summarise(S.usage, S.budget).month, S.budget);
+        const after = spendNow();
+        const crossed = budgetCrossed(before.month, after.month, after.budget);
         renderSpend();
         if (crossed)
           toast(
             crossed === 100
-              ? `You've reached this month's limit (${fmtUsd(S.budget)}) on this phone.`
-              : `80% of this month's limit used on this phone.`,
+              ? `You've reached this month's limit (${fmtUsd(after.budget)})${after.shared ? ', PC and phone together' : ' on this phone'}.`
+              : `80% of this month's limit used${after.shared ? ' (PC and phone together)' : ' on this phone'}.`,
           );
       }
       base = reply.text;
@@ -1510,13 +1553,13 @@ function askForShifts(pick = true): void {
 
 /* ── Spending bar under the header: this month's Claude spend on this phone ── */
 function renderSpend(): void {
-  const u = summarise(S.usage, S.budget);
-  const lvl = spendLevel(u.month, S.budget);
+  const u = spendNow();
+  const lvl = spendLevel(u.month, u.budget);
   const t = $('spendText');
-  t.textContent = `· ${S.saver ? '🍃 ' : ''}${fmtUsd(u.month)}${S.budget > 0 ? ` / ${fmtUsd(S.budget)}` : ''} this month`;
+  t.textContent = `· ${S.saver ? '🍃 ' : ''}${fmtUsd(u.month)}${u.budget > 0 ? ` / ${fmtUsd(u.budget)}` : ''} this month${u.shared ? ' (PC + phone)' : ''}`;
   t.className = lvl.tone === 'ok' ? '' : lvl.tone;
   const bar = $('spendBar');
-  bar.hidden = !(S.budget > 0);
+  bar.hidden = !(u.budget > 0);
   bar.className = `spendbar${lvl.tone === 'ok' ? '' : ` ${lvl.tone}`}`;
   $('spendFill').style.width = `${Math.max(2, lvl.pct)}%`;
 }
@@ -1673,7 +1716,10 @@ async function syncWithPc(manual = false): Promise<void> {
     const phone = await phoneStatusNow();
     const pk = JSON.stringify({ ...phone, at: 0 });
     const sendPhone = pk !== lastPhoneSent;
-    if (chats.length || n.m || n.i || n.o || n.t || sendShifts || sendPhone) {
+    const usage = S.usage.slice(-40);
+    const uk = JSON.stringify(usage);
+    const sendUsage = uk !== lastUsageSent;
+    if (chats.length || n.m || n.i || n.o || n.t || sendShifts || sendPhone || sendUsage) {
       const data: SyncToPc = {
         v: 1,
         chats,
@@ -1683,9 +1729,11 @@ async function syncWithPc(manual = false): Promise<void> {
         notes: S.newNotes.slice(0, n.t),
         ...(sendShifts ? { shifts } : {}),
         phone,
+        usage,
       };
       await pcApi(c, 'POST', '/api/import', { data }, 30_000);
       lastPhoneSent = pk;
+      lastUsageSent = uk;
       // Anything added while that was on its way stays for next time.
       S.newMemories = S.newMemories.slice(n.m);
       S.newListItems = S.newListItems.slice(n.i);
@@ -2320,6 +2368,8 @@ function alertRotaChanges(before: Shift[], incoming: Shift[]): void {
 }
 /** Battery, unread messages and the next payday, for the PC's desktop widget and tray. */
 let lastPhoneSent = '';
+/** The phone's Claude costs as last sent to the PC (for the shared limit). */
+let lastUsageSent = '';
 async function phoneStatusNow(): Promise<NonNullable<SyncToPc['phone']>> {
   let battery: number | null = null;
   let charging = false;
@@ -7397,7 +7447,7 @@ function renderSettings(): void {
   $<HTMLInputElement>('pcHttps').value = S.pcHttps;
   const u = summarise(S.usage, S.budget);
   $('spendToday').textContent = fmtUsd(u.today);
-  $('spendMonth').textContent = fmtUsd(u.month);
+  $('spendMonth').textContent = fmtUsd(spendNow().month);
   $<HTMLInputElement>('budget').value = S.budget ? String(budgetInGbp(S.budget)) : '';
 }
 

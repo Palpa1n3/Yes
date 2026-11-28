@@ -304,6 +304,7 @@ export function makePhoneRoutes(
           fishModel: st.fishModel,
           name: st.voiceName,
         },
+        budget: ctx.usage.shared(),
         at: Date.now(),
       };
       return ok({ payload, appUrl: st.phoneAppUrl });
@@ -352,6 +353,7 @@ export function makePhoneRoutes(
         if (typeof n === 'string' && n.trim() && d.notes.addNote(n)) notes++;
       const shifts = ctx.shifts.merge(data.shifts);
       if (data.phone) setPhoneStatus(data.phone);
+      if (data.usage) ctx.usage.setPhoneDays(data.usage);
       // A conversation you've just been having on the phone: say where to carry on with it here.
       const recent = (Array.isArray(data.chats) ? data.chats : [])
         .map((c) => ({

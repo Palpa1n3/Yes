@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.99.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.99.1, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,12 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.99.1** Gate 1, shared spending: `SyncToPc.usage` (phone DayUsage[], last 40 days, sent when
+  changed) → `/api/import` → `UsageTracker.setPhoneDays` (validated, stored in usage-phone.json,
+  replace-not-add; `summary()`/`blocked()` use `withPhoneDays`). `/api/sync` sends
+  `budget: ctx.usage.shared()`; the phone stores `S.sharedBudget` and `spendNow()` = `sharedMonth()`
+  plus the PC's limit/action; `ask()` checks `budgetBlock` first. Versions 0.99.x for gate items;
+  1.0.0 when the gate is done. Next: gate 2 (intended vs actual changes).
 - **0.99** Phase 2 done. `shared/brain.ts` `messageBrief` (model pick + check-first note + facts about
   mentioned entities); anthropic-provider `deps.brief` (replaces `pickModel`; without it, model() and
   `checkFirstNote`); ipc/assistant.ts supplies it with the knowledge graph. Next: the safety gate

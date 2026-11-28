@@ -3,6 +3,28 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.99.1: one spending limit for the PC and the phone
+
+Safety gate, item 1 of 6.
+
+- **One limit for both.** The phone now tells the PC what it has spent on Claude every time they
+  sync, and the PC counts it in your monthly total. Settings › AI › Spending on the PC shows the
+  phone's share as **phone**.
+- **The phone follows the PC's limit.** Once the PC has a limit, the phone uses it too. Between
+  syncs, the phone adds whatever it has spent since. When the limit is reached:
+  - with "pause everything", the phone stops using Claude as well and tells you why;
+  - with "pause background", research on the phone pauses too, but normal chat carries on.
+- The 80% and 100% warnings now count both. The phone's spending bar says **(PC + phone)**.
+- Nothing new leaves your devices. Only the daily cost figures go to your own PC.
+
+**What to test**
+
+1. Chat on the phone, then let it sync with the PC. Settings › AI › Spending on the PC should show
+   a **phone** amount.
+2. The phone's spending bar should read "… this month (PC + phone)" with the PC's limit.
+3. Optional: set a tiny limit on the PC with "pause everything" and sync. The phone should reply
+   with the limit message instead of answering. Afterwards, set the limit back.
+
 ## 0.99.0: everything joined up (Phase 2 complete)
 
 Phase 2, the last item. **Phase 2, "Unified intelligence", is finished.**

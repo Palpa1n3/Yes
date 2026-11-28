@@ -166,3 +166,44 @@ export function projectMonth(month: number, now = new Date()): number {
   const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   return day > 0 ? (month / day) * days : month;
 }
+
+/* ── One limit for the PC and the phone ── */
+
+/** The phone's daily spending added to the PC's (as the feature "phone"). The phone sends its
+ *  whole days each time, so this replaces rather than adds up. */
+export function withPhoneDays(pc: DayUsage[], phone: DayUsage[]): DayUsage[] {
+  const out = new Map(pc.map((d) => [d.day, { ...d, by: { ...d.by } }]));
+  for (const p of phone) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(p.day) || !(p.usd >= 0)) continue;
+    const d = out.get(p.day) ?? { day: p.day, usd: 0, requests: 0, by: {} };
+    d.usd += p.usd;
+    d.requests += p.requests || 0;
+    d.by.phone = (d.by.phone ?? 0) + p.usd;
+    out.set(p.day, d);
+  }
+  return [...out.values()].sort((a, b) => a.day.localeCompare(b.day)).slice(-92);
+}
+
+/** What the PC told the phone at the last sync. */
+export interface SharedBudget {
+  /** PC + phone spending this month, in dollars, when the PC last synced. */
+  month: number;
+  budget: number;
+  action: 'warn' | 'pause-background' | 'pause-all';
+  /** The phone's own month total at that moment (so spending since can be added). */
+  phoneMonthAtSync: number;
+  at: number;
+}
+
+/** This month's spending across both, on the phone: the PC's last figure plus what the phone has
+ *  spent since (a new month starts again from the phone's own figure). */
+export function sharedMonth(
+  s: SharedBudget | null,
+  phoneMonthNow: number,
+  now = new Date(),
+): number {
+  if (!s) return phoneMonthNow;
+  const sameMonth = dayKey(new Date(s.at)).slice(0, 7) === dayKey(now).slice(0, 7);
+  if (!sameMonth) return phoneMonthNow;
+  return s.month + Math.max(0, phoneMonthNow - s.phoneMonthAtSync);
+}

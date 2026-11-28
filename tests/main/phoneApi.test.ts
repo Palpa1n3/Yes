@@ -1,4 +1,5 @@
 import { ShiftStore } from '../../src/main/services/shift-store';
+import { UsageTracker } from '../../src/main/services/usage-tracker';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,6 +23,7 @@ function setup() {
     command,
     audit: { add: vi.fn() },
     shifts: new ShiftStore(),
+    usage: new UsageTracker({ budget: () => 2, action: () => 'pause-all' }),
     settings: { get: () => ({ ...DEFAULT_SETTINGS, screenAware: false }) },
     timers: {
       list: () => timers,
@@ -61,6 +63,25 @@ function setup() {
 }
 
 describe('phone-only app sync', () => {
+  it('shares one spending limit: takes the phone’s costs and sends back the total', async () => {
+    const { call } = setup();
+    const today = new Date();
+    const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    await call('POST', '/api/import', {
+      data: {
+        v: 1,
+        chats: [],
+        memories: [],
+        listItems: [],
+        usage: [{ day, usd: 0.75, requests: 3, by: {} }],
+      },
+    });
+    const s = (await call('GET', '/api/sync', {}, 'pc=http://192.168.1.5:47615')) as {
+      json: { payload: { budget?: { month: number; budget: number; action: string } } };
+    };
+    expect(s.json.payload.budget).toEqual({ month: 0.75, budget: 2, action: 'pause-all' });
+  });
+
   it('gives the phone memories, lists, chats and the MAC, and takes phone chats back', async () => {
     const { call, chats } = setup();
     const c = chats.create();

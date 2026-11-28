@@ -80,3 +80,28 @@ describe('spending estimates', () => {
     expect(t.summary().byFeature.agent).toBeCloseTo(0.2);
   });
 });
+
+describe('one spending limit for the PC and the phone (tracker)', () => {
+  it('counts the phone’s costs in the total and the limit, and keeps them after a restart', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'arc-usage-')), 'usage.json');
+    const now = () => new Date(2026, 10, 28, 12);
+    const warn = vi.fn();
+    const t = new UsageTracker({ file, budget: () => 1, action: () => 'pause-all', warn, now });
+    expect(t.blocked('chat')).toBeNull();
+    t.setPhoneDays([{ day: '2026-11-28', usd: 1.2, requests: 4, by: { chat: 1.2 } }]);
+    expect(t.summary().month).toBeCloseTo(1.2);
+    expect(t.summary().byFeature.phone).toBeCloseTo(1.2);
+    expect(t.blocked('chat')).toMatch(/limit/);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/counting the phone/));
+    expect(t.shared()).toEqual({ month: 1.2, budget: 1, action: 'pause-all' });
+    // Sending the same days again replaces them, never doubles them.
+    t.setPhoneDays([{ day: '2026-11-28', usd: 1.2, requests: 4, by: {} }]);
+    expect(t.summary().month).toBeCloseTo(1.2);
+    // Junk from the phone is ignored.
+    t.setPhoneDays([{ day: '2026-11-28', usd: -5 }, { day: 3, usd: 'x' }, null]);
+    expect(t.summary().month).toBe(0);
+    t.setPhoneDays([{ day: '2026-11-28', usd: 0.4, requests: 1, by: {} }]);
+    const again = new UsageTracker({ file, budget: () => 1, now });
+    expect(again.summary().month).toBeCloseTo(0.4);
+  });
+});

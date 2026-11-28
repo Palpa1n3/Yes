@@ -125,6 +125,9 @@ export interface SyncFromPc {
   personality?: import('./personalities').Personality;
   /** Voice corrections learnt on the PC. */
   voiceFixes?: Array<{ heard: string; meant: string }>;
+  /** One Claude spending limit for both: this month's total (PC + phone), the limit (0 = none) and
+   *  what happens at it. */
+  budget?: { month: number; budget: number; action: 'warn' | 'pause-background' | 'pause-all' };
   at: number;
 }
 
@@ -142,6 +145,8 @@ export interface SyncToPc {
   shifts?: import('./shifts').Shift[];
   /** Battery, unread messages and the next payday, for the PC's desktop widget and tray. */
   phone?: import('./desk').PhoneStatus;
+  /** The phone's own Claude costs per day (for the shared spending limit). */
+  usage?: import('./usage').DayUsage[];
 }
 
 /* ── Encoding for the URL fragment (never sent to any server) ─────────────── */
