@@ -3,6 +3,26 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.2.0: Alton understands its own code
+
+Phase 3 (self-development), item 2.
+
+- **Alton can now look at its code as a whole,** not just one file at a time. Ask:
+  - **"How is your code organised?"** It shows the main areas, the biggest files, the parts with
+    no tests, and anything marked as unfinished.
+  - **"Where do you handle email?"** or **"what uses the spending limit?"** It shows where
+    something is defined and every place it's used.
+  - **"What would changing the email code affect?"** It shows every part that depends on it, and
+    which tests check it.
+- This is what self-improvement builds on: before suggesting a change, Alton can see what it
+  would touch and how it would be tested.
+- It only reads. On your copy: 359 files and about 74,000 lines, mapped in a quarter of a second.
+
+**What to test**
+
+1. Ask Alton "which parts of your code have no tests?" It should list some (Cyberpunk mods is the
+   biggest).
+
 ## 1.1.0: Alton diagnoses itself
 
 Phase 3 (self-development), item 1.

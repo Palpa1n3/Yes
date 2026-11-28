@@ -61,6 +61,7 @@ const ACTIVITY_TEXT: Record<string, string> = {
   check_minecraft_mods: 'Checking your mods…',
   run_self_test: 'Running my tests…',
   diagnose_alton: 'Checking myself…',
+  analyze_arc_code: 'Reading my code…',
   start_background_research: 'Starting background research…',
   look_at_all_screens: 'Looking at all your screens…',
 };

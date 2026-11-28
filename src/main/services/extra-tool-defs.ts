@@ -178,6 +178,20 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'analyze_arc_code',
+    description:
+      'Analyse your own (Alton\'s) source code as a whole, read-only. action "overview": the areas, biggest files, code with no tests, and TODO/FIXME notes. action "symbol" with name: where a function/class/type/constant is defined and every place it\'s used (file:line). action "file" with path (e.g. src/main/services/email.ts): its exports and imports, what imports it, everything a change to it would affect, and the tests that cover it. Use before explaining how something works, finding a bug\'s cause, or planning a change; then read_arc_source for the actual lines.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['overview', 'symbol', 'file'] },
+        name: { type: 'string' },
+        path: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'diagnose_alton',
     description:
       "Diagnose yourself (Alton): reads your whole error log, groups repeated errors into distinct problems with counts, when they started and last happened, a likely cause, and whether they've stopped since the last update; adds the start-up health check. Use when the user says Alton isn't working right, asks what's wrong with you, or before proposing a fix. Read-only. Then read_arc_source to find the cause in the code if needed.",

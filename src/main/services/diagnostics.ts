@@ -11,6 +11,15 @@ import {
   writeFileSync,
 } from 'node:fs';
 import type { ActionRecord } from '@shared/audit';
+import {
+  buildCodeMap,
+  dependents,
+  findSymbol,
+  overview,
+  testsFor,
+  type CodeMap,
+  type SourceFile,
+} from '@shared/code-map';
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 
 const MAX_LINES = 500;
@@ -241,6 +250,57 @@ export class SourceReader {
       });
     }
     return hits;
+  }
+
+  private cached: { at: number; files: SourceFile[]; map: CodeMap } | null = null;
+
+  /** Alton's own code files (src, tests, phone app, scripts), mapped; kept for a minute. */
+  codeMap(now = Date.now()): { files: SourceFile[]; map: CodeMap } {
+    if (this.cached && now - this.cached.at < 60_000) return this.cached;
+    const base = this.base();
+    const files: SourceFile[] = [];
+    for (const f of this.files(4000)) {
+      if (!/^(src|tests|phone\/src|scripts)\//.test(f) || !/\.(ts|tsx|js|mjs|cjs)$/.test(f))
+        continue;
+      try {
+        const p = join(base, f);
+        if (statSync(p).size > 400 * 1024) continue;
+        files.push({ path: f, text: readFileSync(p, 'utf8') });
+      } catch {
+        /* unreadable: skipped */
+      }
+    }
+    this.cached = { at: now, files, map: buildCodeMap(files) };
+    return this.cached;
+  }
+
+  /** The analyze_arc_code tool. */
+  analyze(input: unknown): unknown {
+    const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+    const action = typeof o.action === 'string' ? o.action : 'overview';
+    const name = typeof o.name === 'string' ? o.name.trim().slice(0, 80) : '';
+    const path =
+      typeof o.path === 'string' ? o.path.trim().replace(/\\/g, '/').replace(/^\.\//, '') : '';
+    const { files, map } = this.codeMap();
+    switch (action) {
+      case 'symbol':
+        if (!name) return { error: 'Give the name of a function, class, type or constant.' };
+        return { name, ...findSymbol(map, files, name) };
+      case 'file': {
+        const m = map.modules.get(path);
+        if (!m)
+          return { error: `No code file ${path}. Use overview or read_arc_source to find it.` };
+        const deps = dependents(map, path);
+        return {
+          ...m,
+          importedBy: map.importedBy.get(path) ?? [],
+          affects: deps.filter((p) => !map.modules.get(p)?.test).slice(0, 40),
+          tests: testsFor(map, path),
+        };
+      }
+      default:
+        return overview(map);
+    }
   }
 
   /** The read_arc_source tool. */

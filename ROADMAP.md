@@ -213,7 +213,13 @@ meanwhile. PIN authentication stays; no biometrics.
   started (`BootRecord.since`) as probably fixed; adds the start-up health check. Read-only.
   On this PC's real log it found 213 entries → one live minor issue (ScriptProcessorNode
   deprecated, the voice audio) and the old image-policy error correctly marked fixed.
-- ⬜ Source code analysis.
+- ✅ Source code analysis. **1.2.0:** `shared/code-map.ts` + the `analyze_arc_code` tool
+  (`SourceReader.codeMap()`, cached a minute): every code file in src, tests, phone/src and
+  scripts with its imports (aliases, relative paths and index files resolved), exports and
+  TODO/FIXME lines; what imports each file, everything a change would reach (`dependents`), the
+  tests that cover it (`testsFor`), where a name is defined and used (`findSymbol`), and an
+  overview (areas, biggest files, untested code, TODOs). On this project: 359 files, 73,642 lines,
+  136 test files, mapped in about 0.25 s.
 - ⬜ Autonomous improvement proposals.
 - ⬜ Sandboxed development and testing.
 - ⬜ Automated regression testing.

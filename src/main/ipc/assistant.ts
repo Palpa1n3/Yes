@@ -257,6 +257,7 @@ export function registerAssistantIpc(
             : 'The log is empty: no errors or warnings since ARC started.';
         },
         read_arc_source: (input) => source.tool(input),
+        analyze_arc_code: (input) => source.analyze(input),
         diagnose_alton: () => {
           const boot = app.isPackaged ? bootGuard().read() : null;
           return diagnose({
