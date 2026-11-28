@@ -199,6 +199,20 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'apply_self_change',
+    description:
+      'Put a change you (Alton) made and checked in your development copy into the real project, with the user\'s approval. action "apply" with message (a short plain description, e.g. "Update the voice audio to AudioWorklet"): only works when every check ran after your last edit and nothing new failed, the project has no uncommitted work, and it\'s at the same version the copy started from; the user approves; it\'s applied, verified file by file and committed (not pushed). action "push": send that commit to GitHub (starts a release build; the user approves again). action "revert": undo the latest Alton self-change with a new commit (approved). Explain the change in plain words before applying.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['apply', 'push', 'revert'] },
+        message: { type: 'string' },
+      },
+      required: ['action'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'self_test',
     description:
       'Your (Alton\'s) automatic regression tests: once a day, while the PC is idle, a fresh copy of your project\'s last commit is fully checked (typecheck, lint, every test) and compared with the run before, so anything that used to work and now fails is caught and named. action "status" (latest results and the last week), "run" (now; about a minute). Read-only for the real project.',

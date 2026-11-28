@@ -3,6 +3,30 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.7.0: Alton can improve itself, with your say-so
+
+Phase 3 (self-development), item 6. Alton can now go all the way: spot something to improve,
+change it in its development copy, test it, and put it into its real code. **Only with your
+approval, at each step that matters.**
+
+- **Before it even asks you,** a change has to pass every check after its last edit, with nothing
+  newly broken.
+- **Your own work is never mixed in.** If your project has uncommitted changes, or has moved on
+  since Alton made its copy, it refuses and says why.
+- **You approve the change.** The card shows what it does, which files, and the test results.
+  Alton then applies it, checks that exactly those files changed and nothing else (otherwise it
+  undoes it), and saves it as an "Alton self-change".
+- **Pushing it to GitHub,** which starts a new release, is a **separate approval**.
+- **Changed your mind?** "Undo your last change" reverses it (asking you first).
+
+**What to test**
+
+1. Ask Alton "what would you improve?", pick a small idea, and say "go ahead and do it".
+   - It should change and test it in its copy.
+   - Then it asks to apply it, and separately whether to push.
+2. Say no at the push step. The change stays in your project folder only. Then say "undo your
+   last change".
+
 ## 1.6.0: Alton tests itself every day
 
 Phase 3 (self-development), item 5.

@@ -251,7 +251,18 @@ meanwhile. PIN authentication stays; no biometrics.
   "check" now reports `newFailures` against the last self-test, so a change is judged by
   "nothing new broke"; committed code (no changes) runs without asking, changed code still asks.
   First real run on this PC: commit 1b5475b, 792 of 792 tests passed.
-- ⬜ Approval-based code modifications.
+- ✅ Approval-based code modifications. **1.7.0:** `services/self-change.ts` `SelfChange` + the
+  `apply_self_change` tool. A change from the development copy reaches the real project only
+  when: the copy is `ready()` (every check ran after the last edit, typecheck and lint passed,
+  tests ran, no new failures against the self-test baseline); the project has no uncommitted
+  work and is at the commit the copy started from; the user approves (summary, files, results).
+  Then `git apply --check` / `--index`, and what git staged is compared strictly with the copy's
+  own name-status (gate 2): any difference resets to HEAD (safe: the tree was clean). Committed
+  as "Alton self-change: …"; pushing is a second approval; "revert" undoes the latest Alton
+  self-change with a new commit (approved, never pushed by itself). Counts as risky after outside
+  content (gate 4). Tests run against a real throwaway git repo
+  (tests/main/self-change.test.ts); they caught that the command runner's trimmed output broke
+  the patch's final newline (fixed).
 - ⬜ Development roadmap management (partly there: Notes › "Alton roadmap").
 - ⬜ Automatic documentation.
 - ⬜ Performance benchmarking.

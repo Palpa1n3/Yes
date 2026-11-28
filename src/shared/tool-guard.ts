@@ -82,6 +82,8 @@ export function riskyTool(name: string, input: unknown): string | null {
       return field(input, 'goal') === 'find' ? null : 'make an offer or buy something';
     case 'minecraft_build':
       return field(input, 'action') === 'build' ? 'build in Minecraft' : null;
+    case 'apply_self_change':
+      return 'change its own code in your project';
     case 'dev_sandbox':
       return field(input, 'action') === 'check' ? 'run tests on its changed code' : null;
     case 'cyberpunk_mods':

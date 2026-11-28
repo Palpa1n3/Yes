@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **1.6.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **1.7.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,10 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **1.7.0** Phase 3.6 approval-based changes: `services/self-change.ts` (`apply` / `push` /
+  `revert`, `SELF_CHANGE_PREFIX`); DevSandbox `ready()`, `patch()` (newline-terminated),
+  `nameStatus()`, `changedAt` / `lastResult`; tool `apply_self_change` (assistant.ts); tool-guard
+  marks it risky. Next: 3.7 roadmap management, 3.8 automatic documentation, 3.9 benchmarking.
 - **1.6.0** Phase 3.5 regression testing: `shared/regression.ts` (`parseVitestJson`,
   `compareRuns`, `describeRun`, `newAgainstBaseline`), `services/regression.ts`
   `RegressionWatch` (regression.json; own sandbox root dev-sandbox-selftest); DevSandbox

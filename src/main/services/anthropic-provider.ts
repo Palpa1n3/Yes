@@ -66,6 +66,7 @@ const ACTIVITY_TEXT: Record<string, string> = {
   improvement_ideas: 'Thinking about how to improve…',
   dev_sandbox: 'Working on my development copy…',
   self_test: 'Testing myself…',
+  apply_self_change: 'Updating my code…',
   start_background_research: 'Starting background research…',
   look_at_all_screens: 'Looking at all your screens…',
 };

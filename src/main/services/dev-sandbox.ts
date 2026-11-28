@@ -51,6 +51,9 @@ export class DevSandbox {
   private changed = new Set<string>();
   private allowedToRun = false;
   private lastChecks: SandboxCheck[] = [];
+  /** When files last changed, and the last check (to know a change was checked after its edits). */
+  private changedAt = 0;
+  private lastResult: { at: number; result: CheckResult; newFailures: string[] } | null = null;
 
   constructor(
     private readonly d: {
@@ -143,6 +146,7 @@ export class DevSandbox {
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, content);
     this.changed.add(path.replace(/\\/g, '/'));
+    this.changedAt = this.d.now?.() ?? Date.now();
     return `Wrote ${path} in the copy.`;
   }
 
@@ -153,6 +157,7 @@ export class DevSandbox {
     if ('error' in r) throw new Error(r.error);
     writeFileSync(abs, r.text);
     this.changed.add(path.replace(/\\/g, '/'));
+    this.changedAt = this.d.now?.() ?? Date.now();
     return `Changed ${path} in the copy.`;
   }
 
@@ -160,6 +165,7 @@ export class DevSandbox {
     const abs = this.inside(path);
     rmSync(abs, { force: true });
     this.changed.add(path.replace(/\\/g, '/'));
+    this.changedAt = this.d.now?.() ?? Date.now();
     return `Deleted ${path} in the copy.`;
   }
 
@@ -200,18 +206,72 @@ export class DevSandbox {
       if (r.code !== 0 && !o.all) break;
     }
     this.lastChecks = checks;
+    const checkedAt = this.d.now?.() ?? Date.now();
     let tests: CheckResult['tests'] = null;
     try {
       if (existsSync(report)) tests = parseVitestJson(readFileSync(report, 'utf8'));
     } catch {
       tests = null;
     }
-    return {
+    const result: CheckResult = {
       ok: checks.length === SANDBOX_CHECKS.length && checks.every((c) => c.ok),
       checks,
       tests,
       commit: await this.head(),
     };
+    this.lastResult = { at: checkedAt, result, newFailures: tests?.failed ?? [] };
+    return result;
+  }
+
+  /** Record which failures were new against the baseline (set by the tool after a check). */
+  private noteNewFailures(list: string[]): void {
+    if (this.lastResult) this.lastResult.newFailures = list;
+  }
+
+  /** Is the copy ready to go into the real project? Its changes were all checked after the last
+   *  edit: typecheck and lint passed, the tests ran, and nothing new failed. */
+  ready(): { ok: true; result: CheckResult; changed: string[] } | { ok: false; why: string } {
+    if (!this.dir) return { ok: false, why: 'There is no development copy.' };
+    if (!this.changed.size) return { ok: false, why: 'Nothing has been changed in the copy.' };
+    const r = this.lastResult;
+    if (!r || r.at < this.changedAt)
+      return { ok: false, why: 'Run "check" after the last change first.' };
+    const failed = r.result.checks.filter((c) => !c.ok && c.name !== 'Tests').map((c) => c.name);
+    if (failed.length) return { ok: false, why: `These checks failed: ${failed.join(', ')}.` };
+    if (!r.result.tests) return { ok: false, why: "The tests didn't run." };
+    if (r.newFailures.length)
+      return { ok: false, why: `New test failures: ${r.newFailures.slice(0, 5).join('; ')}.` };
+    return { ok: true, result: r.result, changed: [...this.changed] };
+  }
+
+  /** Each changed file and how (git's name-status), against the commit the copy started from. */
+  async nameStatus(): Promise<string> {
+    if (!this.dir) return '';
+    await this.exec()('git', ['add', '-A', '--', '.', ':!node_modules'], {
+      cwd: this.dir,
+      timeout: 60_000,
+    });
+    const r = await this.exec()('git', ['diff', '--cached', '--name-status'], {
+      cwd: this.dir,
+      timeout: 60_000,
+    });
+    return r.code === 0 ? r.out : '';
+  }
+
+  /** The copy's changes as a patch (binary-safe), against the commit it started from. */
+  async patch(): Promise<string> {
+    if (!this.dir) return '';
+    await this.exec()('git', ['add', '-A', '--', '.', ':!node_modules'], {
+      cwd: this.dir,
+      timeout: 60_000,
+    });
+    const r = await this.exec()('git', ['diff', '--cached', '--binary'], {
+      cwd: this.dir,
+      timeout: 60_000,
+    });
+    if (r.code !== 0 || !r.out.trim()) return '';
+    // The runner trims its output, but a patch must end with a newline or git calls it corrupt.
+    return r.out.endsWith('\n') ? r.out : `${r.out}\n`;
   }
 
   /** The commit the copy is at. */
@@ -253,6 +313,7 @@ export class DevSandbox {
     this.dir = null;
     this.changed.clear();
     this.allowedToRun = false;
+    this.lastResult = null;
     if (!dir) return 'There was no development copy.';
     // The node_modules link goes first (as a link: never followed into the project's folder).
     const link = join(dir, 'node_modules');
@@ -291,9 +352,11 @@ export class DevSandbox {
           if ('error' in r || !r.tests) return r;
           // Judged against the last self-test: failures that were already there don't count.
           const base = baseline?.() ?? null;
+          const fresh = newAgainstBaseline(base, r.tests.failed);
+          this.noteNewFailures(fresh);
           return {
             ...r,
-            newFailures: newAgainstBaseline(base, r.tests.failed),
+            newFailures: fresh,
             ...(base ? { alreadyFailingBefore: base.tests?.failed.length ?? 0 } : {}),
           };
         }

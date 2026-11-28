@@ -8,6 +8,7 @@ import type { CodeFacts } from '@shared/proposals';
 import { ProposalStore } from '../services/proposals';
 import { DevSandbox } from '../services/dev-sandbox';
 import { RegressionWatch } from '../services/regression';
+import { SelfChange } from '../services/self-change';
 import { bootGuard } from '../services/rollback';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
@@ -113,6 +114,13 @@ export function registerAssistantIpc(
     approve: (title, detail) => ctx.askApproval?.(title, detail) ?? Promise.resolve(false),
   });
   app.on('will-quit', () => void sandbox.discard());
+  // Changes from the development copy reach the real project only with the user's approval.
+  const selfChange = new SelfChange({
+    sandbox,
+    projectDir: () => getSettings().projectDir || getSettings().sourceDir,
+    approve: (title, detail) => ctx.askApproval?.(title, detail) ?? Promise.resolve(false),
+    audit: (text, ok) => ctx.audit.add('action', text, ok),
+  });
   // Daily self-test of the project's last commit, in its own copy (regressions get reported,
   // and the log entry feeds the diagnosis and improvement ideas).
   const regression = new RegressionWatch({
@@ -341,6 +349,7 @@ export function registerAssistantIpc(
         diagnose_alton: () => selfDiagnosis(),
         dev_sandbox: (input) => sandbox.tool(input, () => regression.last()),
         self_test: (input) => regression.tool(input, selfTestResult),
+        apply_self_change: (input) => selfChange.tool(input),
         improvement_ideas: (input) =>
           ideas.tool(input, () => ({ diagnosis: selfDiagnosis(), code: codeFacts() })),
         get_recent_crashes: (input) => recentCrashes(input),
