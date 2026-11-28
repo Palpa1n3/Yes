@@ -9,7 +9,9 @@ import { ProposalStore } from '../services/proposals';
 import { DevSandbox } from '../services/dev-sandbox';
 import { RegressionWatch } from '../services/regression';
 import { SelfChange } from '../services/self-change';
+import { parseRoadmap, roadmapStatus, wishesVsPlan } from '@shared/dev-roadmap';
 import { bootGuard } from '../services/rollback';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { IPC } from '@shared/ipc';
 import { buildSystemPrompt } from '@shared/personalities';
@@ -350,6 +352,37 @@ export function registerAssistantIpc(
         dev_sandbox: (input) => sandbox.tool(input, () => regression.last()),
         self_test: (input) => regression.tool(input, selfTestResult),
         apply_self_change: (input) => selfChange.tool(input),
+        alton_roadmap: (input) => {
+          const dir = getSettings().projectDir || getSettings().sourceDir;
+          let md: string;
+          try {
+            md = dir ? readFileSync(join(dir, 'ROADMAP.md'), 'utf8') : '';
+          } catch {
+            md = '';
+          }
+          if (!md)
+            return {
+              error:
+                'ROADMAP.md isn’t available: set the Alton project folder (Settings › Connections › Phone companion) or the source folder.',
+            };
+          const phases = parseRoadmap(md);
+          const action = (input as { action?: unknown } | null)?.action;
+          const wishes =
+            extra.notes.state().lists.find((l) => l.name.toLowerCase() === 'alton roadmap')
+              ?.items ?? [];
+          if (action === 'wishes') return wishesVsPlan(wishes, phases);
+          if (action === 'phase') {
+            const name = String((input as { name?: unknown }).name ?? '').toLowerCase();
+            const p = phases.find((x) => x.title.toLowerCase().includes(name));
+            return p ?? { error: 'No phase like that.', phases: phases.map((x) => x.title) };
+          }
+          const ideasNow = ideas.all().filter((p) => p.status === 'accepted');
+          return {
+            ...roadmapStatus(phases),
+            acceptedIdeas: ideasNow.map((p) => p.title).slice(0, 10),
+            wishesNotPlanned: wishesVsPlan(wishes, phases).notPlanned.slice(0, 10),
+          };
+        },
         improvement_ideas: (input) =>
           ideas.tool(input, () => ({ diagnosis: selfDiagnosis(), code: codeFacts() })),
         get_recent_crashes: (input) => recentCrashes(input),

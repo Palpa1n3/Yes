@@ -199,6 +199,19 @@ export const EXTRA_TOOL_DEFS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: 'alton_roadmap',
+    description:
+      'Your (Alton\'s) development plan, from ROADMAP.md in your project: the phases, what\'s done (✅), part-done (🔶) and still to do (⬜), the phase you\'re on and the next items; plus improvement ideas the user accepted, and wishes from the Notes "Alton roadmap" list that the plan doesn\'t cover yet. action "status" (default), "phase" with name (one phase\'s items), "wishes" (each wish: planned as which item, or not planned). To change ROADMAP.md (tick an item, add a planned item), edit it in dev_sandbox and apply it with the user\'s approval.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['status', 'phase', 'wishes'] },
+        name: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'apply_self_change',
     description:
       'Put a change you (Alton) made and checked in your development copy into the real project, with the user\'s approval. action "apply" with message (a short plain description, e.g. "Update the voice audio to AudioWorklet"): only works when every check ran after your last edit and nothing new failed, the project has no uncommitted work, and it\'s at the same version the copy started from; the user approves; it\'s applied, verified file by file and committed (not pushed). action "push": send that commit to GitHub (starts a release build; the user approves again). action "revert": undo the latest Alton self-change with a new commit (approved). Explain the change in plain words before applying.',

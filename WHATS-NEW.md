@@ -3,6 +3,27 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 1.8.0: Alton knows its own plan
+
+Phase 3 (self-development), item 7.
+
+- **Ask "where are you up to?" or "what's next on your roadmap?"** Alton reads its real plan
+  (ROADMAP.md) and tells you:
+  - which phase it's on;
+  - how much is done (33 of 59 items right now);
+  - the next few things to do.
+- **Your wishes are checked against the plan.** The things you've asked for that went into the
+  Notes "Alton roadmap" list are matched up with the plan, so anything that isn't planned yet
+  stands out. Right now: speaker recognition and a native phone app.
+- It also mentions the improvement ideas you've accepted but that aren't done yet.
+- If Alton wants to change the plan itself (tick something off, add an item), it goes through its
+  development copy and your approval, like any change to its code.
+
+**What to test**
+
+1. Ask Alton "what's next on your roadmap?"
+2. Ask "which of my wishes aren't planned yet?"
+
 ## 1.7.0: Alton can improve itself, with your say-so
 
 Phase 3 (self-development), item 6. Alton can now go all the way: spot something to improve,

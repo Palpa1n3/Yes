@@ -67,6 +67,7 @@ const ACTIVITY_TEXT: Record<string, string> = {
   dev_sandbox: 'Working on my development copy…',
   self_test: 'Testing myself…',
   apply_self_change: 'Updating my code…',
+  alton_roadmap: 'Checking my plan…',
   start_background_research: 'Starting background research…',
   look_at_all_screens: 'Looking at all your screens…',
 };

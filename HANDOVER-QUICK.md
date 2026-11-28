@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **1.7.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **1.8.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,10 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **1.8.0** Phase 3.7 roadmap: `shared/dev-roadmap.ts` (`parseRoadmap`, `roadmapStatus`,
+  `wishesVsPlan`); tool `alton_roadmap` in assistant.ts reads ROADMAP.md from projectDir or
+  sourceDir (NB `shared/roadmap.ts` is the older seed list for the Notes wish-list). Next: 3.8
+  automatic documentation, 3.9 benchmarking.
 - **1.7.0** Phase 3.6 approval-based changes: `services/self-change.ts` (`apply` / `push` /
   `revert`, `SELF_CHANGE_PREFIX`); DevSandbox `ready()`, `patch()` (newline-terminated),
   `nameStatus()`, `changedAt` / `lastResult`; tool `apply_self_change` (assistant.ts); tool-guard

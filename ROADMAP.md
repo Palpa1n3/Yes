@@ -263,7 +263,13 @@ meanwhile. PIN authentication stays; no biometrics.
   content (gate 4). Tests run against a real throwaway git repo
   (tests/main/self-change.test.ts); they caught that the command runner's trimmed output broke
   the patch's final newline (fixed).
-- ⬜ Development roadmap management (partly there: Notes › "Alton roadmap").
+- ✅ Development roadmap management (partly there: Notes › "Alton roadmap"). **1.8.0:**
+  `shared/dev-roadmap.ts` + the `alton_roadmap` tool: reads this file (phases, ✅ / 🔶 / ⬜
+  items, the phase being worked on, the next items), the improvement ideas the owner accepted,
+  and lines the Notes "Alton roadmap" wishes up against the plan (which item covers each, and
+  which aren't planned yet). Updating this file goes through the development copy and the
+  owner's approval like any other change. On the real file: 33 of 59 items done, Phase 3 current;
+  the two open wishes (speaker recognition, a native phone app) aren't planned.
 - ⬜ Automatic documentation.
 - ⬜ Performance benchmarking.
 
