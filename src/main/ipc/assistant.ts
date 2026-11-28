@@ -1,5 +1,5 @@
 import { registerPower } from './power';
-import { pickModel } from '@shared/model-pick';
+import { messageBrief } from '@shared/brain';
 import { factsAbout, findMentions, whosWho } from '@shared/knowledge';
 import { KnowledgeService } from '../services/knowledge';
 import { app, safeStorage } from 'electron';
@@ -188,17 +188,15 @@ export function registerAssistantIpc(
       getKey: () => secrets.get(),
       // Saver mode: the cheapest model for everything but Agent Mode.
       model: () => (getSettings().saver ? 'claude-haiku-5-5' : getSettings().model),
-      // The fast model for everyday requests, a stronger one when a message needs more thought.
-      pickModel: (text, attachments) => {
+      // The central engine: which model answers this message, and what to know for it.
+      brief: (text, attachments) => {
         const s = getSettings();
-        return pickModel({
+        return messageBrief({
           text,
           attachments,
-          chosen: s.model,
-          auto: s.autoModel,
-          top: s.autoModelTop,
-          saver: s.saver,
-        }).model;
+          model: { chosen: s.model, auto: s.autoModel, top: s.autoModelTop, saver: s.saver },
+          graph: knowledge.get(),
+        });
       },
       researchModel: () => (getSettings().saver ? 'claude-haiku-5-5' : getSettings().researchModel),
       saver: () => getSettings().saver,

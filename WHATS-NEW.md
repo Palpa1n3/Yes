@@ -3,6 +3,25 @@
 The latest changes, newest first, in plain words, with what to try on your PC and phone.
 The full plan is in ROADMAP.md.
 
+## 0.99.0: everything joined up (Phase 2 complete)
+
+Phase 2, the last item. **Phase 2, "Unified intelligence", is finished.**
+
+- **One plan for each message.** Before answering, Alton now works out in one place:
+  - which model should answer (0.96);
+  - whether the answer needs checking on the web first (0.97);
+  - what it knows about anyone or anything you mention.
+    This sits alongside the "right now" picture (0.92) and the who's who (0.95).
+- **New:** mention someone and their details come with your message. "Is Fives working tomorrow?"
+  arrives with "Will, also called Fives, shares shifts with you…", so Alton answers straight away
+  instead of looking it up.
+
+**What to test**
+
+1. Ask about someone by a nickname Alton knows ("what's Fives up to?"). It should know who you mean.
+
+**Next:** the safety gate (your six items) before anything in Phase 3 or 4.
+
 ## 0.98.0: Alton offers what you usually do
 
 Phase 2, item 8.

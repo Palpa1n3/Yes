@@ -814,8 +814,9 @@ export function statsForModel(s: SystemStats): Record<string, unknown> {
 export interface AnthropicDeps {
   getKey(): Promise<string | null>;
   model(): AiModel;
-  /** The model for this message (automatic choice); falls back to model(). */
-  pickModel?(text: string, attachments: Array<{ kind: string }>): AiModel;
+  /** The central engine's plan for this message: which model, and extra notes
+   *  (shared/brain.ts). Without it, model() and the check-first note are used. */
+  brief?(text: string, attachments: Array<{ kind: string }>): import('@shared/brain').MessageBrief;
   /** Model for research-mode chats. */
   researchModel?(): AiModel;
   /** Saver mode: fewer web searches per answer. */
@@ -960,9 +961,11 @@ export class AnthropicProvider implements AIProvider {
     const client = this.client(key);
     const research = opts.research === true;
     const userText = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+    const brief = research ? null : (this.deps.brief?.(userText, opts.attachments ?? []) ?? null);
     const model = research
       ? (this.deps.researchModel?.() ?? 'claude-sonnet-5-5')
-      : (this.deps.pickModel?.(userText, opts.attachments ?? []) ?? this.deps.model());
+      : (brief?.model ?? this.deps.model());
+    const messageNotes = brief ? brief.notes : [checkFirstNote(userText)];
 
     if (this.transcript.length > MAX_TRANSCRIPT) {
       this.reset();
@@ -1006,8 +1009,8 @@ export class AnthropicProvider implements AIProvider {
         content: [
           `Current local date and time (from this computer's clock): ${localTimeText(now)}.`,
           this.deps.context?.() ?? '',
-          // Facts that change (prices, opening times, latest…): check first, say where from.
-          checkFirstNote(userText),
+          // This message's notes from the central engine (check first, who's mentioned…).
+          ...messageNotes,
           research ? RESEARCH_NOTE : '',
           changed
             ? `Your instructions have been updated. From now on, follow these instead of the earlier ones:\n\n${current}`

@@ -74,12 +74,13 @@ downloads in the background, is checked (same app, same signing key) and is inst
 Android's PackageInstaller when you leave Alton. After the first such update, Android 12+ needs
 no Install screen. Switch: phone app › Settings › This app › Update automatically.
 
-## Phase 2: Unified intelligence (next)
+## Phase 2: Unified intelligence (done, 0.92–0.99)
 
-- 🔶 Central intelligence engine connecting all existing capabilities. **0.92:** the first piece:
-  `shared/context.ts` `describeNow()` builds one "right now" picture from everything Alton knows
-  and every chat gets it (see the next item). Still to do: one place that decides which
-  capability answers what (with model choice and confidence later in this phase).
+- ✅ Central intelligence engine connecting all existing capabilities. **0.92:** one "right now"
+  picture for every message. **0.99:** `shared/brain.ts` `messageBrief()`: one place that plans
+  each message: which model answers (0.96), the check-first note for changing facts (0.97), and
+  what Alton knows about anyone or anything the message mentions (from the knowledge graph, 0.95),
+  alongside the "right now" picture and who's who. Chat uses it through `deps.brief`.
 - ✅ Shared contextual awareness across applications. **0.92:** chat on the PC now knows, on every
   message: the app in front, gaming, what Alton itself is busy with (Agent Mode, mod updates…), the
   next calendar event, today's shift, running timers, unread email (count and senders), what's
@@ -121,7 +122,7 @@ no Install screen. Switch: phone app › Settings › This app › Update automa
   numbers, names, links or quotes, ask when a request is ambiguous and it matters. Launching apps:
   a loose name that fits several installed apps now asks "Which one?" instead of opening the first.
 
-## Safety gate (must be done and tested before Phase 3 or Phase 4 starts)
+## Safety gate (next; must be done and tested before Phase 3 or Phase 4 starts)
 
 Added by the owner on 27 Nov 2026. Phase 3 (self-development) and Phase 4 (persistent autonomous
 agents) stay switched off until every item here is implemented and has tests. Phase 2 carries on

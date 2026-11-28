@@ -1,6 +1,6 @@
 # Alton (ARC) — quick handover
 
-A short, stand-alone handover (current to **0.98.0, 28 Nov 2026**). The full history and per-feature
+A short, stand-alone handover (current to **0.99.0, 28 Nov 2026**). The full history and per-feature
 detail is in `HANDOVER.md`; read this first if you need to pick the work up fast.
 
 ## What it is
@@ -53,6 +53,10 @@ with each item's status. Update it with every release that moves an item.
 
 ## Recent work (newest first)
 
+- **0.99** Phase 2 done. `shared/brain.ts` `messageBrief` (model pick + check-first note + facts about
+  mentioned entities); anthropic-provider `deps.brief` (replaces `pickModel`; without it, model() and
+  `checkFirstNote`); ipc/assistant.ts supplies it with the knowledge graph. Next: the safety gate
+  (ROADMAP.md), starting with shared desktop+mobile spending limits.
 - **0.98** Predictive: `shared/initiative.ts` `usualNow(opens, now)` + `usualAppRule` (kind 'usual',
   3 h cooldown, launch_app action); `Habits.usual()`; ipc/index.ts passes `usualApp`. Next: finish
   the central engine (last Phase 2 item), then the safety gate.
